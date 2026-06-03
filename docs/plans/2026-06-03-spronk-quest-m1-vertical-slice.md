@@ -57,12 +57,12 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started.
+**Overall:** In progress — host-side foundations shipped; Butano/devkitPro tasks deferred pending toolchain install.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 0 — Foundations & toolchain | ⬜ Not started | — | — |
-| 1 — Pure logic layer (host-tested) | ⬜ Not started | — | — |
+| 0 — Foundations & toolchain | 🚧 In progress | `cf1652a`,`15fced2`,`5809e53` | Tasks 0.1+0.4 done (host harness green). Tasks 0.2/0.3 (devkitPro+Butano ROM) ⏸ deferred — user installing devkitPro. |
+| 1 — Pure logic layer (host-tested) | 🚧 In progress | — | on branch `m1-vertical-slice` |
 | 2 — Butano engine glue | ⬜ Not started | — | — |
 | 3 — Game scenes & Dungeon 1 content | ⬜ Not started | — | — |
 | 4 — Integration & hardware verification | ⬜ Not started | — | — |
@@ -71,7 +71,8 @@ notes and commit messages.
 - _(none yet)_
 
 ### Discoveries
-- _(none yet)_
+- **[Task 0.4, env]** On this Windows machine, `make -C test` MUST run with the **mingw64** g++ on PATH — the default git-bash resolves `g++` to msys64's cygwin compiler (`/usr/bin/g++`), which has broken include search paths in that shell and fails to compile. Canonical command (use in all logic tasks): `PATH="/c/msys64/mingw64/bin:/c/msys64/usr/bin:$PATH" make -C test`. Host toolchain confirmed: mingw64 g++, msys make, Windows Python 3.12, Pillow 12.2. devkitPro/Butano not yet installed (user installing in parallel).
+- **[Task 0.4, deviation]** Implementer also added `test/run_tests` + `test/run_tests.exe` to `.gitignore` and removed an accidentally-committed binary (commit `5809e53`). Sensible; kept.
 
 ---
 
@@ -148,7 +149,7 @@ GBA-action-platformer/
 
 ## Phase 0 — Foundations & toolchain
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** 🚧 IN PROGRESS — claimed 2026-06-03 (branch `m1-vertical-slice`). Tasks 0.1 + 0.4 ✅ shipped (`cf1652a`,`15fced2`,`5809e53`); host tests green via the mingw64 PATH command (see Discoveries). Tasks 0.2 + 0.3 ⏸ DEFERRED pending devkitPro+Butano install (user installing in parallel); resume when `arm-none-eabi-g++ --version` succeeds.
 
 Outcome: a black/colored ROM boots in mGBA, and `make -C test` runs a green host test. Proves both build pipelines before any gameplay code.
 
@@ -286,7 +287,7 @@ print("logic purity OK"); sys.exit(0)
 
 ## Phase 1 — Pure logic layer (host-tested, NO bn::)
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** 🚧 IN PROGRESS — claimed 2026-06-03 (branch `m1-vertical-slice`). Executing via subagent-driven development; no toolchain needed.
 
 This is the testable heart. Every task here is strict TDD with real assertions via `make -C test`. All later phases depend on these APIs, so this phase gets extra review scrutiny. **Units:** 16.8 fixed-point; world units are pixels-as-fixed; `dt` is one frame = `1` logical tick (physics tuned per-tick, framerate-independent by construction since GBA is locked 60Hz but we keep `dt` explicit for testability).
 
