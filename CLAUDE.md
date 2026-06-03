@@ -4,9 +4,11 @@
 
 - **ROM:** `make` (requires devkitPro + Butano installed; see Butano docs for setup)
 - **Host tests:** `make -C test` (needs g++ + Python).
-  - **On this Windows machine** the default git-bash picks the wrong (cygwin) g++ with broken include paths. Use the **mingw64** g++ by prepending it to PATH:
+  - **On this Windows machine** `make`'s recipe shell re-resolves `g++` to msys64's cygwin compiler (broken include paths + TMP issues). The bulletproof invocation forces the mingw64 compiler and a valid temp dir:
     ```bash
-    PATH="/c/msys64/mingw64/bin:/c/msys64/usr/bin:$PATH" make -C test
+    make -C test CXX=/c/msys64/mingw64/bin/g++ \
+      TMP="C:/Users/baranmcl/AppData/Local/Temp" \
+      TEMP="C:/Users/baranmcl/AppData/Local/Temp"
     ```
 
 ## Architecture: Three-Layer Rule

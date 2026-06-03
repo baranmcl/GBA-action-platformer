@@ -71,7 +71,7 @@ notes and commit messages.
 - _(none yet)_
 
 ### Discoveries
-- **[Task 0.4, env]** On this Windows machine, `make -C test` MUST run with the **mingw64** g++ on PATH — the default git-bash resolves `g++` to msys64's cygwin compiler (`/usr/bin/g++`), which has broken include search paths in that shell and fails to compile. Canonical command (use in all logic tasks): `PATH="/c/msys64/mingw64/bin:/c/msys64/usr/bin:$PATH" make -C test`. Host toolchain confirmed: mingw64 g++, msys make, Windows Python 3.12, Pillow 12.2. devkitPro/Butano not yet installed (user installing in parallel).
+- **[Task 0.4, env]** On this Windows machine, `make -C test` MUST run with the **mingw64** g++ on PATH — the default git-bash resolves `g++` to msys64's cygwin compiler (`/usr/bin/g++`), which has broken include search paths in that shell and fails to compile. Canonical command (use in all logic tasks) — the bulletproof form that works in both the controller and subagent shells: `make -C test CXX=/c/msys64/mingw64/bin/g++ TMP="C:/Users/baranmcl/AppData/Local/Temp" TEMP="C:/Users/baranmcl/AppData/Local/Temp"`. (A bare `PATH=...mingw64... make -C test` works in some shells but make's recipe `/bin/sh` can re-resolve `g++` to cygwin + hit a TMP error — hence the explicit `CXX`/`TMP`/`TEMP` overrides.) Host toolchain confirmed: mingw64 g++, msys make, Windows Python 3.12, Pillow 12.2. devkitPro/Butano not yet installed (user installing in parallel).
 - **[Task 0.4, deviation]** Implementer also added `test/run_tests` + `test/run_tests.exe` to `.gitignore` and removed an accidentally-committed binary (commit `5809e53`). Sensible; kept.
 
 ---
