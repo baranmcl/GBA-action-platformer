@@ -9,6 +9,10 @@ build/
 *.map
 *.sav
 
+# Host test binaries
+test/run_tests
+test/run_tests.exe
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db
