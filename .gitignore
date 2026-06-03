@@ -1,0 +1,14 @@
+# Brainstorming companion artifacts
+.superpowers/
+
+# Build artifacts
+build/
+*.gba
+*.elf
+*.o
+*.map
+*.sav
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
