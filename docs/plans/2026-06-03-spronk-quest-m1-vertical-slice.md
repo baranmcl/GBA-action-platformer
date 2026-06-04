@@ -57,18 +57,20 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** In progress — host-side foundations shipped; Butano/devkitPro tasks deferred pending toolchain install.
+**Overall:** Phase 1 (pure logic) shipped — 38/38 host tests green. Phase 0 host-side done; Butano/devkitPro tasks (0.2/0.3) and Phases 2–4 deferred pending toolchain install (user installing devkitPro in parallel).
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 0 — Foundations & toolchain | 🚧 In progress | `cf1652a`,`15fced2`,`5809e53` | Tasks 0.1+0.4 done (host harness green). Tasks 0.2/0.3 (devkitPro+Butano ROM) ⏸ deferred — user installing devkitPro. |
-| 1 — Pure logic layer (host-tested) | 🚧 In progress | — | on branch `m1-vertical-slice` |
+| 0 — Foundations & toolchain | 🚧 Partial | `cf1652a`,`15fced2`,`5809e53` | Tasks 0.1+0.4+1.0 done (host harness green). Tasks 0.2/0.3 (devkitPro+Butano ROM) ⏸ deferred — user installing devkitPro. |
+| 1 — Pure logic layer (host-tested) | ✅ Shipped | `8766c58`…`55e1c27` | All 9 units done, **38/38 host tests green**, logic purity clean. branch `m1-vertical-slice` |
 | 2 — Butano engine glue | ⬜ Not started | — | — |
 | 3 — Game scenes & Dungeon 1 content | ⬜ Not started | — | — |
 | 4 — Integration & hardware verification | ⬜ Not started | — | — |
 
 ### Deviations
-- _(none yet)_
+- **Execution method:** Tasks 0.1+0.4 were grouped into one subagent (cohesive host scaffolding). After the collision subagent (Task 1.5) hit a 2-hour stream timeout caused by the Windows toolchain environment (not the code), the controller took over and implemented Tasks 1.6–1.9 **inline** rather than dispatch fresh subagents — faster and lower-risk given the finicky env and that the tasks were small, sequential, and fully-specified. Task 1.5's code (written by the subagent before it timed out) was verified + committed by the controller.
+- **Task 1.5 scope+:** added a ground-probe to `move_and_collide` (and 2 tests) beyond the written collision spec, to fix an `on_ground` flicker bug surfaced by the player tests. See commit `4d019cb`.
+- **Task 1.0:** repurposed from "wire purity into Makefile" (done in 0.4) to a guard self-test; verified the guard halts the build on a `bn::` violation (controller-run, no commit).
 
 ### Discoveries
 - **[Task 0.4, env]** On this Windows machine, `make -C test` MUST run with the **mingw64** g++ on PATH — the default git-bash resolves `g++` to msys64's cygwin compiler (`/usr/bin/g++`), which has broken include search paths in that shell and fails to compile. **RESOLVED → use `bash tools/host_test.sh`.** Plain `make -C test` is unreliable on this machine for two compounding reasons: (1) git-bash resolves `g++` to msys64's *cygwin* compiler whose `cc1plus` silently fails (exit 1, no diagnostic) unless `mingw64/bin` is on PATH so its DLLs load; (2) `make`'s recipe shell strips `TMP`/`TEMP`, so the assembler tries `C:\WINDOWS\` for temp files → `Permission denied`. The committed `tools/host_test.sh` puts mingw64 on PATH, exports a writable temp dir, and compiles directly (bypassing make's env-stripping). Host toolchain confirmed: mingw64 g++ 16.1, Windows Python 3.12, Pillow 12.2. devkitPro/Butano not yet installed (user installing in parallel).
@@ -287,7 +289,7 @@ print("logic purity OK"); sys.exit(0)
 
 ## Phase 1 — Pure logic layer (host-tested, NO bn::)
 
-**Execution Status:** 🚧 IN PROGRESS — claimed 2026-06-03 (branch `m1-vertical-slice`). Executing via subagent-driven development; no toolchain needed.
+**Execution Status:** ✅ SHIPPED on 2026-06-03 (branch `m1-vertical-slice`, commits `8766c58`…`55e1c27`). All 9 logic units implemented with strict TDD; **38/38 host tests green**, logic-purity guard clean. Notable improvement beyond the written spec: collision gained a **ground probe** (commit `4d019cb`) to keep `on_ground` stable across the resolver's sub-pixel gap — the player tests exposed the flicker bug.
 
 This is the testable heart. Every task here is strict TDD with real assertions via `make -C test`. All later phases depend on these APIs, so this phase gets extra review scrutiny. **Units:** 16.8 fixed-point; world units are pixels-as-fixed; `dt` is one frame = `1` logical tick (physics tuned per-tick, framerate-independent by construction since GBA is locked 60Hz but we keep `dt` explicit for testability).
 
