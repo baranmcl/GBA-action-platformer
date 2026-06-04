@@ -61,7 +61,7 @@ notes and commit messages.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 0 — Foundations & toolchain | 🚧 Partial | `cf1652a`,`15fced2`,`5809e53` | Tasks 0.1+0.4+1.0 done (host harness green). Tasks 0.2/0.3 (devkitPro+Butano ROM) ⏸ deferred — user installing devkitPro. |
+| 0 — Foundations & toolchain | ✅ Shipped | `cf1652a`,`15fced2`,`5809e53`,`<butano-setup>` | All tasks done. devkitPro+Butano 21.6.0 installed; **first ROM `SpronkQuest.gba` (80KB) builds & boots in mGBA 0.9.3**. |
 | 1 — Pure logic layer (host-tested) | ✅ Shipped | `8766c58`…`55e1c27` | All 9 units done, **38/38 host tests green**, logic purity clean. branch `m1-vertical-slice` |
 | 2 — Butano engine glue | ⬜ Not started | — | — |
 | 3 — Game scenes & Dungeon 1 content | ⬜ Not started | — | — |
@@ -75,6 +75,7 @@ notes and commit messages.
 ### Discoveries
 - **[Task 0.4, env]** On this Windows machine, `make -C test` MUST run with the **mingw64** g++ on PATH — the default git-bash resolves `g++` to msys64's cygwin compiler (`/usr/bin/g++`), which has broken include search paths in that shell and fails to compile. **RESOLVED → use `bash tools/host_test.sh`.** Plain `make -C test` is unreliable on this machine for two compounding reasons: (1) git-bash resolves `g++` to msys64's *cygwin* compiler whose `cc1plus` silently fails (exit 1, no diagnostic) unless `mingw64/bin` is on PATH so its DLLs load; (2) `make`'s recipe shell strips `TMP`/`TEMP`, so the assembler tries `C:\WINDOWS\` for temp files → `Permission denied`. The committed `tools/host_test.sh` puts mingw64 on PATH, exports a writable temp dir, and compiles directly (bypassing make's env-stripping). Host toolchain confirmed: mingw64 g++ 16.1, Windows Python 3.12, Pillow 12.2. devkitPro/Butano not yet installed (user installing in parallel).
 - **[Task 0.4, deviation]** Implementer also added `test/run_tests` + `test/run_tests.exe` to `.gitignore` and removed an accidentally-committed binary (commit `5809e53`). Sensible; kept.
+- **[Task 0.2/0.3, env]** ROM builds **only** inside devkitPro's bundled MSYS2 (`C:\devkitPro\msys2`, where `C:\devkitPro`=`/opt/devkitpro`). That MSYS2 has **no python**, which Butano's build needs — fixed by prepending Windows Python 3.12 (with Pillow) to PATH. Captured in `tools/build_rom.sh` (the one command to build: `bash tools/build_rom.sh`). Butano outputs the `.gba`/`.elf` to the **project root**, not `build/` (build/ holds objects). Both are gitignored. Butano vendored as a git submodule pinned to tag `21.6.0`.
 
 ---
 
@@ -151,7 +152,7 @@ GBA-action-platformer/
 
 ## Phase 0 — Foundations & toolchain
 
-**Execution Status:** 🚧 IN PROGRESS — claimed 2026-06-03 (branch `m1-vertical-slice`). Tasks 0.1 + 0.4 ✅ shipped (`cf1652a`,`15fced2`,`5809e53`); host tests green via the mingw64 PATH command (see Discoveries). Tasks 0.2 + 0.3 ⏸ DEFERRED pending devkitPro+Butano install (user installing in parallel); resume when `arm-none-eabi-g++ --version` succeeds.
+**Execution Status:** ✅ SHIPPED on 2026-06-03 (branch `m1-vertical-slice`). Tasks 0.1+0.4+1.0 (host harness + purity guard) and 0.2+0.3 (Butano 21.6.0 vendored as submodule + booting ROM) all done. devkitPro installed (devkitARM g++ 15.2, grit). `SpronkQuest.gba` (80KB) builds via `bash tools/build_rom.sh` and boots in mGBA 0.9.3.
 
 Outcome: a black/colored ROM boots in mGBA, and `make -C test` runs a green host test. Proves both build pipelines before any gameplay code.
 
