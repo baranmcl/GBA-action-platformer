@@ -63,7 +63,7 @@ notes and commit messages.
 |---|---|---|---|
 | 0 — Foundations & toolchain | ✅ Shipped | `cf1652a`,`15fced2`,`5809e53`,`<butano-setup>` | All tasks done. devkitPro+Butano 21.6.0 installed; **first ROM `SpronkQuest.gba` (80KB) builds & boots in mGBA 0.9.3**. |
 | 1 — Pure logic layer (host-tested) | ✅ Shipped | `8766c58`…`55e1c27` | All 9 units done, **43/43 host tests green** (incl. hud_math), logic purity clean. |
-| 2 — Butano engine glue | 🚧 In progress | `0766af4`,`2e6aa2f`,`3250f21`,`a0dc3c4` | art (verified in mGBA) + input + hud_math + save done. Avatar/camera/HUD-render folded into Phase 3. |
+| 2 — Butano engine glue | ✅ Shipped | `0766af4`,`2e6aa2f`,`3250f21`,`a0dc3c4`,`d1256ac` | art+input+avatar+camera+dynbg+hud_math+save+bolts. **mGBA-verified: Laurel runs/jumps/double-jumps/collides + wand fires.** HUD render pending in Phase 3. |
 | 3 — Game scenes & Dungeon 1 content | ⬜ Not started | — | — |
 | 4 — Integration & hardware verification | ⬜ Not started | — | — |
 
@@ -837,7 +837,9 @@ inline bool load_save(const SaveData& s, World& out){
 
 ## Phase 2 — Butano engine glue
 
-**Execution Status:** 🚧 IN PROGRESS — claimed 2026-06-03 (branch `m1-vertical-slice`). ✅ Task 2.1 (placeholder sprites — Laurel/enemy/spronk/bolt, **verified rendering + transparency in mGBA**, commit `0766af4`); ✅ 2.2 input adapter (`3250f21`); ✅ 2.4 pure HUD bar math host-tested (`2e6aa2f`); ✅ 2.5 SRAM save wrapper (`a0dc3c4`). ⬜ Remaining: 2.3 avatar+camera and 2.4's visual HUD render — folded into the Phase 3 play-scene integration (they're only meaningfully verifiable on screen). NOTE: Butano sprite animation frames stack VERTICALLY (plan said horizontally — corrected in the generator). NOTE: bg tiles use `regular_bg_tiles` + a runtime `regular_bg_map_cell` array (per `dynamic_regular_bg` example) — to be built in Phase 3.
+**Execution Status:** ✅ effectively SHIPPED on 2026-06-03 (branch `m1-vertical-slice`). ✅ 2.1 placeholder sprites + bg tiles/palette (mGBA-verified, `0766af4`/`d1256ac`); ✅ 2.2 input (`3250f21`); ✅ 2.3 avatar + camera + `engine/level_view` dynamic bg (`d1256ac`); ✅ 2.4 pure HUD bar math host-tested (`2e6aa2f`) — visual HUD render still pending in Phase 3; ✅ 2.5 SRAM save (`a0dc3c4`); ➕ BONUS `engine/bolts` wand firing (`<bolt-commit>`).
+**Two integration milestones verified in mGBA beyond the plan's deferral:** (1) "Laurel moves on a tilemap" — run/jump/double-jump/collision/one-way/camera; (2) wand bolt firing. These live in a temporary integrated `src/main.cpp` (the play loop) to be refactored into the scene framework in Phase 3.
+NOTES: Butano sprite frames stack VERTICALLY (not horizontally — generator corrected). Avatar frame change needs `bn_sprite_tiles_ptr.h`+`bn_sprite_tiles_item.h`. Dynamic bg = `regular_bg_tiles`+`bg_palette`+runtime `regular_bg_map_cell` array (static, no heap), world origin = map centre (`world = level_px - map_px/2`). One-way fast-fall bug found+fixed in collision (`caa1918`).
 
 Wires the pure logic to Butano. These tasks are verified by **mGBA observation** (no host unit tests possible), except where noted. Keep each glue file thin — push any real decision-making back into `src/logic/`.
 
