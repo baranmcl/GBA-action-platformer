@@ -62,8 +62,8 @@ notes and commit messages.
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 0 — Foundations & toolchain | ✅ Shipped | `cf1652a`,`15fced2`,`5809e53`,`<butano-setup>` | All tasks done. devkitPro+Butano 21.6.0 installed; **first ROM `SpronkQuest.gba` (80KB) builds & boots in mGBA 0.9.3**. |
-| 1 — Pure logic layer (host-tested) | ✅ Shipped | `8766c58`…`55e1c27` | All 9 units done, **38/38 host tests green**, logic purity clean. branch `m1-vertical-slice` |
-| 2 — Butano engine glue | ⬜ Not started | — | — |
+| 1 — Pure logic layer (host-tested) | ✅ Shipped | `8766c58`…`55e1c27` | All 9 units done, **43/43 host tests green** (incl. hud_math), logic purity clean. |
+| 2 — Butano engine glue | 🚧 In progress | `0766af4`,`2e6aa2f`,`3250f21`,`a0dc3c4` | art (verified in mGBA) + input + hud_math + save done. Avatar/camera/HUD-render folded into Phase 3. |
 | 3 — Game scenes & Dungeon 1 content | ⬜ Not started | — | — |
 | 4 — Integration & hardware verification | ⬜ Not started | — | — |
 
@@ -837,7 +837,7 @@ inline bool load_save(const SaveData& s, World& out){
 
 ## Phase 2 — Butano engine glue
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** 🚧 IN PROGRESS — claimed 2026-06-03 (branch `m1-vertical-slice`). ✅ Task 2.1 (placeholder sprites — Laurel/enemy/spronk/bolt, **verified rendering + transparency in mGBA**, commit `0766af4`); ✅ 2.2 input adapter (`3250f21`); ✅ 2.4 pure HUD bar math host-tested (`2e6aa2f`); ✅ 2.5 SRAM save wrapper (`a0dc3c4`). ⬜ Remaining: 2.3 avatar+camera and 2.4's visual HUD render — folded into the Phase 3 play-scene integration (they're only meaningfully verifiable on screen). NOTE: Butano sprite animation frames stack VERTICALLY (plan said horizontally — corrected in the generator). NOTE: bg tiles use `regular_bg_tiles` + a runtime `regular_bg_map_cell` array (per `dynamic_regular_bg` example) — to be built in Phase 3.
 
 Wires the pure logic to Butano. These tasks are verified by **mGBA observation** (no host unit tests possible), except where noted. Keep each glue file thin — push any real decision-making back into `src/logic/`.
 
