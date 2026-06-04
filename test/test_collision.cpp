@@ -21,6 +21,12 @@ TEST(oneway_passes_from_below){ // one-way at (1,2): top y=16, cells y:16..23
   CHECK(b.on_ground==false);
   CHECK_EQ(b.vel.y.raw, Fixed::from_int(-6).raw);
   CHECK(b.pos.y.to_int() <= 14); }
+TEST(oneway_lands_when_falling_fast){ // fast fall must NOT skip the one-way platform (top y=16)
+  Body b{}; b.half_w=Fixed::from_int(3); b.half_h=Fixed::from_int(3);
+  b.pos={Fixed::from_int(8), Fixed::from_int(6)}; b.vel={Fixed::from_int(0), Fixed::from_int(8)};
+  move_and_collide(b, mk());
+  CHECK(b.on_ground==true);
+  CHECK_EQ(b.pos.y.to_int(), 10); } // bottom rests exactly on platform top: 16 - 6 = 10
 TEST(no_tunneling_high_speed){
   Body b{}; b.half_w=Fixed::from_int(3); b.half_h=Fixed::from_int(3);
   b.pos={Fixed::from_int(8), Fixed::from_int(0)}; b.vel={Fixed::from_int(0), Fixed::from_int(40)};

@@ -26,7 +26,6 @@ void move_and_collide(Body& b, const Tilemap& map){
         remx = remx - d;
     }
     // ---- Y axis ----
-    Fixed prev_bottom = b.pos.y + b.half_h + b.half_h;
     Fixed remy = b.vel.y;
     while(remy.raw != 0){
         Fixed d = remy;
@@ -35,23 +34,32 @@ void move_and_collide(Body& b, const Tilemap& map){
         Fixed before = b.pos.y;
         b.pos.y = b.pos.y + d;
         bool hit = overlaps_solid(b,map);
-        if(!hit && d.raw>0){
-            int l=Tilemap::px_to_tile(b.pos.x);
-            int r=Tilemap::px_to_tile(b.pos.x + b.half_w+b.half_w - Fixed::from_int(1));
-            int bm=Tilemap::px_to_tile(b.pos.y + b.half_h+b.half_h - Fixed::from_int(1));
-            for(int tx=l;tx<=r && !hit;++tx){
-                if(map.is_oneway(tx,bm)){
-                    Fixed plat_top = Fixed::from_int(bm*Tilemap::TILE);
-                    if(prev_bottom <= plat_top) hit = true;
+        // One-way platforms: land only when moving down AND the body's bottom edge
+        // CROSSED the platform's top plane this step (prev above, new below). Snap to
+        // rest exactly on top. Checking the crossed plane (not the post-move bottom
+        // tile) is what prevents fast falls from skipping the platform.
+        if(!hit && d.raw > 0){
+            Fixed prev_bottom = before + b.half_h + b.half_h;   // exclusive bottom before step
+            Fixed new_bottom  = b.pos.y + b.half_h + b.half_h;  // exclusive bottom after step
+            int bm = Tilemap::px_to_tile(new_bottom);           // tile row at the feet
+            Fixed plat_top = Fixed::from_int(bm * Tilemap::TILE);
+            if(prev_bottom <= plat_top && new_bottom > plat_top){
+                int l = Tilemap::px_to_tile(b.pos.x);
+                int r = Tilemap::px_to_tile(b.pos.x + b.half_w + b.half_w - Fixed::from_int(1));
+                for(int tx = l; tx <= r && !hit; ++tx){
+                    if(map.is_oneway(tx, bm)){
+                        hit = true;
+                        b.pos.y = plat_top - (b.half_h + b.half_h); // rest on the platform top
+                    }
                 }
             }
         }
         if(hit){
             Fixed dir = (d.raw>0)? Fixed::from_int(1):Fixed::from_int(-1);
-            while(overlaps_solid(b,map)) b.pos.y = b.pos.y - dir;
+            while(overlaps_solid(b,map)) b.pos.y = b.pos.y - dir; // back out of solids only
             if(d.raw>0) b.on_ground = true;
             b.vel.y = Fixed::from_int(0);
-            (void)before; break;
+            break;
         }
         remy = remy - d;
     }
