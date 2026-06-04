@@ -11,6 +11,7 @@
 #include "engine/input.h"
 #include "engine/level_view.h"
 #include "engine/avatar.h"
+#include "engine/bolts.h"
 
 namespace
 {
@@ -55,6 +56,7 @@ int main()
     player.abilities.featherleap = true;              // enable double jump for testing
 
     engine::Avatar avatar(player, level.map_px_w, level.map_px_h, cam);
+    engine::BoltPool bolts(level.map_px_w, level.map_px_h, cam);
 
     const int hw = level.map_px_w / 2;
     const int hh = level.map_px_h / 2;
@@ -64,6 +66,10 @@ int main()
         logic::InputFrame in = engine::read_input();
         player.update(in, map);
         avatar.sync(player);
+
+        logic::Vec2 muzzle = { player.body.pos.x + player.body.half_w,
+                               player.body.pos.y + player.body.half_h };
+        bolts.update(in.fire_pressed, muzzle, player.facing, map);
 
         int cx = player.body.pos.x.to_int() + player.body.half_w.to_int();
         int cy = player.body.pos.y.to_int() + player.body.half_h.to_int();
