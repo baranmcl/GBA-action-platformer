@@ -114,9 +114,45 @@ def gen_bolt():
     px(im, 1, 3, 8); px(im, 6, 4, 8); px(im, 3, 1, 8); px(im, 4, 6, 8)
     write(im, "bolt", {"type": "sprite"})
 
+def gen_tiles():
+    """Background tileset: 5 tiles of 8x8 in a horizontal strip. Index order matches
+    logic::TileKind + content markers: 0 blank, 1 ground, 2 one-way, 3 gate, 4 cage."""
+    im = new_img(8 * 5, 8)
+    # tile 0: blank -> all index 0 (transparent, shows backdrop). nothing to draw.
+    # tile 1: ground (brown with grass top, dark bottom)
+    ox = 8 * 1
+    rect(im, ox, 0, ox + 7, 7, 10)        # brown body
+    rect(im, ox, 0, ox + 7, 0, 4)         # grass top
+    rect(im, ox, 7, ox + 7, 7, 11)        # dark bottom
+    px(im, ox + 2, 3, 11); px(im, ox + 5, 5, 11)  # speckle
+    # tile 2: one-way platform (thin top ledge, transparent below)
+    ox = 8 * 2
+    rect(im, ox, 0, ox + 7, 0, 4)         # grass edge
+    rect(im, ox, 1, ox + 7, 2, 10)        # brown lip
+    # tile 3: gate (gold vertical bars on transparent)
+    ox = 8 * 3
+    for cx in (1, 3, 5):
+        rect(im, ox + cx, 0, ox + cx, 7, 6)
+    rect(im, ox, 0, ox + 7, 0, 6)         # top rail
+    # tile 4: cage (stone box outline)
+    ox = 8 * 4
+    rect(im, ox, 0, ox + 7, 0, 12); rect(im, ox, 7, ox + 7, 7, 12)
+    rect(im, ox, 0, ox, 7, 12); rect(im, ox + 7, 0, ox + 7, 7, 12)
+    write(im, "tiles", {"type": "regular_bg_tiles", "bpp_mode": "bpp_4"})
+
+def gen_bg_palette():
+    """A swatch image whose 16-colour palette becomes the shared background palette.
+    Pixels are irrelevant; grit reads the palette table."""
+    im = new_img(8, 8)
+    for i in range(16):
+        px(im, i % 8, i // 8, i)
+    write(im, "bg_palette", {"type": "bg_palette", "bpp_mode": "bpp_4"})
+
 if __name__ == "__main__":
     gen_laurel()
     gen_enemy()
     gen_spronk()
     gen_bolt()
-    print("placeholder sprites generated.")
+    gen_tiles()
+    gen_bg_palette()
+    print("placeholder sprites + bg tiles generated.")
