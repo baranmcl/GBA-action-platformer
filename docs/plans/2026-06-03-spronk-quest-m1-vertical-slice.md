@@ -57,15 +57,20 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Phase 1 (pure logic) shipped — 38/38 host tests green. Phase 0 host-side done; Butano/devkitPro tasks (0.2/0.3) and Phases 2–4 deferred pending toolchain install (user installing devkitPro in parallel).
+**Overall:** **M1 vertical slice feature-complete and mGBA-verified** (2026-06-04). Phases 0–3 shipped; Phase 4 = acceptance doc + README done, real-hardware flash pending (user action). 52/52 host tests green, logic purity clean, 35 commits on `m1-vertical-slice`.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 0 — Foundations & toolchain | ✅ Shipped | `cf1652a`,`15fced2`,`5809e53`,`<butano-setup>` | All tasks done. devkitPro+Butano 21.6.0 installed; **first ROM `SpronkQuest.gba` (80KB) builds & boots in mGBA 0.9.3**. |
 | 1 — Pure logic layer (host-tested) | ✅ Shipped | `8766c58`…`55e1c27` | All 9 units done, **43/43 host tests green** (incl. hud_math), logic purity clean. |
 | 2 — Butano engine glue | ✅ Shipped | `0766af4`,`2e6aa2f`,`3250f21`,`a0dc3c4`,`d1256ac` | art+input+avatar+camera+dynbg+hud_math+save+bolts. **mGBA-verified: Laurel runs/jumps/double-jumps/collides + wand fires.** HUD render pending in Phase 3. |
-| 3 — Game scenes & Dungeon 1 content | ⬜ Not started | — | — |
-| 4 — Integration & hardware verification | ⬜ Not started | — | — |
+| 3 — Game scenes & Dungeon 1 content | ✅ Shipped | thru `<title-save-commit>` | scene framework, Dungeon 1 (hardcoded level — not the JSON compiler), enemy, spronk→Featherleap→gate loop, HUD, title, SRAM save/continue. All mGBA-verified. |
+| 4 — Integration & hardware verification | 🚧 Partial | — | `docs/acceptance-m1.md` + README done; **real-hardware flash pending (user)**. |
+
+### Phase 3 deviations
+- Built Dungeon 1 as a **hardcoded `logic::Tilemap`** in `scene_play.cpp` rather than the planned JSON level-data compiler (`tools/build_level.py`, Task 3.2). The compiler is deferred to M2 (when multiple dungeons make data-authoring pay off). The single slice level didn't justify the pipeline yet.
+- Phases 2 & 3 were **interleaved and largely implemented inline** (controller-driven, mGBA-verified each step) rather than via the subagent pipeline, after the Phase-1 subagent timeout. Faster + lower-risk given the tight build/verify loop. Logic stayed strict-TDD throughout.
+- Jump feel tuned across 3 playtests to gravity raw 46.
 
 ### Deviations
 - **Execution method:** Tasks 0.1+0.4 were grouped into one subagent (cohesive host scaffolding). After the collision subagent (Task 1.5) hit a 2-hour stream timeout caused by the Windows toolchain environment (not the code), the controller took over and implemented Tasks 1.6–1.9 **inline** rather than dispatch fresh subagents — faster and lower-risk given the finicky env and that the tasks were small, sequential, and fully-specified. Task 1.5's code (written by the subagent before it timed out) was verified + committed by the controller.
