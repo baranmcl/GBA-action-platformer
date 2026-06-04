@@ -10,6 +10,7 @@ class Avatar {
 public:
     Avatar(const logic::Player& p, int map_px_w, int map_px_h, const bn::camera_ptr& cam);
     void sync(const logic::Player& p);
+    void set_visible(bool v){ _sprite.set_visible(v); } // used for i-frame blink
 private:
     bn::sprite_ptr _sprite;
     int _half_w_px;   // map_px_w / 2  (level -> world x offset)

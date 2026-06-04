@@ -13,6 +13,8 @@ class BoltPool {
 public:
     BoltPool(int map_px_w, int map_px_h, const bn::camera_ptr& cam);
     void update(bool fire_pressed, logic::Vec2 muzzle, int facing, const logic::Tilemap& map);
+    // If an active bolt overlaps `target`, despawn that bolt and return true (one hit).
+    bool consume_hit(const logic::Body& target);
 private:
     struct Bolt {
         bool active = false;

@@ -1,6 +1,19 @@
 #include "engine/bolts.h"
+#include "logic/collision.h"
 #include "bn_sprite_items_bolt.h"
 namespace engine {
+
+bool BoltPool::consume_hit(const logic::Body& target){
+    for(Bolt& b : _bolts){
+        if(b.active && logic::aabb_overlap(b.body, target)){
+            b.active = false;
+            b.sprite.reset();
+            return true;
+        }
+    }
+    return false;
+}
+
 
 BoltPool::BoltPool(int map_px_w, int map_px_h, const bn::camera_ptr& cam)
     : _half_w_px(map_px_w / 2), _half_h_px(map_px_h / 2), _camera(cam) {}

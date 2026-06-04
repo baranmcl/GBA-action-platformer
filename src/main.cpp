@@ -7,11 +7,14 @@
 #include "bn_camera_ptr.h"
 #include "bn_sprite_ptr.h"
 #include "bn_sprite_items_spronk.h"
+#include "bn_sprite_items_enemy.h"
 
 #include "logic/tilemap.h"
 #include "logic/player.h"
 #include "logic/world_state.h"
 #include "logic/dungeon1.h"
+#include "logic/enemy.h"
+#include "logic/meters.h"
 #include "engine/input.h"
 #include "engine/level_view.h"
 #include "engine/avatar.h"
@@ -71,10 +74,16 @@ int main()
 
     logic::World world; // fresh: no spronk freed, no Featherleap
 
+    const logic::Vec2 spawn_pos { fx(3 * 8), fx(13 * 8) };
+
     logic::Player player;
     player.body.half_w = fx(8);
     player.body.half_h = fx(16);
-    player.body.pos = { fx(3 * 8), fx(13 * 8) };
+    player.body.pos = spawn_pos;
+
+    logic::Meter health{ 100, 100 };
+    logic::Meter magic{ 0, 100 };   // refills from kills; no consumer yet in M1
+    int invuln = 0;                 // i-frame ticks after taking a hit
 
     engine::Avatar avatar(player, level.map_px_w, level.map_px_h, cam);
     engine::BoltPool bolts(level.map_px_w, level.map_px_h, cam);
@@ -92,6 +101,14 @@ int main()
     exit.half_w = fx(16); exit.half_h = fx(16);
     exit.pos = { fx(43 * 8), fx(6 * 8) };
 
+    // Patrolling enemy on the floor between the cage and the gate.
+    logic::Enemy enemy;
+    enemy.body.half_w = fx(8); enemy.body.half_h = fx(8);
+    enemy.body.pos = { fx(16 * 8), fx(15 * 8) };
+    enemy.left_bound = fx(14 * 8); enemy.right_bound = fx(22 * 8);
+    bn::sprite_ptr enemy_sprite = bn::sprite_items::enemy.create_sprite(0, 0);
+    enemy_sprite.set_camera(cam);
+
     bool won = false;
 
     while(true)
@@ -106,6 +123,45 @@ int main()
         logic::Vec2 muzzle = { player.body.pos.x + player.body.half_w,
                                player.body.pos.y + player.body.half_h };
         bolts.update(in.fire_pressed, muzzle, player.facing, map);
+
+        // Enemy patrol + combat
+        enemy.update(map);
+        if(enemy.alive)
+        {
+            int ex = enemy.body.pos.x.to_int() + enemy.body.half_w.to_int();
+            int ey = enemy.body.pos.y.to_int() + enemy.body.half_h.to_int();
+            enemy_sprite.set_position(ex - hw, ey - hh);
+
+            if(bolts.consume_hit(enemy.body))      // wand bolt kills the enemy, refills magic
+            {
+                enemy.kill();
+                magic.heal(25);
+                enemy_sprite.set_visible(false);
+            }
+            else if(invuln == 0 && logic::aabb_overlap(player.body, enemy.body))
+            {
+                health.damage(20);
+                invuln = 45;
+            }
+        }
+
+        // i-frames: blink while invulnerable; empty health -> respawn at start.
+        if(invuln > 0)
+        {
+            --invuln;
+            avatar.set_visible((invuln / 4) % 2 == 0);
+        }
+        else
+        {
+            avatar.set_visible(true);
+        }
+        if(health.is_empty())
+        {
+            player.body.pos = spawn_pos;
+            player.body.vel = { fx(0), fx(0) };
+            health.cur = health.max;
+            invuln = 0;
+        }
 
         // Spronk rescue: grant Featherleap + open the gate (once).
         bool was_freed = world.spronk1_freed;
