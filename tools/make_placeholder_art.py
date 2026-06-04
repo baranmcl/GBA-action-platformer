@@ -148,6 +148,13 @@ def gen_bg_palette():
         px(im, i % 8, i // 8, i)
     write(im, "bg_palette", {"type": "bg_palette", "bpp_mode": "bpp_4"})
 
+def gen_hud():
+    """HUD meter pips: a 7x7 filled square (1px gap). Health = red, magic = cyan."""
+    for name, idx in (("hud_health", 13), ("hud_magic", 8)):
+        im = new_img(8, 8)
+        rect(im, 0, 0, 6, 6, idx)
+        write(im, name, {"type": "sprite"})
+
 if __name__ == "__main__":
     gen_laurel()
     gen_enemy()
@@ -155,4 +162,5 @@ if __name__ == "__main__":
     gen_bolt()
     gen_tiles()
     gen_bg_palette()
-    print("placeholder sprites + bg tiles generated.")
+    gen_hud()
+    print("placeholder sprites + bg tiles + hud generated.")

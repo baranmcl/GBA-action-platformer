@@ -19,6 +19,7 @@
 #include "engine/level_view.h"
 #include "engine/avatar.h"
 #include "engine/bolts.h"
+#include "engine/hud.h"
 
 namespace
 {
@@ -87,6 +88,7 @@ int main()
 
     engine::Avatar avatar(player, level.map_px_w, level.map_px_h, cam);
     engine::BoltPool bolts(level.map_px_w, level.map_px_h, cam);
+    engine::Hud hud;
 
     // Caged spronk on the platform around tile (10, 14).
     logic::Body cage;
@@ -181,6 +183,8 @@ int main()
             won = true;
             bn::bg_palettes::set_transparent_color(bn::color(6, 22, 8)); // victory green
         }
+
+        hud.update(health, magic);
 
         int cx = player.body.pos.x.to_int() + player.body.half_w.to_int();
         int cy = player.body.pos.y.to_int() + player.body.half_h.to_int();
