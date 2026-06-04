@@ -3,13 +3,8 @@
 ## Build
 
 - **ROM:** `make` (requires devkitPro + Butano installed; see Butano docs for setup)
-- **Host tests:** `make -C test` (needs g++ + Python).
-  - **On this Windows machine** `make`'s recipe shell re-resolves `g++` to msys64's cygwin compiler (broken include paths + TMP issues). The bulletproof invocation forces the mingw64 compiler and a valid temp dir:
-    ```bash
-    make -C test CXX=/c/msys64/mingw64/bin/g++ \
-      TMP="C:/Users/baranmcl/AppData/Local/Temp" \
-      TEMP="C:/Users/baranmcl/AppData/Local/Temp"
-    ```
+- **Host tests:** run `bash tools/host_test.sh` (preferred on this machine).
+  - Plain `make -C test` is **fragile here**: git-bash resolves `g++` to msys64's cygwin compiler (whose cc1plus can't find its DLLs without mingw64 on PATH), and `make`'s recipe shell strips `TMP`/`TEMP` so the assembler tries to write to `C:\WINDOWS` (Permission denied). `tools/host_test.sh` fixes both (puts mingw64 on PATH, exports a writable temp dir) and compiles directly. A green run ends with `N/N tests passed, 0 checks failed`.
 
 ## Architecture: Three-Layer Rule
 
