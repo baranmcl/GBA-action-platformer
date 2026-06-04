@@ -13,4 +13,8 @@ struct LevelView {
 // indices: 0 blank, 1 ground, 2 one-way, 3 gate, 4 cage). The map is placed at the
 // top-left of a fixed 64x32-tile background; cells outside `map` are blank.
 LevelView build_level_view(const logic::Tilemap& map);
+
+// Change one background tile at runtime (e.g. opening a gate) and re-upload the map.
+// Does NOT touch collision — update the logic tilemap separately.
+void set_level_tile(LevelView& view, int tx, int ty, int tile_index);
 }

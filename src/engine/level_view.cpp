@@ -3,6 +3,7 @@
 #include "bn_memory.h"
 #include "bn_bg_tiles.h"
 #include "bn_regular_bg_item.h"
+#include "bn_regular_bg_map_ptr.h"
 #include "bn_regular_bg_map_cell_info.h"
 #include "bn_regular_bg_tiles_items_tiles.h"
 #include "bn_bg_palette_items_bg_palette.h"
@@ -39,5 +40,16 @@ LevelView build_level_view(const logic::Tilemap& map){
     bn::regular_bg_ptr bg = item.create_bg(0, 0);
     bn::bg_tiles::set_allow_offset(true);
     return LevelView{ bg, COLS * 8, ROWS * 8 };
+}
+
+void set_level_tile(LevelView& view, int tx, int ty, int tile_index){
+    if(tx < 0 || ty < 0 || tx >= COLS || ty >= ROWS) return;
+    int ci = s_map_item.cell_index(tx, ty);
+    bn::regular_bg_map_cell_info info(s_cells[ci]);
+    info.set_tile_index(tile_index);
+    info.set_palette_id(0);
+    s_cells[ci] = info.cell();
+    bn::regular_bg_map_ptr map_ptr = view.bg.map();
+    map_ptr.reload_cells_ref();
 }
 }
