@@ -25,6 +25,14 @@ TEST(no_tunneling_high_speed){
   Body b{}; b.half_w=Fixed::from_int(3); b.half_h=Fixed::from_int(3);
   b.pos={Fixed::from_int(8), Fixed::from_int(0)}; b.vel={Fixed::from_int(0), Fixed::from_int(40)};
   move_and_collide(b, mk()); CHECK(b.on_ground==true); }
+TEST(ground_probe_grounds_resting_body){ // feet flush above floor (tile row 3), not rising
+  Body b{}; b.half_w=Fixed::from_int(3); b.half_h=Fixed::from_int(3);
+  b.pos={Fixed::from_int(8), Fixed::from_int(18)}; b.vel={Fixed::from_int(0), Fixed::from_int(0)};
+  move_and_collide(b, mk()); CHECK(b.on_ground==true); }
+TEST(ground_probe_airborne_not_grounded){ // high above floor, nothing beneath the feet
+  Body b{}; b.half_w=Fixed::from_int(3); b.half_h=Fixed::from_int(3);
+  b.pos={Fixed::from_int(8), Fixed::from_int(2)}; b.vel={Fixed::from_int(0), Fixed::from_int(0)};
+  move_and_collide(b, mk()); CHECK(b.on_ground==false); }
 TEST(aabb_overlap_basic){
   Body a{}; a.half_w=Fixed::from_int(4); a.half_h=Fixed::from_int(4); a.pos={Fixed::from_int(0),Fixed::from_int(0)};
   Body b{}; b.half_w=Fixed::from_int(4); b.half_h=Fixed::from_int(4); b.pos={Fixed::from_int(4),Fixed::from_int(4)};

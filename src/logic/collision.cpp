@@ -55,6 +55,19 @@ void move_and_collide(Body& b, const Tilemap& map){
         }
         remy = remy - d;
     }
+    // Ground probe: when resting or falling (not rising), mark on_ground if a solid or
+    // one-way tile sits directly beneath the body's feet. The axis resolver leaves a
+    // sub-pixel gap when it backs the body out of overlap, so without this probe
+    // on_ground would flicker frame-to-frame. Skipped while moving up so jumping through
+    // a one-way platform does not falsely report "grounded".
+    if(b.vel.y.raw >= 0){
+        int below = Tilemap::px_to_tile(b.pos.y + b.half_h + b.half_h); // tile just under the feet
+        int l = Tilemap::px_to_tile(b.pos.x);
+        int r = Tilemap::px_to_tile(b.pos.x + b.half_w + b.half_w - Fixed::from_int(1));
+        for(int tx=l; tx<=r; ++tx){
+            if(map.is_solid(tx,below) || map.is_oneway(tx,below)){ b.on_ground = true; break; }
+        }
+    }
 }
 bool aabb_overlap(const Body& a, const Body& b){
     Fixed aL=a.pos.x, aT=a.pos.y, aR=a.pos.x + a.half_w + a.half_w, aB=a.pos.y + a.half_h + a.half_h;
