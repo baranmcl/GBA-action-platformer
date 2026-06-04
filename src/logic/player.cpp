@@ -4,7 +4,9 @@ static const Fixed RUN_ACCEL = Fixed::from_raw(24);
 static const Fixed RUN_MAX   = Fixed::from_int(2);
 static const Fixed FRICTION  = Fixed::from_raw(24);
 static const Fixed JUMP_VY   = Fixed::from_int(-4);
-static const PhysicsParams PH { Fixed::from_raw(28), Fixed::from_int(6) }; // gravity, terminal
+// Midpoint feel (playtested): single jump ~5.5 tiles. Gravity is halfway between the
+// floaty (28) and heavy (64) trials; terminal kept gentle at 6.
+static const PhysicsParams PH { Fixed::from_raw(46), Fixed::from_int(6) };
 
 void Player::update(const InputFrame& in, const Tilemap& map){
     // horizontal acceleration / friction
