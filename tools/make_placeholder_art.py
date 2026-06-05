@@ -115,9 +115,10 @@ def gen_bolt():
     write(im, "bolt", {"type": "sprite"})
 
 def gen_tiles():
-    """Background tileset: 5 tiles of 8x8 in a horizontal strip. Index order matches
-    logic::TileKind + content markers: 0 blank, 1 ground, 2 one-way, 3 gate, 4 cage."""
-    im = new_img(8 * 5, 8)
+    """Background tileset: 7 tiles of 8x8 in a horizontal strip. Index order:
+    0 blank, 1 ground, 2 one-way, 3 gate(closed wall), 4 cage, 5 door-open, 6 door-locked.
+    (7-12 reserved for M3+ obstacle-gate art.)"""
+    im = new_img(8 * 7, 8)
     # tile 0: blank -> all index 0 (transparent, shows backdrop). nothing to draw.
     # tile 1: ground (brown with grass top, dark bottom)
     ox = 8 * 1
@@ -138,6 +139,18 @@ def gen_tiles():
     ox = 8 * 4
     rect(im, ox, 0, ox + 7, 0, 12); rect(im, ox, 7, ox + 7, 7, 12)
     rect(im, ox, 0, ox, 7, 12); rect(im, ox + 7, 0, ox + 7, 7, 12)
+    # tile 5: door-open (an archway: stone frame, dark opening)
+    ox = 8 * 5
+    rect(im, ox + 1, 0, ox + 6, 7, 1)        # dark opening
+    rect(im, ox, 0, ox, 7, 12); rect(im, ox + 7, 0, ox + 7, 7, 12)  # stone jambs
+    rect(im, ox + 1, 0, ox + 6, 0, 12)       # stone lintel
+    # tile 6: door-locked (archway with gold bars)
+    ox = 8 * 6
+    rect(im, ox + 1, 0, ox + 6, 7, 1)        # dark opening
+    rect(im, ox, 0, ox, 7, 12); rect(im, ox + 7, 0, ox + 7, 7, 12)  # stone jambs
+    rect(im, ox + 1, 0, ox + 6, 0, 12)       # lintel
+    for cx in (2, 4, 6):                      # gold bars (locked)
+        rect(im, ox + cx, 1, ox + cx, 7, 6)
     write(im, "tiles", {"type": "regular_bg_tiles", "bpp_mode": "bpp_4"})
 
 def gen_bg_palette():

@@ -79,9 +79,11 @@ def compile_level(txt_path, json_path):
                 enemies.append((x, y, patrol[0], patrol[1]))
                 e_idx += 1
             elif c == 'G':
-                if g_idx >= len(json_gates):
-                    raise LevelError(f"gate 'G' #{g_idx} at ({x},{y}) has no JSON 'gates' entry")
-                gtype = json_gates[g_idx]['type']
+                if not json_gates:
+                    raise LevelError(f"gate 'G' at ({x},{y}) but JSON has no 'gates' entry")
+                # Nth 'G' -> Nth JSON entry; extra 'G's (e.g. a wall of one gate type) clamp to last.
+                entry = json_gates[g_idx] if g_idx < len(json_gates) else json_gates[-1]
+                gtype = entry['type']
                 if gtype not in GATE_ENUM:
                     raise LevelError(f"unknown gate type '{gtype}'")
                 gates.append((x, y, GATE_ENUM[gtype]))
