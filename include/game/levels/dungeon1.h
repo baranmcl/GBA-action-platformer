@@ -5,5 +5,5 @@ inline constexpr unsigned char DUNGEON1_TILES[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 inline constexpr logic::EntitySpawn DUNGEON1_ENEMIES[] = { {16,15,14,22} };
 inline constexpr logic::GateSpawn DUNGEON1_GATES[] = { {0,0,logic::GateType::Gap} };
 inline constexpr logic::DoorSpawn DUNGEON1_DOORS[] = { {0,0,0} };
-inline constexpr logic::LevelData DUNGEON1_DATA = { DUNGEON1_TILES, 48, 20, 3, 13, true, 10, 14, true, 43, 7, DUNGEON1_ENEMIES, 1, DUNGEON1_GATES, 0, DUNGEON1_DOORS, 0 };
+inline constexpr logic::LevelData DUNGEON1_DATA = { DUNGEON1_TILES, 48, 20, 3, 14, true, 10, 13, true, 43, 7, DUNGEON1_ENEMIES, 1, DUNGEON1_GATES, 0, DUNGEON1_DOORS, 0 };
 

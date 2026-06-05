@@ -2,7 +2,7 @@
 #include <cstdint>
 namespace logic {
 struct Fixed {
-    int32_t raw; // 16.8 fixed point
+    int32_t raw = 0; // 16.8 fixed point (default-zero so Vec2/Body never start indeterminate)
     static constexpr int SHIFT = 8;
     static constexpr Fixed from_raw(int32_t r){ return Fixed{r}; }
     static constexpr Fixed from_int(int32_t i){ return Fixed{ i << SHIFT }; }

@@ -6,3 +6,4 @@ TEST(fixed_add){ CHECK_EQ((Fixed::from_int(2) + Fixed::from_int(5)).raw, Fixed::
 TEST(fixed_fractional_floor){ Fixed a = Fixed::from_raw(1*256 + 128); Fixed b = Fixed::from_raw(1*256 + 192); CHECK_EQ((a+b).to_int(), 3); }
 TEST(fixed_mul){ Fixed a = Fixed::from_int(2); Fixed b = Fixed::from_raw(256 + 128); CHECK_EQ((a*b).to_int(), 3); }
 TEST(fixed_neg_floor){ CHECK_EQ(Fixed::from_raw(-128).to_int(), -1); }
+TEST(fixed_default_is_zero){ Fixed f; CHECK_EQ(f.raw, 0); } // guards against uninitialized Vec2/Body velocity

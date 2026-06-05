@@ -8,6 +8,7 @@
 #include "bn_sprite_ptr.h"
 #include "bn_sprite_text_generator.h"
 #include "common_variable_8x16_sprite_font.h"
+#include "engine/fade.h"
 
 namespace game
 {
@@ -24,9 +25,15 @@ void run_title(const logic::World& world)
     bn::vector<bn::sprite_ptr, 40> prompt;
     text.generate(0, 16, world.spronks_freed != 0 ? "CONTINUE - PRESS START" : "PRESS START", prompt);
 
+    engine::fade_in(16); // fade in from the black handed over by the previous scene
+
     while(true)
     {
-        if(bn::keypad::start_pressed()) return;
+        if(bn::keypad::start_pressed())
+        {
+            engine::fade_out(16); // hand the next scene a black screen
+            return;
+        }
         bn::core::update();
     }
 }

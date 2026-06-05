@@ -91,7 +91,14 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world)
         inst.sprite->set_camera(cam);
     }
 
-    engine::fade_in(16);
+    // Centre the camera on the player BEFORE fading in, else the fade reveals the level
+    // centre (and the enemy) and then snaps to Laurel on the first loop frame.
+    // (int locals: to_int() returns int32_t == long on arm-none-eabi, ambiguous as bn::fixed.)
+    int cx0 = player.body.pos.x.to_int() + player.body.half_w.to_int();
+    int cy0 = player.body.pos.y.to_int() + player.body.half_h.to_int();
+    cam.set_position(cx0 - hw, cy0 - hh);
+    engine::set_fade(16);   // start black; fades in LIVE over the loop so the player is
+    int fade_in_t = 16;     // controllable from frame 0 (no frozen-then-snap on held input)
 
     DungeonResult result = DungeonResult::Quit;
     while(true)
@@ -155,6 +162,7 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world)
         int cx = player.body.pos.x.to_int() + player.body.half_w.to_int();
         int cy = player.body.pos.y.to_int() + player.body.half_h.to_int();
         cam.set_position(cx - hw, cy - hh);
+        if(fade_in_t > 0) engine::set_fade(--fade_in_t); // live fade-in ramp
         bn::core::update();
     }
 
