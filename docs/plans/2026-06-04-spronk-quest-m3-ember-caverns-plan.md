@@ -57,11 +57,11 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started.
+**Overall:** Phase 0 shipped (pure logic, 95/95 host tests). Branch `m3-ember-caverns`. Phases 1–5 remaining.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 0 — Pure logic systems | ⬜ Not started | — | — |
+| 0 — Pure logic systems | ✅ Shipped | (Phase 0 commit) | lava, FireCast/economy, ability pickup, pushable block, trigger→target, fire-immune, fire-clears-gate. 95/95 host (+24). |
 | 1 — Level compiler symbols + art | ⬜ Not started | — | — |
 | 2 — Engine: spell input + fire pool + rendering | ⬜ Not started | — | — |
 | 3 — scene_dungeon integration (additive) | ⬜ Not started | — | — |
