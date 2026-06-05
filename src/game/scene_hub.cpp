@@ -35,11 +35,14 @@ HubResult run_hub(logic::World& world)
         engine::set_collision_tile(g.tx, g.ty, open ? 0 : 1);
         engine::set_level_tile(lvl.view, g.tx, g.ty, open ? 0 : logic::gate_info(g.type).bg_tile);
     }
-    // Render doors: Dungeon 1 open (enterable), others locked.
+    // Render doors as a 2-wide x 4-tall archway (Laurel is 16x32). Dungeon 1 open, others locked.
     for(int i = 0; i < HUB_DATA.door_count; ++i)
     {
         const logic::DoorSpawn& dr = HUB_DATA.doors[i];
-        engine::set_level_tile(lvl.view, dr.tx, dr.ty, dr.dungeon == 1 ? 5 : 6);
+        int t = dr.dungeon == 1 ? 5 : 6;
+        for(int dy = 0; dy < 4; ++dy)
+            for(int dx = 0; dx < 2; ++dx)
+                engine::set_level_tile(lvl.view, dr.tx + dx, dr.ty - dy, t);
     }
 
     bn::camera_ptr cam = bn::camera_ptr::create(0, 0);
@@ -73,9 +76,9 @@ HubResult run_hub(logic::World& world)
             {
                 const logic::DoorSpawn& dr = HUB_DATA.doors[i];
                 if(dr.dungeon != 1) continue;
-                logic::Body door;
-                door.half_w = fx(8); door.half_h = fx(8);
-                door.pos = { fx(dr.tx * 8), fx(dr.ty * 8) };
+                logic::Body door; // matches the 2x4 archway region
+                door.half_w = fx(8); door.half_h = fx(16);
+                door.pos = { fx(dr.tx * 8), fx((dr.ty - 3) * 8) };
                 if(logic::aabb_overlap(player.body, door))
                 {
                     engine::fade_out(16);

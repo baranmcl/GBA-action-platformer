@@ -139,18 +139,15 @@ def gen_tiles():
     ox = 8 * 4
     rect(im, ox, 0, ox + 7, 0, 12); rect(im, ox, 7, ox + 7, 7, 12)
     rect(im, ox, 0, ox, 7, 12); rect(im, ox + 7, 0, ox + 7, 7, 12)
-    # tile 5: door-open (an archway: stone frame, dark opening)
+    # tile 5: door-open SEGMENT (dark opening + side jambs; tiles 2-wide x N-tall into a doorway)
     ox = 8 * 5
-    rect(im, ox + 1, 0, ox + 6, 7, 1)        # dark opening
-    rect(im, ox, 0, ox, 7, 12); rect(im, ox + 7, 0, ox + 7, 7, 12)  # stone jambs
-    rect(im, ox + 1, 0, ox + 6, 0, 12)       # stone lintel
-    # tile 6: door-locked (archway with gold bars)
+    rect(im, ox, 0, ox + 7, 7, 1)            # dark opening fill
+    rect(im, ox, 0, ox, 7, 12); rect(im, ox + 7, 0, ox + 7, 7, 12)  # stone jambs (left/right)
+    # tile 6: door-locked SEGMENT (dark + jambs + central gold bar -> barred look when tiled)
     ox = 8 * 6
-    rect(im, ox + 1, 0, ox + 6, 7, 1)        # dark opening
-    rect(im, ox, 0, ox, 7, 12); rect(im, ox + 7, 0, ox + 7, 7, 12)  # stone jambs
-    rect(im, ox + 1, 0, ox + 6, 0, 12)       # lintel
-    for cx in (2, 4, 6):                      # gold bars (locked)
-        rect(im, ox + cx, 1, ox + cx, 7, 6)
+    rect(im, ox, 0, ox + 7, 7, 1)
+    rect(im, ox, 0, ox, 7, 12); rect(im, ox + 7, 0, ox + 7, 7, 12)
+    rect(im, ox + 3, 0, ox + 4, 7, 6)        # gold bar
     write(im, "tiles", {"type": "regular_bg_tiles", "bpp_mode": "bpp_4"})
 
 def gen_bg_palette():
