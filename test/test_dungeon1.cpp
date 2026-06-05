@@ -7,17 +7,17 @@ static Body mk(int x, int y, int hw, int hh){
 }
 TEST(spronk_freed_on_overlap){
     World w; Body p = mk(10,10,4,4); Body cage = mk(12,12,4,4);
-    CHECK(try_free_spronk(p, cage, w) == true);
-    CHECK(w.spronk1_freed); CHECK(w.featherleap); CHECK(w.gate1_open);
+    CHECK(try_free_spronk(p, cage, w, 1) == true);
+    CHECK(w.spronk_freed(1)); CHECK(!w.spronk_freed(2));
 }
 TEST(no_free_when_apart){
     World w; Body p = mk(0,0,4,4); Body cage = mk(40,0,4,4);
-    CHECK(try_free_spronk(p, cage, w) == false);
-    CHECK(!w.spronk1_freed); CHECK(!w.featherleap); CHECK(!w.gate1_open);
+    CHECK(try_free_spronk(p, cage, w, 1) == false);
+    CHECK(!w.spronk_freed(1));
 }
 TEST(idempotent_after_freed){
-    World w; w.spronk1_freed=true; w.featherleap=true; w.gate1_open=true;
+    World w; w.free_spronk(1);
     Body p = mk(0,0,4,4); Body cage = mk(40,0,4,4); // not overlapping
-    CHECK(try_free_spronk(p, cage, w) == true); // stays freed
-    CHECK(w.featherleap);
+    CHECK(try_free_spronk(p, cage, w, 1) == true); // stays freed
+    CHECK(w.spronk_freed(1));
 }
