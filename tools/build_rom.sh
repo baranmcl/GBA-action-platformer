@@ -16,4 +16,10 @@ WINPY="/c/Users/baranmcl/AppData/Local/Programs/Python/Python312"
 
 MAKE_ARGS="${*:-"-j8"}"
 
+# Regenerate level headers (ASCII+JSON -> C++) before building the ROM.
+for f in "$REPO"/tools/levels/*.txt; do
+    [ -e "$f" ] || continue
+    "$WINPY/python" "$REPO/tools/build_level.py" "$f" "$REPO/include/game/levels/$(basename "${f%.txt}").h"
+done
+
 exec "$DKP_BASH" -lc "cd '$REPO' && export PATH=\"$WINPY:\$PATH\" && make $MAKE_ARGS"
