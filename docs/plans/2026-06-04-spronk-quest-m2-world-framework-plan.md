@@ -57,11 +57,11 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started.
+**Overall:** Phase 0 shipped — 60/60 host tests green. Branch `m2-world-framework`.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 0 — Save v2 + gate logic (pure) | ⬜ Not started | — | — |
+| 0 — Save v2 + gate logic (pure) | ✅ Shipped | Task 0.1, 0.2 | 60/60 host tests. ROM build intentionally broken until Phase 2 (World ripple). |
 | 1 — Level-data pipeline | ⬜ Not started | — | — |
 | 2 — Engine: loader + fade + scene_dungeon | ⬜ Not started | — | — |
 | 3 — Hub scene + gate integration | ⬜ Not started | — | — |
@@ -127,7 +127,7 @@ test/              -- test_world_state_v2.cpp, test_gates.cpp, test_level_data.c
 
 ## Phase 0 — Save schema v2 + gate logic (pure, host-tested)
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED on 2026-06-04 (branch `m2-world-framework`). Tasks 0.1 (World bitmasks + SaveData v2 + v1→v2 migration + dungeon1.h ripple) and 0.2 (gate-type table + can_pass) done. 60/60 host tests green. NOTE: ROM build is intentionally broken from here until Phase 2 retires the old-World references in `scene_play`/`scene_title`.
 
 Pure foundations everything else builds on. Strict TDD via `bash tools/host_test.sh`.
 
