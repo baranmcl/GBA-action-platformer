@@ -3,11 +3,11 @@
 #include "logic/meters.h"
 #include "logic/world_state.h"
 using namespace logic;
-TEST(fire_needs_magic){ FireCast fc; Meter magic{10,100}; BoltSpawn out;
-  CHECK(fc.try_cast(true, magic, Vec2{}, 1, out)==false); CHECK_EQ(magic.cur,10); }   // insufficient
+TEST(fire_needs_magic){ FireCast fc; Meter magic{5,100}; BoltSpawn out;
+  CHECK(fc.try_cast(true, magic, Vec2{}, 1, out)==false); CHECK_EQ(magic.cur,5); }     // insufficient (cost 10)
 TEST(fire_spends_and_spawns){ FireCast fc; Meter magic{50,100}; BoltSpawn out;
   CHECK(fc.try_cast(true, magic, Vec2{Fixed::from_int(5),Fixed::from_int(5)}, 1, out)==true);
-  CHECK_EQ(magic.cur,25); CHECK(out.vel.x.raw>0); }                                    // spent 25, facing +
+  CHECK_EQ(magic.cur,40); CHECK(out.vel.x.raw>0); }                                    // spent 10, facing +
 TEST(fire_cooldown){ FireCast fc; Meter magic{100,100}; BoltSpawn out;
   CHECK(fc.try_cast(true, magic, Vec2{}, 1, out)==true);
   CHECK(fc.try_cast(true, magic, Vec2{}, 1, out)==false);   // cooling

@@ -55,22 +55,23 @@ namespace
         logic::Body b{}; b.half_w = fx(hw); b.half_h = fx(hh);
         b.pos = { fx(tx * 8), fx(ty * 8) }; return b;
     }
-    // A door/gate is a player-sized 2-wide x 4-tall region anchored top-left at (tx,ty).
-    void fill_region(engine::LevelView& view, int tx, int ty, int bg){
-        for(int dy = 0; dy < 4; ++dy) for(int dx = 0; dx < 2; ++dx){
-            engine::set_collision_tile(tx + dx, ty + dy, 1);
-            engine::set_level_tile(view, tx + dx, ty + dy, bg);
+    // A gate/wall is a FULL-height 2-wide column (rows 1..floor-1) at column tx, so it
+    // can't be double-jumped over — you must clear it. Clearing opens the whole column.
+    void fill_column(engine::LevelView& view, int tx, int level_h, int bg){
+        for(int ty = 1; ty < level_h - 2; ++ty) for(int dx = 0; dx < 2; ++dx){
+            engine::set_collision_tile(tx + dx, ty, 1);
+            engine::set_level_tile(view, tx + dx, ty, bg);
         }
     }
-    void open_region(engine::LevelView& view, int tx, int ty){
-        for(int dy = 0; dy < 4; ++dy) for(int dx = 0; dx < 2; ++dx){
-            engine::set_collision_tile(tx + dx, ty + dy, 0);
-            engine::set_level_tile(view, tx + dx, ty + dy, 0);
+    void open_column(engine::LevelView& view, int tx, int level_h){
+        for(int ty = 1; ty < level_h - 2; ++ty) for(int dx = 0; dx < 2; ++dx){
+            engine::set_collision_tile(tx + dx, ty, 0);
+            engine::set_level_tile(view, tx + dx, ty, 0);
         }
     }
 }
 
-DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world)
+DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, logic::PlayerState& ps)
 {
     const int d = world.current_dungeon;
     bn::bg_palettes::set_transparent_color(bn::color(8, 8, 24));
@@ -90,8 +91,8 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world)
     player.body.half_w = fx(8); player.body.half_h = fx(16);
     player.body.pos = spawn_pos;
 
-    logic::Meter health{ 100, 100 };
-    logic::Meter magic{ 0, 100 };
+    logic::Meter& health = ps.health;   // persist across hub <-> dungeon (no reset on entry)
+    logic::Meter& magic  = ps.magic;
     int invuln = 0;
 
     logic::SpellState spell; spell.refresh(world);
@@ -101,8 +102,8 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world)
     engine::FirePool fire(lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::Hud hud;
 
-    // Spell HUD icon (fire) — screen-fixed, shown once Fire is owned.
-    bn::sprite_ptr spell_icon = bn::sprite_items::fire_proj.create_sprite(-100, -72);
+    // Spell HUD icon (fire) — screen-fixed top-RIGHT, clear of the top-left health/magic bars.
+    bn::sprite_ptr spell_icon = bn::sprite_items::fire_proj.create_sprite(104, -68);
     spell_icon.set_visible(spell.selected == logic::SpellId::Fire);
 
     // ---- cage / spronk ----
@@ -137,12 +138,14 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world)
     bn::vector<GateInst, 24> gates;
     for(int i = 0; i < level.gate_count && i < 24; ++i){
         const logic::GateSpawn& g = level.gates[i];
-        gates.push_back(GateInst{ g, tile_body(g.tx, g.ty, 8, 16), false }); // 2x4 door region
+        logic::Body gb; gb.half_w = fx(8); gb.half_h = fx((level.h - 3) * 4); // full-column body
+        gb.pos = { fx(g.tx * 8), fx(8) };
+        gates.push_back(GateInst{ g, gb, false });
         GateInst& gi = gates.back();
         const logic::GateInfo& info = logic::gate_info(g.type);
         bool passable = info.is_geometry && logic::can_pass(g.type, world.abilities);
-        if(passable){ gi.open = true; }                          // geometry gate already owned -> open
-        else { fill_region(lvl.view, g.tx, g.ty, info.bg_tile); } // closed -> 2x4 solid + visible
+        if(passable){ gi.open = true; }                              // geometry gate already owned -> open
+        else { fill_column(lvl.view, g.tx, level.h, info.bg_tile); } // closed -> full-height vine/ice wall
     }
 
     // ---- ability shrines ----
@@ -172,7 +175,9 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world)
     bn::vector<BrazierInst, 16> braziers;
     for(int i = 0; i < level.brazier_count && i < 16; ++i){
         const logic::BrazierSpawn& b = level.braziers[i];
-        braziers.push_back(BrazierInst{ b.tx, b.ty, b.group, tile_body(b.tx, b.ty, 4, 4), false });
+        // Tall hit-body (rows 14..19) so a horizontal Fire shot at the player's chest height
+        // still hits a brazier sitting on the floor.
+        braziers.push_back(BrazierInst{ b.tx, b.ty, b.group, tile_body(b.tx, 14, 6, 24), false });
         engine::set_level_tile(lvl.view, b.tx, b.ty, 14);
     }
 
@@ -226,7 +231,7 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world)
         for(GateInst& gi : gates){
             if(!gi.open && logic::fire_clears_gate(gi.spawn.type) && fire.consume_hit(gi.body)){
                 gi.open = true;
-                open_region(lvl.view, gi.spawn.tx, gi.spawn.ty);
+                open_column(lvl.view, gi.spawn.tx, level.h);
             }
         }
         for(BrazierInst& bi : braziers){
@@ -282,27 +287,29 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world)
             bi.sprite->set_position(bx - hw, by - hh);
         }
 
-        // ---- triggers: update inputs, open targets once ----
+        // ---- triggers: update inputs, open/close targets ----
         for(TriggerInst& ti : triggers){
             switch(ti.trig.kind){
                 case logic::TriggerKind::Plate: {
-                    bool on = px2t(player.body.pos.x) <= ti.src_tx &&
-                              px2t(player.body.pos.x + player.body.half_w + player.body.half_w - fx(1)) >= ti.src_tx &&
-                              px2t(player.body.pos.y + player.body.half_h + player.body.half_h - fx(1)) == ti.src_ty;
+                    // Pressed by the player OR a block. The gate is held open only WHILE pressed,
+                    // so the player can step on it (it opens) but can't pass alone — walking toward
+                    // the gate releases the plate and it shuts. Only the block, left resting on it,
+                    // holds the gate open for the player to walk through. (ti.applied = "open now".)
+                    bool on = logic::aabb_overlap(player.body, tile_body(ti.src_tx, ti.src_ty, 4, 4));
                     for(BlockInst& bi : blocks) if(bi.blk.tx == ti.src_tx && bi.blk.ty == ti.src_ty) on = true;
                     ti.trig.pressed = on;
+                    if(on && !ti.applied){ ti.applied = true;  open_column(lvl.view, ti.trig.target_tx, level.h); }
+                    else if(!on && ti.applied){ ti.applied = false; fill_column(lvl.view, ti.trig.target_tx, level.h, 1); }
                     break; }
                 case logic::TriggerKind::Button: {
                     if(logic::aabb_overlap(player.body, tile_body(ti.src_tx, ti.src_ty, 4, 4))) ti.trig.pressed = true; // latch
+                    if(!ti.applied && ti.trig.active()){ ti.applied = true; open_column(lvl.view, ti.trig.target_tx, level.h); }
                     break; }
                 case logic::TriggerKind::Braziers: {
                     int n = 0; for(BrazierInst& bi : braziers) if(bi.group == ti.group && bi.lit) ++n;
                     ti.trig.lit = n;
+                    if(!ti.applied && ti.trig.active()){ ti.applied = true; open_column(lvl.view, ti.trig.target_tx, level.h); } // latch
                     break; }
-            }
-            if(!ti.applied && ti.trig.active()){
-                ti.applied = true;
-                open_region(lvl.view, ti.trig.target_tx, ti.trig.target_ty); // 2x4 passage
             }
         }
 

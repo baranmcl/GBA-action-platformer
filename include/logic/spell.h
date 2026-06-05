@@ -6,7 +6,7 @@ namespace logic {
 enum class SpellId : uint8_t { None=0, Fire };   // D3+: Ice, Light, Stone...
 
 struct FireCast {
-    int cost = 25;
+    int cost = 10;   // cheap enough that a few enemy kills fund a dungeon's Fire obstacles
     int cooldown_ticks = 20;
     int cd = 0;
     void tick(){ if(cd>0) --cd; }

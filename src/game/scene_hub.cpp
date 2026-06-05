@@ -15,6 +15,7 @@
 #include "engine/level_view.h"  // set_level_tile
 #include "engine/avatar.h"
 #include "engine/fade.h"
+#include "engine/hud.h"
 #include "game/levels/hub.h"
 
 namespace game
@@ -27,7 +28,7 @@ namespace {
     }
 }
 
-HubResult run_hub(logic::World& world)
+HubResult run_hub(logic::World& world, logic::PlayerState& ps)
 {
     bn::bg_palettes::set_transparent_color(bn::color(8, 8, 24));
 
@@ -61,6 +62,7 @@ HubResult run_hub(logic::World& world)
     player.body.pos = { fx(HUB_DATA.spawn_tx * 8), fx(HUB_DATA.spawn_ty * 8) };
 
     engine::Avatar avatar(player, lvl.view.map_px_w, lvl.view.map_px_h, cam);
+    engine::Hud hud; // shows the persistent health/magic in the hub too
 
     int cx0 = player.body.pos.x.to_int() + player.body.half_w.to_int();
     int cy0 = player.body.pos.y.to_int() + player.body.half_h.to_int();
@@ -96,6 +98,7 @@ HubResult run_hub(logic::World& world)
         int cx = player.body.pos.x.to_int() + player.body.half_w.to_int();
         int cy = player.body.pos.y.to_int() + player.body.half_h.to_int();
         cam.set_position(cx - hw, cy - hh);
+        hud.update(ps.health, ps.magic);
         if(fade_in_t > 0) engine::set_fade(--fade_in_t);
         bn::core::update();
     }
