@@ -35,3 +35,4 @@ TEST(enemy_dead_does_not_move){
     CHECK_EQ(e.body.pos.x.raw, x0.raw);
 }
 TEST(enemy_kill_flag){ Enemy e; e.kill(); CHECK(!e.alive); }
+TEST(enemy_fire_immune_flag){ Enemy e; e.fire_immune=true; CHECK(e.fire_immune); Enemy d; CHECK(!d.fire_immune); }
