@@ -115,10 +115,11 @@ def gen_bolt():
     write(im, "bolt", {"type": "sprite"})
 
 def gen_tiles():
-    """Background tileset: 7 tiles of 8x8 in a horizontal strip. Index order:
-    0 blank, 1 ground, 2 one-way, 3 gate(closed wall), 4 cage, 5 door-open, 6 door-locked.
-    (7-12 reserved for M3+ obstacle-gate art.)"""
-    im = new_img(8 * 7, 8)
+    """Background tileset: 19 tiles of 8x8 in a horizontal strip. Index order:
+    0 blank, 1 ground, 2 one-way, 3 gate(closed wall), 4 cage, 5 door-open, 6 door-locked,
+    7 vine, 8 ice, 9-12 reserved (D3+ gates), 13 lava, 14 brazier-unlit, 15 brazier-lit,
+    16 free, 17 plate, 18 button. (block + shrine are SPRITES, not bg tiles.)"""
+    im = new_img(8 * 19, 8)
     # tile 0: blank -> all index 0 (transparent, shows backdrop). nothing to draw.
     # tile 1: ground (brown with grass top, dark bottom)
     ox = 8 * 1
@@ -148,7 +149,72 @@ def gen_tiles():
     rect(im, ox, 0, ox + 7, 7, 1)
     rect(im, ox, 0, ox, 7, 12); rect(im, ox + 7, 0, ox + 7, 7, 12)
     rect(im, ox + 3, 0, ox + 4, 7, 6)        # gold bar
+    # tile 7: vine gate (green tangle)
+    ox = 8 * 7
+    rect(im, ox, 0, ox + 7, 7, 5)            # dark green fill
+    for yy in range(0, 8, 2):
+        rect(im, ox, yy, ox + 7, yy, 4)      # lighter green strands
+    px(im, ox + 2, 1, 4); px(im, ox + 5, 4, 4)
+    # tile 8: ice gate (pale blue block)
+    ox = 8 * 8
+    rect(im, ox, 0, ox + 7, 7, 8)            # cyan fill
+    rect(im, ox, 0, ox + 7, 0, 9); rect(im, ox + 1, 1, ox + 2, 2, 9)  # white glints
+    # tile 13: lava (red with orange/gold bubbles)
+    ox = 8 * 13
+    rect(im, ox, 0, ox + 7, 7, 13)          # red
+    rect(im, ox, 0, ox + 7, 0, 6)           # gold crust line
+    px(im, ox + 2, 4, 6); px(im, ox + 5, 5, 6); px(im, ox + 4, 2, 6)  # bubbles
+    # tile 14: brazier unlit (brown bowl on a post)
+    ox = 8 * 14
+    rect(im, ox + 2, 5, ox + 5, 7, 11)      # post
+    rect(im, ox + 1, 3, ox + 6, 4, 12)      # stone bowl
+    # tile 15: brazier lit (bowl + flame)
+    ox = 8 * 15
+    rect(im, ox + 2, 5, ox + 5, 7, 11)      # post
+    rect(im, ox + 1, 3, ox + 6, 4, 12)      # bowl
+    rect(im, ox + 2, 0, ox + 5, 3, 6)       # gold flame
+    px(im, ox + 3, 0, 13); px(im, ox + 4, 1, 13)  # red flame tips
+    # tile 17: pressure plate (recessed stone on the floor)
+    ox = 8 * 17
+    rect(im, ox, 6, ox + 7, 7, 11)          # floor base
+    rect(im, ox + 1, 4, ox + 6, 5, 12)      # plate
+    # tile 18: hidden button (small floor switch)
+    ox = 8 * 18
+    rect(im, ox, 6, ox + 7, 7, 11)          # floor base
+    rect(im, ox + 3, 4, ox + 4, 5, 6)       # gold button
     write(im, "tiles", {"type": "regular_bg_tiles", "bpp_mode": "bpp_4"})
+
+def gen_ember_sprites():
+    """M3 sprites: fire projectile, fire enemy, pushable block, ability shrine."""
+    # fire projectile 8x8 (orange/red orb)
+    fp = new_img(8, 8)
+    rect(fp, 2, 2, 5, 5, 6)                  # gold core
+    rect(fp, 3, 3, 4, 4, 13)                 # red center
+    px(fp, 1, 4, 6); px(fp, 6, 3, 6); px(fp, 4, 1, 6); px(fp, 3, 6, 6)
+    write(fp, "fire_proj", {"type": "sprite"})
+    # fire enemy 16x16 (red variant of the green enemy)
+    fe = new_img(16, 16)
+    rect(fe, 3, 5, 12, 14, 13)               # red body
+    rect(fe, 4, 11, 11, 14, 1)               # dark base
+    px(fe, 6, 8, 9); px(fe, 9, 8, 9)         # white eyes
+    rect(fe, 5, 4, 10, 4, 6)                 # gold brow
+    write(fe, "fire_enemy", {"type": "sprite"})
+    # pushable block 16x16 (brown crate)
+    bl = new_img(16, 16)
+    rect(bl, 0, 0, 15, 15, 10)               # brown
+    rect(bl, 0, 0, 15, 0, 11); rect(bl, 0, 15, 15, 15, 11)
+    rect(bl, 0, 0, 0, 15, 11); rect(bl, 15, 0, 15, 15, 11)
+    rect(bl, 0, 0, 15, 15, 11)               # ... outline
+    rect(bl, 1, 1, 14, 14, 10)
+    px(bl, 4, 4, 11); px(bl, 11, 11, 11); px(bl, 8, 8, 11)  # grain
+    write(bl, "block", {"type": "sprite"})
+    # ability shrine 16x16 (glowing pedestal)
+    sh = new_img(16, 16)
+    rect(sh, 4, 11, 11, 15, 12)              # stone pedestal
+    rect(sh, 6, 3, 9, 10, 6)                 # gold orb column
+    rect(sh, 5, 1, 10, 2, 9)                 # white glow top
+    px(sh, 3, 6, 9); px(sh, 12, 6, 9)        # sparkles
+    write(sh, "shrine", {"type": "sprite"})
 
 def gen_bg_palette():
     """A swatch image whose 16-colour palette becomes the shared background palette.
@@ -173,4 +239,5 @@ if __name__ == "__main__":
     gen_tiles()
     gen_bg_palette()
     gen_hud()
-    print("placeholder sprites + bg tiles + hud generated.")
+    gen_ember_sprites()
+    print("placeholder sprites + bg tiles + hud + ember art generated.")
