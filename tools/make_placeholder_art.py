@@ -164,24 +164,31 @@ def gen_tiles():
     rect(im, ox, 0, ox + 7, 7, 13)          # red
     rect(im, ox, 0, ox + 7, 0, 6)           # gold crust line
     px(im, ox + 2, 4, 6); px(im, ox + 5, 5, 6); px(im, ox + 4, 2, 6)  # bubbles
-    # tile 14: brazier unlit (brown bowl on a post)
+    # tile 14: brazier unlit — tall GREY STONE bowl on a thin dark post (cold/ashen).
+    # Deliberately grey + bowl-shaped so it never reads as the brown wooden crate.
     ox = 8 * 14
-    rect(im, ox + 2, 5, ox + 5, 7, 11)      # post
-    rect(im, ox + 1, 3, ox + 6, 4, 12)      # stone bowl
-    # tile 15: brazier lit (bowl + flame)
+    rect(im, ox + 3, 4, ox + 4, 7, 1)       # thin dark post
+    rect(im, ox + 1, 2, ox + 6, 3, 12)      # wide stone bowl
+    rect(im, ox + 1, 2, ox + 6, 2, 9)       # pale stone rim
+    px(im, ox + 3, 3, 14); px(im, ox + 4, 3, 14)  # cold ash inside
+    # tile 15: brazier lit — same bowl + a tall bright flame
     ox = 8 * 15
-    rect(im, ox + 2, 5, ox + 5, 7, 11)      # post
-    rect(im, ox + 1, 3, ox + 6, 4, 12)      # bowl
-    rect(im, ox + 2, 0, ox + 5, 3, 6)       # gold flame
-    px(im, ox + 3, 0, 13); px(im, ox + 4, 1, 13)  # red flame tips
+    rect(im, ox + 3, 4, ox + 4, 7, 1)       # post
+    rect(im, ox + 1, 2, ox + 6, 3, 12)      # bowl
+    rect(im, ox + 1, 2, ox + 6, 2, 9)       # rim
+    rect(im, ox + 2, 0, ox + 5, 2, 13)      # red flame body
+    rect(im, ox + 3, 1, ox + 4, 2, 6)       # gold inner flame
+    px(im, ox + 3, 0, 9)                    # white-hot tip
     # tile 17: pressure plate (recessed stone on the floor)
     ox = 8 * 17
     rect(im, ox, 6, ox + 7, 7, 11)          # floor base
     rect(im, ox + 1, 4, ox + 6, 5, 12)      # plate
-    # tile 18: hidden button (small floor switch)
+    # tile 18: hidden button — a round RED switch (distinct from grey braziers/brown crate)
     ox = 8 * 18
     rect(im, ox, 6, ox + 7, 7, 11)          # floor base
-    rect(im, ox + 3, 4, ox + 4, 5, 6)       # gold button
+    rect(im, ox + 2, 3, ox + 5, 5, 13)      # red dome
+    rect(im, ox + 2, 3, ox + 5, 3, 6)       # gold rim
+    px(im, ox + 3, 4, 7)                    # highlight
     write(im, "tiles", {"type": "regular_bg_tiles", "bpp_mode": "bpp_4"})
 
 def gen_ember_sprites():
@@ -199,11 +206,13 @@ def gen_ember_sprites():
     px(fe, 6, 8, 9); px(fe, 9, 8, 9)         # white eyes
     rect(fe, 5, 4, 10, 4, 6)                 # gold brow
     write(fe, "fire_enemy", {"type": "sprite"})
-    # pushable block 8x8 (brown crate, 1-tile to match its grid collision)
+    # pushable block 8x8 — wooden crate with diagonal X-bracing, so it reads as a
+    # pushable crate, not a brazier or button.
     bl = new_img(8, 8)
-    rect(bl, 0, 0, 7, 7, 11)                 # dark-brown border
+    rect(bl, 0, 0, 7, 7, 11)                 # dark-brown frame
     rect(bl, 1, 1, 6, 6, 10)                 # brown body
-    px(bl, 3, 3, 11); px(bl, 5, 5, 11)       # grain
+    for d in range(1, 7):                    # X brace across the face
+        px(bl, d, d, 11); px(bl, 7 - d, d, 11)
     write(bl, "block", {"type": "sprite"})
     # ability shrine 16x16 (glowing pedestal)
     sh = new_img(16, 16)
