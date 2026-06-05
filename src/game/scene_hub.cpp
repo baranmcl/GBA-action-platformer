@@ -19,7 +19,13 @@
 
 namespace game
 {
-namespace { logic::Fixed fx(int v){ return logic::Fixed::from_int(v); } }
+namespace {
+    logic::Fixed fx(int v){ return logic::Fixed::from_int(v); }
+    // Door N enterable: D1 always; D2 once D1's spronk is freed; D3-8 not built yet.
+    bool door_enterable(int n, const logic::World& w){
+        return n == 1 || (n == 2 && w.spronk_freed(1));
+    }
+}
 
 HubResult run_hub(logic::World& world)
 {
@@ -39,7 +45,7 @@ HubResult run_hub(logic::World& world)
     for(int i = 0; i < HUB_DATA.door_count; ++i)
     {
         const logic::DoorSpawn& dr = HUB_DATA.doors[i];
-        int t = dr.dungeon == 1 ? 5 : 6;
+        int t = door_enterable(dr.dungeon, world) ? 5 : 6; // open vs locked
         for(int dy = 0; dy < 4; ++dy)
             for(int dx = 0; dx < 2; ++dx)
                 engine::set_level_tile(lvl.view, dr.tx + dx, dr.ty - dy, t);
@@ -75,7 +81,7 @@ HubResult run_hub(logic::World& world)
             for(int i = 0; i < HUB_DATA.door_count; ++i)
             {
                 const logic::DoorSpawn& dr = HUB_DATA.doors[i];
-                if(dr.dungeon != 1) continue;
+                if(!door_enterable(dr.dungeon, world)) continue;
                 logic::Body door; // matches the 2x4 archway region
                 door.half_w = fx(8); door.half_h = fx(16);
                 door.pos = { fx(dr.tx * 8), fx((dr.ty - 3) * 8) };

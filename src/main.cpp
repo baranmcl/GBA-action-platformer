@@ -6,6 +6,7 @@
 #include "game/scene_hub.h"
 #include "game/scene_dungeon.h"
 #include "game/levels/dungeon1.h"
+#include "game/levels/dungeon2.h"
 
 int main()
 {
@@ -20,11 +21,14 @@ int main()
     while(true)
     {
         game::HubResult hr = game::run_hub(world);   // returns when a door is entered
-        int n = hr.enter_dungeon;                     // 1..8; M2 only ever 1 (others locked)
-        if(n != 1) continue;
+        int n = hr.enter_dungeon;                     // 1..8; M3 supports 1 and 2 (others locked)
+        const logic::LevelData* lvl = nullptr;
+        if(n == 1) lvl = &DUNGEON1_DATA;
+        else if(n == 2) lvl = &DUNGEON2_DATA;
+        else continue;                                // doors 3-8 not built
 
         world.current_dungeon = n;
-        game::DungeonResult dr = game::run_dungeon(DUNGEON1_DATA, world);
+        game::DungeonResult dr = game::run_dungeon(*lvl, world);
         world.current_dungeon = 0;                    // back in the hub before saving
         if(dr == game::DungeonResult::Cleared)
             engine::write_world(world);               // persist earned spronk/ability

@@ -1,0 +1,59 @@
+{
+  "tileset": "tiles",
+  "enemies": [
+    {
+      "patrol": [
+        11,
+        16
+      ]
+    },
+    {
+      "patrol": [
+        43,
+        46
+      ],
+      "fire_immune": true
+    }
+  ],
+  "pickups": [
+    {
+      "ability": "fire"
+    }
+  ],
+  "plates": [
+    {
+      "target": [
+        24,
+        16
+      ]
+    }
+  ],
+  "buttons": [
+    {
+      "target": [
+        31,
+        16
+      ]
+    }
+  ],
+  "braziers": [
+    {
+      "group": 0
+    },
+    {
+      "group": 0
+    },
+    {
+      "group": 0
+    }
+  ],
+  "brazier_groups": [
+    {
+      "total": 3,
+      "target": [
+        57,
+        16
+      ]
+    }
+  ]
+}

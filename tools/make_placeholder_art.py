@@ -199,14 +199,11 @@ def gen_ember_sprites():
     px(fe, 6, 8, 9); px(fe, 9, 8, 9)         # white eyes
     rect(fe, 5, 4, 10, 4, 6)                 # gold brow
     write(fe, "fire_enemy", {"type": "sprite"})
-    # pushable block 16x16 (brown crate)
-    bl = new_img(16, 16)
-    rect(bl, 0, 0, 15, 15, 10)               # brown
-    rect(bl, 0, 0, 15, 0, 11); rect(bl, 0, 15, 15, 15, 11)
-    rect(bl, 0, 0, 0, 15, 11); rect(bl, 15, 0, 15, 15, 11)
-    rect(bl, 0, 0, 15, 15, 11)               # ... outline
-    rect(bl, 1, 1, 14, 14, 10)
-    px(bl, 4, 4, 11); px(bl, 11, 11, 11); px(bl, 8, 8, 11)  # grain
+    # pushable block 8x8 (brown crate, 1-tile to match its grid collision)
+    bl = new_img(8, 8)
+    rect(bl, 0, 0, 7, 7, 11)                 # dark-brown border
+    rect(bl, 1, 1, 6, 6, 10)                 # brown body
+    px(bl, 3, 3, 11); px(bl, 5, 5, 11)       # grain
     write(bl, "block", {"type": "sprite"})
     # ability shrine 16x16 (glowing pedestal)
     sh = new_img(16, 16)
