@@ -62,7 +62,7 @@ notes and commit messages.
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 0 — Pure logic systems | ✅ Shipped | (Phase 0 commit) | lava, FireCast/economy, ability pickup, pushable block, trigger→target, fire-immune, fire-clears-gate. 95/95 host (+24). |
-| 1 — Level compiler symbols + art | ⬜ Not started | — | — |
+| 1 — Level compiler symbols + art | ✅ Shipped | (Phase 1 commits) | compiler symbols + LevelData arrays (16 Python + 97 host tests); ember art (19-tile tileset + 4 sprites), ROM imports clean. |
 | 2 — Engine: spell input + fire pool + rendering | ⬜ Not started | — | — |
 | 3 — scene_dungeon integration (additive) | ⬜ Not started | — | — |
 | 4 — Dungeon 2 content + hub unlock | ⬜ Not started | — | — |
