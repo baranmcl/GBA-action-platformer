@@ -61,7 +61,22 @@ Physics, collision, combat, meters, and the save format are all validated by fas
 
 ## Project status
 
-**M1 vertical slice: feature-complete, mGBA-verified.** Real-hardware verification pending (see
-`docs/acceptance-m1.md`). Next milestones: the full hub overworld and Dungeons 2–8 (see
-`docs/superpowers/specs/2026-06-03-spronk-quest-design.md` and
-`docs/plans/2026-06-03-spronk-quest-m1-vertical-slice.md`).
+**M2 world framework: feature-complete, mGBA-verified.** Adds the data-driven level pipeline
+(author levels as ASCII `.txt` + JSON — see `tools/levels/`), a central **plaza hub** with
+ability-gated dungeon doors, a thematic gate-type framework, plaza↔dungeon transitions, and an
+expanded save with **v1→v2 migration** (existing M1 saves carry over). Dungeon 1 is now authored
+as data. See `docs/acceptance-m2.md`.
+
+**M1 vertical slice:** shipped (`docs/acceptance-m1.md`).
+
+Real-hardware verification pending. Next milestones: Dungeons 2–8 + their abilities (each now a
+content milestone snapping into the M2 framework). See
+`docs/superpowers/specs/2026-06-03-spronk-quest-design.md` and the per-milestone plans in
+`docs/plans/`.
+
+### Level authoring (M2)
+
+Levels live in `tools/levels/<name>.txt` (ASCII tile grid) + `<name>.json` (metadata). Symbols:
+`#` solid, `.` empty, `^` one-way, `@` spawn, `C` caged spronk, `E` exit, `o` enemy, `G` gate,
+`1`–`8` dungeon doors. `tools/build_level.py` compiles them to `include/game/levels/<name>.h`
+(both `host_test.sh` and `build_rom.sh` regenerate these automatically).

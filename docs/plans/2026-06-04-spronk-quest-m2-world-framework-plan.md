@@ -57,16 +57,16 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Phase 0 shipped — 60/60 host tests green. Branch `m2-world-framework`.
+**Overall:** ✅ **M2 feature-complete, mGBA-verified** (2026-06-04). All phases shipped on `m2-world-framework`; real-hardware flash pending. 76/76 host + 10 Python compiler tests.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 0 — Save v2 + gate logic (pure) | ✅ Shipped | Task 0.1, 0.2 | 60/60 host tests. |
 | 1 — Level-data pipeline | ✅ Shipped | Task 1.1–1.3 | compiler + Dungeon 1 as data. 70/70 host. |
-| 2 — Engine: loader + fade + scene_dungeon | ✅ Shipped | Phase 2 + polish | data-driven D1 == M1, mGBA-verified. Fixes: Fixed zero-init (phantom drift), live fade-in, camera/spawn polish, int32_t==long on ARM. 71/71 host. |
-| 3 — Hub scene + gate integration | ⬜ Not started | — | — |
-| 4 — Integration loop (title→hub→dungeon→hub) | ⬜ Not started | — | — |
-| 5 — Verification + docs | ⬜ Not started | — | — |
+| 2 — Engine: loader + fade + scene_dungeon | ✅ Shipped | Phase 2 + polish | data-driven D1 == M1, mGBA-verified. Fixes: Fixed zero-init, live fade-in, camera/spawn, int32_t==long on ARM. |
+| 3 — Hub scene + gate integration | ✅ Shipped | Task 3.1, 3.2 | plaza + door tiles + 2×4 door archways. Gate blocks/opens from save. |
+| 4 — Integration loop (title→hub→dungeon→hub) | ✅ Shipped | main.cpp | full demo verified: enter D1 → clear → gate opens → D2 revealed → save. |
+| 5 — Verification + docs | ✅ Shipped | `docs/acceptance-m2.md` | v1→v2 migration verified on real SRAM. Real-hardware flash pending. |
 
 ### Deviations
 - _(none yet)_
