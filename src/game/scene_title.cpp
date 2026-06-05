@@ -22,7 +22,7 @@ void run_title(const logic::World& world)
     text.generate(0, -40, "SPRONK QUEST", title);
 
     bn::vector<bn::sprite_ptr, 40> prompt;
-    text.generate(0, 16, world.spronk1_freed ? "CONTINUE - PRESS START" : "PRESS START", prompt);
+    text.generate(0, 16, world.spronks_freed != 0 ? "CONTINUE - PRESS START" : "PRESS START", prompt);
 
     while(true)
     {
