@@ -61,9 +61,9 @@ notes and commit messages.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 0 — Save v2 + gate logic (pure) | ✅ Shipped | Task 0.1, 0.2 | 60/60 host tests. ROM build intentionally broken until Phase 2 (World ripple). |
-| 1 — Level-data pipeline | ⬜ Not started | — | — |
-| 2 — Engine: loader + fade + scene_dungeon | ⬜ Not started | — | — |
+| 0 — Save v2 + gate logic (pure) | ✅ Shipped | Task 0.1, 0.2 | 60/60 host tests. |
+| 1 — Level-data pipeline | ✅ Shipped | Task 1.1–1.3 | compiler + Dungeon 1 as data. 70/70 host. |
+| 2 — Engine: loader + fade + scene_dungeon | ✅ Shipped | Phase 2 + polish | data-driven D1 == M1, mGBA-verified. Fixes: Fixed zero-init (phantom drift), live fade-in, camera/spawn polish, int32_t==long on ARM. 71/71 host. |
 | 3 — Hub scene + gate integration | ⬜ Not started | — | — |
 | 4 — Integration loop (title→hub→dungeon→hub) | ⬜ Not started | — | — |
 | 5 — Verification + docs | ⬜ Not started | — | — |
@@ -72,7 +72,9 @@ notes and commit messages.
 - _(none yet)_
 
 ### Discoveries
-- _(none yet)_
+- **[Phase 2] `int32_t` is `long int` on arm-none-eabi** (both 32-bit). `logic::Fixed::to_int()` returns `int32_t`==`long`, so passing `to_int()` expressions directly to Butano APIs taking `bn::fixed` is **ambiguous** (host g++ where `int32_t`==`int` compiles fine, ARM does not). Assign to an `int` local first. Surfaced in `scene_dungeon` camera `set_position`.
+- **[Phase 2] `logic::Fixed` had no default member initializer** → `Vec2`/`Body` started with indeterminate values; a default-constructed `Player` reused stale stack velocity, drifting on level restart. Fixed by `int32_t raw = 0;` in `fixed.h` (+ `fixed_default_is_zero` test). M1 only "worked" by luck of zeroed stack.
+- **[Phase 2] Blocking fades freeze gameplay** → held input snaps in when control resumes. Dungeon uses a LIVE fade-in (ramp `engine::set_fade` inside the loop); static scenes (title) can keep the blocking `fade_in`.
 
 ---
 
