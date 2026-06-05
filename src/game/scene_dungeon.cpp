@@ -291,11 +291,15 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
         for(TriggerInst& ti : triggers){
             switch(ti.trig.kind){
                 case logic::TriggerKind::Plate: {
-                    // Pressed by the player OR a block. The gate is held open only WHILE pressed,
-                    // so the player can step on it (it opens) but can't pass alone — walking toward
-                    // the gate releases the plate and it shuts. Only the block, left resting on it,
-                    // holds the gate open for the player to walk through. (ti.applied = "open now".)
-                    bool on = logic::aabb_overlap(player.body, tile_body(ti.src_tx, ti.src_ty, 4, 4));
+                    // Pressed by the player OR a block, but only when SQUARELY on the plate —
+                    // the player's horizontal centre must be over the plate column AND the player
+                    // must be grounded on the plate's row (not merely overlapping the edge while
+                    // standing next to/above it; that loose AABB caused the gate to flicker). The
+                    // gate is held open only WHILE pressed, so the player can step on it (it opens)
+                    // but can't pass alone — only the block, left resting on it, holds it open.
+                    int pcx = px2t(player.body.pos.x + player.body.half_w);                       // centre col
+                    int pfy = px2t(player.body.pos.y + player.body.half_h + player.body.half_h - fx(1)); // feet row
+                    bool on = player.body.on_ground && pcx == ti.src_tx && pfy == ti.src_ty;
                     for(BlockInst& bi : blocks) if(bi.blk.tx == ti.src_tx && bi.blk.ty == ti.src_ty) on = true;
                     ti.trig.pressed = on;
                     if(on && !ti.applied){ ti.applied = true;  open_column(lvl.view, ti.trig.target_tx, level.h); }
