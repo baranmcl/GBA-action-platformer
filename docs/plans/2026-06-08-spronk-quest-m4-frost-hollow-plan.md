@@ -61,7 +61,7 @@ notes and commit messages.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 0 — Pure logic (spell generalization, water/ice tiles, freeze/melt, gate) | ⬜ Not started | — | — |
+| 0 — Pure logic (spell generalization, water/ice tiles, freeze/melt, gate) | ✅ Shipped | `105148f` | 111/111 host (+7); purity clean |
 | 1 — Compiler symbols + art | ⬜ Not started | — | — |
 | 2 — Engine: typed spell pool + tile render + HUD icon | ⬜ Not started | — | — |
 | 3 — scene_dungeon integration (additive) | ⬜ Not started | — | — |
@@ -69,7 +69,7 @@ notes and commit messages.
 | 5 — Verification + docs | ⬜ Not started | — | — |
 
 ### Deviations
-- _(none yet)_
+- **Phase 1.2 ROM smoke-test deferred:** Phase 0's `FireCast`→`SpellCast` rename immediately breaks `engine/fire_pool.{h,cpp}` (it references `logic::FireCast`), so NO ROM build is green between Phase 0 and the Phase 2 `SpellPool` rename. Phase 1's art was verified by successful asset generation (`tiles.bmp`=160px/20 tiles, `ice_proj.bmp` written) instead of a ROM build; the first green ROM is at end of Phase 3 (as already noted for Phases 2–3).
 
 ### Discoveries
 - _(none yet)_
@@ -127,7 +127,7 @@ Per `/writing-plans-enhanced` Step 3. Stated once; treat as pasted into each tas
 
 ## Phase 0 — Pure logic systems
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `105148f` on 2026-06-08 (111/111 host, purity clean)
 
 Goal: every new rule is pure C++ and host-tested before any Butano code exists. Order matters: tiles → spell generalization → freeze/melt → gate generalization.
 
