@@ -61,14 +61,14 @@ notes and commit messages.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 0 — Vertical-scroll confirmation spike | ⬜ Not started | — | — |
+| 0 — Vertical-scroll confirmation spike | ✅ Shipped | `1fa452d` | scroll verified; camera clamp added (wrap fix) + hub 20-tall. 117/117 host |
 | 1 — Pure logic (glide/updraft/wind + tiles) | ⬜ Not started | — | — |
 | 2 — Engine: glide input + wind/updraft tiles & art | ⬜ Not started | — | — |
 | 3 — Dungeon 4 content + scene wiring + hub Door 4 | ⬜ Not started | — | — |
 | 4 — Verification + docs | ⬜ Not started | — | — |
 
 ### Deviations
-- _(none yet)_
+- **Camera clamp WAS needed (Phase 0 Step 4 fallback invoked):** the fixed 64×32 BG wraps past the authored level, so a 30-tall stub showed its top wrapped onto the screen bottom. Added `set_clamped_cam` in `scene_dungeon.cpp` AND `scene_hub.cpp` (keeps the 240×160 view inside level bounds; centers sub-screen levels). Also extended the **hub 18→20 rows** so its floor fills the screen height (user-requested; the open-plaza sky on the sides is intentional, left as-is). SHA `1fa452d`.
 
 ### Discoveries
 - **Vertical scroll is already supported (pre-execution finding):** `src/engine/level_view.cpp` allocates a fixed **64×32** BG (`COLS=64, ROWS=32`) and the camera transform uses the full BG size, not the level's `h`. Existing levels are 64×22 (already taller than the 20-tile screen), so vertical scrolling already works — a taller D4 (≤32 rows) just fills more of the BG. Phase 0 confirms this visually rather than building new scroll support.
@@ -120,7 +120,7 @@ Per `/writing-plans-enhanced` Step 3. Stated once; treat as pasted into each tas
 
 ## Phase 0 — Vertical-scroll confirmation spike
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `1fa452d` on 2026-06-08 (scroll verified; camera clamp + hub 20-tall)
 
 Goal: confirm a level taller than one screen scrolls cleanly BEFORE authoring D4. Per the Discoveries note, the 64×32 BG already supports this; this phase is a fast visual check + a fallback.
 
