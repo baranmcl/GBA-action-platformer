@@ -57,21 +57,27 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started. Branch `m5-gale-cliffs` (design spec already committed there).
+**Overall:** ✅ **M5 COMPLETE** — all phases shipped + mGBA-verified end-to-end (fresh-save D1→D4). Branch `m5-gale-cliffs`, 132/132 host. Acceptance: `docs/acceptance-m5.md`. Remaining: real-hardware flash (inherited) + merge.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 0 — Vertical-scroll confirmation spike | ✅ Shipped | `1fa452d` | scroll verified; camera clamp added (wrap fix) + hub 20-tall. 117/117 host |
-| 1 — Pure logic (glide/updraft/wind + tiles) | ✅ Shipped | `4a077e6` | 3 tiles, wind.h, Player::update rules. 124/124 host (+7) |
-| 2 — Engine: glide input + wind/updraft tiles & art | ⬜ Not started | — | — |
-| 3 — Dungeon 4 content + scene wiring + hub Door 4 | ⬜ Not started | — | — |
-| 4 — Verification + docs | ⬜ Not started | — | — |
+| 0 — Vertical-scroll confirmation spike | ✅ Shipped | `1fa452d` | scroll verified; camera clamp added (wrap fix) + hub 20-tall |
+| 1 — Pure logic (glide/updraft/wind + tiles) | ✅ Shipped | `4a077e6` | 3 tiles, wind.h, Player::update rules (+7 host) |
+| 2 — Engine: glide input + wind/updraft tiles & art | ✅ Shipped | `df984ba` | A-held glide input; updraft/wind bg tiles 20/21/22 |
+| 3 — Dungeon 4 content + scene wiring + hub Door 4 | ✅ Shipped | `d5bf596` | scene glide wiring, w/`<`/`>` symbols, D4 + Door 4 |
+| 4 — Verification + docs | ✅ Shipped | `19272b7`, `3957070`, `fa6a256` | playtest tuning (big-map engine, tighter jump, slippery ice, forced D3 crossing) + acceptance/README/close-out |
 
 ### Deviations
-- **Camera clamp WAS needed (Phase 0 Step 4 fallback invoked):** the fixed 64×32 BG wraps past the authored level, so a 30-tall stub showed its top wrapped onto the screen bottom. Added `set_clamped_cam` in `scene_dungeon.cpp` AND `scene_hub.cpp` (keeps the 240×160 view inside level bounds; centers sub-screen levels). Also extended the **hub 18→20 rows** so its floor fills the screen height (user-requested; the open-plaza sky on the sides is intentional, left as-is). SHA `1fa452d`.
+- **Camera clamp WAS needed (Phase 0 Step 4 fallback invoked):** the fixed BG wraps past the authored level, so a tall stub showed its top wrapped onto the screen bottom. Added `set_clamped_cam` in `scene_dungeon.cpp` AND `scene_hub.cpp`; extended the **hub 18→20 rows**. SHA `1fa452d`.
+- **Engine bumped to 128-tall levels (beyond original scope, `19272b7`):** the original 64×32 BG capped levels at 32 rows. Raised to **64×128** (Butano big map, auto-streamed) with cell/collision buffers moved to **EWRAM** (`BN_DATA_EWRAM_BSS`) to avoid IWRAM overflow. D4 authored at **30×56** (not ≤32).
+- **Tighter global jump (`3957070`):** `JUMP_VY` -4 → -812 (single ~5.5→~3.5 tiles) so Featherleap/Glide gating actually bites. D1–D3 re-verified clearable.
+- **D4 vine = grounded bottom-corridor wall, not a shaft gate:** a full-height vine floating in a vertical shaft was incoherent + soft-lock-prone (no magic up high). Moved to the bottom corridor with the enemy for magic.
+- **Slippery ice + Fire flood-melt + forced D3 crossing added mid-milestone** (playtest-driven, `fa6a256`): IcePlatform tiles are slick; Fire melts the whole ice run (symmetric to freeze); a solid overhang makes one D3 ice crossing mandatory.
 
 ### Discoveries
-- **Vertical scroll is already supported (pre-execution finding):** `src/engine/level_view.cpp` allocates a fixed **64×32** BG (`COLS=64, ROWS=32`) and the camera transform uses the full BG size, not the level's `h`. Existing levels are 64×22 (already taller than the 20-tile screen), so vertical scrolling already works — a taller D4 (≤32 rows) just fills more of the BG. Phase 0 confirms this visually rather than building new scroll support.
+- **Vertical scroll was already partly supported** — the fixed BG + full-size camera transform meant 64×22 levels already scroll a little; the real cap was 32 (single-bg hardware) until the big-map bump.
+- **Latent collision hang (since M1, `e15b576`):** an entity spawned EMBEDDED in solid with horizontal velocity hung the game (sideways back-out never clears a vertical overlap). Bounded both back-out loops + regression test. Surfaced as a black-screen on entering D4.
+- **D2 block soft-lock + camera wrap + head-bump exit** — all surfaced + fixed during M5 playtest (see `docs/acceptance-m5.md`).
 
 ---
 
@@ -305,7 +311,7 @@ move_and_collide(body, map);
 
 ## Phase 2 — Engine: glide input + wind/updraft tiles & art
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `df984ba` on 2026-06-08
 
 ### Task 2.1 — Read A-held into `glide_held`
 
@@ -331,7 +337,7 @@ move_and_collide(body, map);
 
 ## Phase 3 — Dungeon 4 content + scene wiring + hub Door 4
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `d5bf596` on 2026-06-08 (D4 re-authored 30×56 in Phase 4 tuning)
 
 ### Task 3.1 — Scene wires the Glide ability onto the player
 
@@ -368,7 +374,7 @@ The route + Door 4 + `dungeon4.h` plumbing already exist from Phase 0 — this t
 
 ## Phase 4 — Verification + docs
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED on 2026-06-08 (mGBA-verified D1→D4; big-map/jump/ice tuning; acceptance-m5 + README + close-out)
 
 - [ ] **Task 4.1 — mGBA playthrough.** Reach D4 by playing through (or a save with D3 cleared + Glide-less). Verify: **vertical scroll** climbs cleanly; **Featherleap** lower climb; **vine gate** burns with Fire; **Glide shrine** grants Glide; **hold A** glides (slow fall + air control); **updraft shafts lift only while gliding** (dive through otherwise); **gusts push sideways**; the upper cliffs are impassable without Glide; **falls land on re-climbable ledges** (no soft-lock); spronk→exit clears; **Door 4 was locked until D3 cleared**; D4 saves on clear. **Tune** GLIDE_VY / UPDRAFT_VY / WIND_ACCEL / WIND_MAX and ledge spacing for feel; log fixes as Discoveries.
 - [ ] **Task 4.2 — `docs/acceptance-m4.md`… → `docs/acceptance-m5.md`.** Map each design §11 criterion → status + evidence, mirroring `docs/acceptance-m4.md`. Note the host-test count + deviations/discoveries.

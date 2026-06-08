@@ -3,10 +3,19 @@
 An original **Game Boy Advance** action platformer. Laurel, a wand-wielding Goob, must rescue
 the 8 spronks from 8 dungeons and defeat the Nightmare King.
 
-This repo is built in milestones. It currently contains **Milestone 4 — Frost Hollow + the Ice
-spell**: a frozen third dungeon with reversible water↔ice terrain, on top of M1–M3.
+This repo is built in milestones. It currently contains **Milestone 5 — Gale Cliffs + the Wind
+Cloak (Glide)**: a tall, vertically-scrolling fourth dungeon with a full wind kit, on top of M1–M4.
 
 ## What's playable
+
+**M5 — Gale Cliffs (Dungeon 4) + Glide**
+- The **Wind Cloak / Glide** — a traversal ability: after jumping, **hold A** to fall slowly with
+  air control.
+- **Updraft shafts** lift you up — but **only while gliding** (dive through otherwise).
+- **Wind-gust zones** push you sideways (the first directional force on Laurel).
+- A genuinely **tall vertical climb** (the engine now supports levels up to 128 tiles tall).
+- **Slippery ice:** frozen-water platforms (from D3 on) are now slick — you slide instead of
+  stopping dead.
 
 **M4 — Frost Hollow (Dungeon 3) + Ice spell**
 - The **Ice spell** ⚡ (cast with R) — and since you carry **Fire** in from D2, **L now cycles
@@ -42,6 +51,7 @@ Abilities now come from **`F` shrines** (e.g. D1's Featherleap), not from rescui
 |---|---|---|
 | Move | D-pad | Arrow keys |
 | Jump / double-jump | A | X |
+| Glide (hold after jumping) | A (held) | X (held) |
 | Fire wand bolt | B | Z |
 | Cast selected spell (Fire) | R | S |
 | Cycle spell | L | A |
@@ -62,7 +72,7 @@ Requires **devkitPro / devkitARM**, **Butano** (vendored as a submodule), and **
 git submodule update --init           # fetch Butano 21.6.0
 python tools/make_placeholder_art.py  # (re)generate placeholder art
 bash tools/build_rom.sh               # build -> SpronkQuest.gba
-bash tools/host_test.sh               # run the host-side logic tests (117 tests)
+bash tools/host_test.sh               # run the host-side logic tests (132 tests)
 ```
 
 > **Windows note:** the ROM builds through devkitPro's bundled MSYS2; host tests use the mingw64
@@ -85,10 +95,14 @@ Physics, collision, combat, meters, and the save format are all validated by fas
 
 ## Project status
 
-**M4 Frost Hollow + Ice spell: feature-complete, mGBA-verified.** Generalizes the spell system to
-two typed spells (Fire+Ice, `L` cycles), adds reversible **water↔ice** terrain (Ice freezes water
-into bridges, Fire melts them back), a water hazard, an Ice-extinguished **fire-wall** gate, and
-**Dungeon 3** authored as data. See `docs/acceptance-m4.md`.
+**M5 Gale Cliffs + Glide: feature-complete, mGBA-verified.** Adds the **Wind Cloak / Glide**
+traversal ability and a tile-based **wind kit** (glide, updraft shafts, gust zones), a tall
+**vertically-scrolling Dungeon 4**, an engine bump to **128-tile-tall levels** (Butano big map),
+**slippery ice**, and a tighter global jump. See `docs/acceptance-m5.md`.
+
+**M4 Frost Hollow + Ice spell:** two typed spells (Fire+Ice, `L` cycles), reversible **water↔ice**
+terrain (Ice freezes water into bridges, Fire melts them back), a water hazard, an Ice-extinguished
+**fire-wall** gate, and **Dungeon 3** (`docs/acceptance-m4.md`).
 
 **M3 Ember Caverns + Fire spell:** a spell system, mid-dungeon ability shrine, trigger→target
 puzzles (plates/buttons/braziers), pushable blocks, lava, fire-immune enemies, and Dungeon 2.
@@ -99,7 +113,7 @@ gates, and v1→v2 save migration (`docs/acceptance-m2.md`).
 
 **M1 vertical slice:** shipped (`docs/acceptance-m1.md`).
 
-Real-hardware verification pending. Next milestones: Dungeons 4–8 + their abilities (each a
+Real-hardware verification pending. Next milestones: Dungeons 5–8 + their abilities (each a
 content milestone snapping into the M2 framework). See
 `docs/superpowers/specs/2026-06-03-spronk-quest-design.md` and the per-milestone plans in
 `docs/plans/`.
@@ -108,8 +122,9 @@ content milestone snapping into the M2 framework). See
 
 Levels live in `tools/levels/<name>.txt` (ASCII tile grid) + `<name>.json` (metadata). Symbols:
 `#` solid, `.` empty, `^` one-way, `~` lava, `w` water, `@` spawn, `C` caged spronk, `E` exit,
-`o` enemy, `G` gate, `V` vine gate, `I` ice gate, `X` fire-wall gate, `W` water gate, `F` ability
-shrine, `B` pushable block, `=` pressure plate, `?` hidden button, `*` brazier, `1`–`8` dungeon
-doors. The JSON sidecar wires enemy patrols, pickup abilities, and trigger→target links. `tools/build_level.py` compiles them to
+`o` enemy, `u` updraft, `<`/`>` wind-left/right, `G` gate, `V` vine gate, `I` ice gate, `X`
+fire-wall gate, `W` water gate, `F` ability shrine, `B` pushable block, `=` pressure plate, `?`
+hidden button, `*` brazier, `1`–`8` dungeon doors. Levels can be up to 64 wide × 128 tall. The
+JSON sidecar wires enemy patrols, pickup abilities, and trigger→target links. `tools/build_level.py` compiles them to
 `include/game/levels/<name>.h` (both `host_test.sh` and `build_rom.sh` regenerate these
 automatically).
