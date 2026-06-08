@@ -14,6 +14,7 @@
 #include "bn_sprite_items_block.h"
 #include "bn_sprite_items_shrine.h"
 #include "bn_sprite_items_fire_proj.h"
+#include "bn_sprite_items_ice_proj.h"
 
 #include "logic/tilemap.h"
 #include "logic/player.h"
@@ -22,6 +23,7 @@
 #include "logic/meters.h"
 #include "logic/spell.h"
 #include "logic/hazard.h"
+#include "logic/frost.h"
 #include "logic/fire_effect.h"
 #include "logic/pushable_block.h"
 #include "logic/puzzle.h"
@@ -32,7 +34,7 @@
 #include "engine/level_view.h"    // set_level_tile
 #include "engine/avatar.h"
 #include "engine/bolts.h"
-#include "engine/fire_pool.h"
+#include "engine/spell_pool.h"
 #include "engine/hud.h"
 #include "engine/fade.h"
 
@@ -99,12 +101,22 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
 
     engine::Avatar avatar(player, lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::BoltPool bolts(lvl.view.map_px_w, lvl.view.map_px_h, cam);
-    engine::FirePool fire(lvl.view.map_px_w, lvl.view.map_px_h, cam);
+    engine::SpellPool spells(lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::Hud hud;
 
-    // Spell HUD icon (fire) — screen-fixed top-RIGHT, clear of the top-left health/magic bars.
+    // Spell HUD icon — screen-fixed top-RIGHT, clear of the top-left bars. Shows the SELECTED
+    // spell's art (fire/ice); swap the image only when the selection changes (set_item, no recreate).
     bn::sprite_ptr spell_icon = bn::sprite_items::fire_proj.create_sprite(104, -68);
-    spell_icon.set_visible(spell.selected == logic::SpellId::Fire);
+    logic::SpellId last_icon = logic::SpellId::None;
+    auto refresh_spell_icon = [&]{
+        if(spell.selected != last_icon){
+            if(spell.selected == logic::SpellId::Ice) spell_icon.set_item(bn::sprite_items::ice_proj);
+            else if(spell.selected == logic::SpellId::Fire) spell_icon.set_item(bn::sprite_items::fire_proj);
+            last_icon = spell.selected;
+        }
+        spell_icon.set_visible(spell.selected != logic::SpellId::None);
+    };
+    refresh_spell_icon();
 
     // ---- cage / spronk ----
     logic::Body cage;
@@ -225,17 +237,18 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
 
         engine::SpellIntent si = engine::read_spell_intent();
         if(si.cycle) spell.cycle(world);
-        fire.update_and_cast(si.cast, spell, magic, muzzle, player.facing, lvl.map);
+        spells.update_and_cast(si.cast, spell, magic, muzzle, player.facing, lvl.map);
 
-        // ---- fire resolution (ORDER: gates -> braziers -> enemies -> despawn-on-solid) ----
+        // ---- spell resolution (ORDER: gates -> braziers -> enemies -> freeze/melt -> despawn-on-solid) ----
         for(GateInst& gi : gates){
-            if(!gi.open && logic::fire_clears_gate(gi.spawn.type) && fire.consume_hit(gi.body)){
+            logic::SpellId clears = logic::gate_cleared_by(gi.spawn.type);
+            if(!gi.open && clears != logic::SpellId::None && spells.consume_hit(gi.body, clears)){
                 gi.open = true;
                 open_column(lvl.view, gi.spawn.tx, level.h);
             }
         }
         for(BrazierInst& bi : braziers){
-            if(!bi.lit && fire.consume_hit(bi.body)){
+            if(!bi.lit && spells.consume_hit(bi.body, logic::SpellId::Fire)){  // only Fire lights braziers
                 bi.lit = true;
                 engine::set_level_tile(lvl.view, bi.tx, bi.ty, 15);
             }
@@ -250,16 +263,31 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
             inst.sprite->set_position(ex - hw, ey - hh);
             if(bolts.consume_hit(inst.e.body)){
                 inst.e.kill(); magic.heal(25); inst.sprite->set_visible(false);
-            } else if(fire.consume_hit(inst.e.body)){
+            } else if(spells.consume_hit(inst.e.body, logic::SpellId::Fire)){
                 if(!inst.e.fire_immune){ inst.e.kill(); inst.sprite->set_visible(false); } // no magic refill from fire
             } else if(invuln == 0 && logic::aabb_overlap(player.body, inst.e.body)){
                 health.damage(20); invuln = 45;
             }
         }
-        fire.despawn_on_solid(lvl.map);
 
-        // ---- lava ----
-        if(invuln == 0 && logic::lava_overlap(player.body, lvl.map)){ health.damage(20); invuln = 45; }
+        // ---- reversible terrain: Ice freezes water it flies over; Fire melts ice platforms.
+        // Spells fly at chest height but water/ice sit at floor level, so consume_tile_hit scans
+        // DOWN the shot's column (the M3 brazier-height lesson). MUST precede despawn_on_solid
+        // because IcePlatform is solid — otherwise a melt-shot is killed before it can melt.
+        constexpr int WATER_BG = 16, ICE_PLATFORM_BG = 19;       // pinned bg indices (gates.h tile map)
+        int ftx, fty;
+        while(spells.consume_tile_hit(lvl.map, logic::TileKind::Water, logic::SpellId::Ice, ftx, fty)){
+            engine::set_collision_tile(ftx, fty, (int)logic::TileKind::IcePlatform); // collision VALUE 5
+            engine::set_level_tile(lvl.view, ftx, fty, ICE_PLATFORM_BG);             // bg INDEX 19
+        }
+        while(spells.consume_tile_hit(lvl.map, logic::TileKind::IcePlatform, logic::SpellId::Fire, ftx, fty)){
+            engine::set_collision_tile(ftx, fty, (int)logic::TileKind::Water);       // collision VALUE 4
+            engine::set_level_tile(lvl.view, ftx, fty, WATER_BG);                    // bg INDEX 16
+        }
+        spells.despawn_on_solid(lvl.map);
+
+        // ---- hazards (lava or water): same damage ----
+        if(invuln == 0 && logic::hazard_overlap(player.body, lvl.map)){ health.damage(20); invuln = 45; }
 
         // ---- pushable blocks: push detection, gravity, sprite ----
         if(push_cd > 0) --push_cd;
@@ -333,7 +361,7 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
                 if(si2.sprite) si2.sprite->set_visible(false);
             }
         }
-        spell_icon.set_visible(spell.selected == logic::SpellId::Fire);
+        refresh_spell_icon();   // reflect cycle (L) and shrine pickups in the HUD icon
 
         // ---- spronk rescue (marks the dungeon cleared; abilities now come from F pickups) ----
         if(level.has_cage){
