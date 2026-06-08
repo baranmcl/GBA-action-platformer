@@ -62,9 +62,9 @@ notes and commit messages.
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 0 — Pure logic (spell generalization, water/ice tiles, freeze/melt, gate) | ✅ Shipped | `105148f` | 111/111 host (+7); purity clean |
-| 1 — Compiler symbols + art | ⬜ Not started | — | — |
-| 2 — Engine: typed spell pool + tile render + HUD icon | ⬜ Not started | — | — |
-| 3 — scene_dungeon integration (additive) | ⬜ Not started | — | — |
+| 1 — Compiler symbols + art | ✅ Shipped | `3229fb1` | w/W symbols (+2 compiler tests); art (tiles 9/16/19 + ice_proj). ROM build deferred to Ph3 (see Deviations) |
+| 2 — Engine: typed spell pool + tile render | ✅ Shipped | `5d7721e` | SpellPool (typed + tile-hit), level_view tiles. (HUD icon moved to Ph3.) |
+| 3 — scene_dungeon integration (additive) | ✅ Shipped | `fa6e3ad` | water hazard, freeze/melt, dual-spell gates, HUD icon. First green ROM; 111/111 host |
 | 4 — Dungeon 3 content + hub unlock | ⬜ Not started | — | — |
 | 5 — Verification + docs | ⬜ Not started | — | — |
 
@@ -327,7 +327,7 @@ inline SpellId gate_cleared_by(GateType t){
 
 ## Phase 1 — Level compiler symbols + placeholder art
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `3229fb1` on 2026-06-08 (art via asset-gen; ROM build deferred to Ph3)
 
 ### Task 1.1 — Compiler: water tile `w` + Water gate `W`
 
@@ -367,7 +367,7 @@ Context: `gen_tiles()` builds the 19-tile `tiles.bmp`; bg indices: 13 lava, 8 ic
 
 ## Phase 2 — Engine: typed spell pool + tile render
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `5d7721e` on 2026-06-08 (compiles with Phase 3)
 
 > **⚠ Phases 2 and 3 are co-dependent — land them together.** Task 2.1 changes `SpellPool::consume_hit` to take a `kind` argument, which makes `scene_dungeon.cpp`'s existing M3 call sites (`fire.consume_hit(gi.body)`, etc.) stop compiling. The first GREEN ROM build is at the **end of Phase 3**, not Phase 2. Do NOT expect `ROM fixed!` after Phase 2 alone. If using subagent-driven execution, dispatch Phase 2 + Phase 3 to the same agent (or sequence them with no intermediate ROM gate). Both touch the engine/scene boundary; `scene_dungeon.cpp` is edited in Phase 3 only (the HUD-icon change moved there to keep Phase 2 engine-only).
 
@@ -437,7 +437,7 @@ Context: `build_level_view` maps collision kind→bg: `int kind=...; tile_index 
 
 ## Phase 3 — scene_dungeon integration (additive)
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `fa6e3ad` on 2026-06-08 (first green ROM; 111/111 host)
 
 **Files:** Modify `src/game/scene_dungeon.cpp` only. No new structure — extend the existing fire-resolution block (`:226`–`:262`) and the lava-hazard line (`:262`). Verified by build + mGBA (Phase 5); no host test (scene is Butano-bound).
 
