@@ -5,11 +5,11 @@ inline constexpr unsigned char DUNGEON1_TILES[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 inline constexpr logic::EntitySpawn DUNGEON1_ENEMIES[] = { {16,15,14,22,0} };
 inline constexpr logic::GateSpawn DUNGEON1_GATES[] = { {0,0,logic::GateType::Gap} };
 inline constexpr logic::DoorSpawn DUNGEON1_DOORS[] = { {0,0,0} };
-inline constexpr logic::AbilityPickup DUNGEON1_PICKUPS[] = { {0,0,logic::Ability::Fire} };
+inline constexpr logic::AbilityPickup DUNGEON1_PICKUPS[] = { {6,16,logic::Ability::Featherleap} };
 inline constexpr logic::BlockSpawn DUNGEON1_BLOCKS[] = { {0,0} };
 inline constexpr logic::PlateSpawn DUNGEON1_PLATES[] = { {0,0,0,0} };
 inline constexpr logic::ButtonSpawn DUNGEON1_BUTTONS[] = { {0,0,0,0} };
 inline constexpr logic::BrazierSpawn DUNGEON1_BRAZIERS[] = { {0,0,0} };
 inline constexpr logic::BrazierGroupSpawn DUNGEON1_BRAZIER_GROUPS[] = { {0,0,0} };
-inline constexpr logic::LevelData DUNGEON1_DATA = { DUNGEON1_TILES, 48, 20, 3, 14, true, 10, 13, true, 43, 7, DUNGEON1_ENEMIES, 1, DUNGEON1_GATES, 0, DUNGEON1_DOORS, 0, DUNGEON1_PICKUPS, 0, DUNGEON1_BLOCKS, 0, DUNGEON1_PLATES, 0, DUNGEON1_BUTTONS, 0, DUNGEON1_BRAZIERS, 0, DUNGEON1_BRAZIER_GROUPS, 0 };
+inline constexpr logic::LevelData DUNGEON1_DATA = { DUNGEON1_TILES, 48, 20, 3, 14, true, 10, 13, true, 43, 7, DUNGEON1_ENEMIES, 1, DUNGEON1_GATES, 0, DUNGEON1_DOORS, 0, DUNGEON1_PICKUPS, 1, DUNGEON1_BLOCKS, 0, DUNGEON1_PLATES, 0, DUNGEON1_BUTTONS, 0, DUNGEON1_BRAZIERS, 0, DUNGEON1_BRAZIER_GROUPS, 0 };
 

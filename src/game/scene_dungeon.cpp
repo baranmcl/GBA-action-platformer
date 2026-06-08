@@ -335,12 +335,11 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
         }
         spell_icon.set_visible(spell.selected == logic::SpellId::Fire);
 
-        // ---- spronk rescue (marks cleared; Featherleap reward handled in M2/Task 4.3) ----
+        // ---- spronk rescue (marks the dungeon cleared; abilities now come from F pickups) ----
         if(level.has_cage){
             bool was = world.spronk_freed(d);
             logic::try_free_spronk(player.body, cage, world, d);
             if(world.spronk_freed(d) && !was){
-                world.grant(logic::Ability::Featherleap);
                 if(spronk) spronk->set_visible(false);
             }
         }

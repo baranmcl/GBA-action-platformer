@@ -10,6 +10,10 @@ TEST(d1_spawn_in_bounds_on_empty){
     CHECK_EQ(tile(L, L.spawn_tx, L.spawn_ty), 0);
 }
 TEST(d1_has_cage_and_exit){ CHECK(DUNGEON1_DATA.has_cage); CHECK(DUNGEON1_DATA.has_exit); }
+TEST(d1_featherleap_is_a_pickup){  // reward model: ability comes from an F shrine, not a hardcoded grant
+    CHECK_EQ(DUNGEON1_DATA.pickup_count, 1);
+    CHECK(DUNGEON1_DATA.pickups[0].ability == Ability::Featherleap);
+}
 TEST(d1_one_enemy){ CHECK_EQ(DUNGEON1_DATA.enemy_count, 1); CHECK_EQ(DUNGEON1_DATA.enemies[0].param0, 14); CHECK_EQ(DUNGEON1_DATA.enemies[0].param1, 22); }
 TEST(d1_border_solid){
     const LevelData& L = DUNGEON1_DATA;
