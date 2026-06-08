@@ -72,7 +72,7 @@ notes and commit messages.
 - **Phase 1.2 ROM smoke-test deferred:** Phase 0's `FireCast`→`SpellCast` rename immediately breaks `engine/fire_pool.{h,cpp}` (it references `logic::FireCast`), so NO ROM build is green between Phase 0 and the Phase 2 `SpellPool` rename. Phase 1's art was verified by successful asset generation (`tiles.bmp`=160px/20 tiles, `ice_proj.bmp` written) instead of a ROM build; the first green ROM is at end of Phase 3 (as already noted for Phases 2–3).
 
 ### Discoveries
-- _(none yet)_
+- **Freeze must bridge the whole run + gaps must not be jumpable (playtest):** the column-scan freeze worked (verified in mGBA), but freezing one tile per cast made a poor bridge AND the narrow gaps were double-jumpable, so the freeze wasn't a real gate. Fixed: (1) scene flood-freezes the contiguous horizontal water run on one Ice hit (`scene_dungeon.cpp` freeze loop); (2) D3 gaps widened (5/4 tiles) with a solid **ceiling** (row 15) over each so the player can't jump over — the ice bridge is the only way across.
 
 ---
 

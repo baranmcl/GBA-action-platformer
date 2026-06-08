@@ -277,8 +277,14 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
         constexpr int WATER_BG = 16, ICE_PLATFORM_BG = 19;       // pinned bg indices (gates.h tile map)
         int ftx, fty;
         while(spells.consume_tile_hit(lvl.map, logic::TileKind::Water, logic::SpellId::Ice, ftx, fty)){
-            engine::set_collision_tile(ftx, fty, (int)logic::TileKind::IcePlatform); // collision VALUE 5
-            engine::set_level_tile(lvl.view, ftx, fty, ICE_PLATFORM_BG);             // bg INDEX 19
+            // Freeze the WHOLE contiguous horizontal run of water into one ice bridge (one cast),
+            // not just the box the shot touched.
+            int x0 = ftx; while(lvl.map.is_water(x0 - 1, fty)) --x0;
+            int x1 = ftx; while(lvl.map.is_water(x1 + 1, fty)) ++x1;
+            for(int x = x0; x <= x1; ++x){
+                engine::set_collision_tile(x, fty, (int)logic::TileKind::IcePlatform); // collision VALUE 5
+                engine::set_level_tile(lvl.view, x, fty, ICE_PLATFORM_BG);             // bg INDEX 19
+            }
         }
         while(spells.consume_tile_hit(lvl.map, logic::TileKind::IcePlatform, logic::SpellId::Fire, ftx, fty)){
             engine::set_collision_tile(ftx, fty, (int)logic::TileKind::Water);       // collision VALUE 4
