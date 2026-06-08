@@ -369,6 +369,16 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
         if(health.is_empty()){
             player.body.pos = spawn_pos; player.body.vel = { fx(0), fx(0) };
             health.cur = health.max; invuln = 0;
+            // Reset pushable blocks to their authored start so a block shoved into a dead corner
+            // (a soft-lock) is recoverable by dying. (Plates re-evaluate next frame; latched
+            // button/brazier gates stay solved.)
+            for(int i = 0; i < (int)blocks.size(); ++i){
+                BlockInst& bi = blocks[i];
+                engine::set_collision_tile(bi.blk.tx, bi.blk.ty, 0);          // clear where it ended up
+                bi.blk.tx = level.blocks[i].tx; bi.blk.ty = level.blocks[i].ty;
+                engine::set_collision_tile(bi.blk.tx, bi.blk.ty, 1);          // solid at the start cell
+                if(bi.sprite) bi.sprite->set_position(wx(bi.blk.tx * 8 + 4), wy(bi.blk.ty * 8 + 4));
+            }
         }
 
         // ---- ability shrines ----
@@ -391,7 +401,9 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
         }
 
         bool spronk_ok = !level.has_cage || world.spronk_freed(d);
-        if(level.has_exit && spronk_ok && logic::aabb_overlap(player.body, exit)){
+        // Must LAND on the exit (grounded), not bump it from underneath — clearing requires
+        // standing on the platform, which matters for the gated vertical climb (no head-bump cheese).
+        if(level.has_exit && spronk_ok && player.body.on_ground && logic::aabb_overlap(player.body, exit)){
             result = DungeonResult::Cleared; break;
         }
 

@@ -62,7 +62,7 @@ notes and commit messages.
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 0 — Vertical-scroll confirmation spike | ✅ Shipped | `1fa452d` | scroll verified; camera clamp added (wrap fix) + hub 20-tall. 117/117 host |
-| 1 — Pure logic (glide/updraft/wind + tiles) | ⬜ Not started | — | — |
+| 1 — Pure logic (glide/updraft/wind + tiles) | ✅ Shipped | `4a077e6` | 3 tiles, wind.h, Player::update rules. 124/124 host (+7) |
 | 2 — Engine: glide input + wind/updraft tiles & art | ⬜ Not started | — | — |
 | 3 — Dungeon 4 content + scene wiring + hub Door 4 | ⬜ Not started | — | — |
 | 4 — Verification + docs | ⬜ Not started | — | — |
@@ -146,7 +146,7 @@ content with the real level — it does NOT re-touch `main.cpp`/`scene_hub.cpp` 
 
 ## Phase 1 — Pure logic: glide, updraft, wind + tiles
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `4a077e6` on 2026-06-08 (124/124 host, +7)
 
 ### Task 1.1 — Three non-solid wind `TileKind`s
 

@@ -11,9 +11,10 @@
 namespace engine {
 namespace {
     constexpr int COLS = 64;
-    constexpr int ROWS = 32;
-    // Static storage (no heap — Butano forbids it). 64*32 cells = 4KB.
-    alignas(int) bn::regular_bg_map_cell s_cells[COLS * ROWS];
+    constexpr int ROWS = 128;   // 64x128 = a Butano "big map" (auto-streamed); lets levels be up to 128 tall.
+    // Static storage (no heap — Butano forbids it). 64*128 cells * 2B = 16KB — in EWRAM (BN_DATA_EWRAM_BSS),
+    // NOT the 32KB IWRAM, which it would overflow.
+    alignas(int) BN_DATA_EWRAM_BSS bn::regular_bg_map_cell s_cells[COLS * ROWS];
     bn::regular_bg_map_item s_map_item(s_cells[0], bn::size(COLS, ROWS));
 }
 

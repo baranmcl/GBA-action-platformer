@@ -7,7 +7,7 @@ static const Fixed FRICTION  = Fixed::from_raw(24);
 static const Fixed JUMP_VY   = Fixed::from_int(-4);
 // M5 wind kit (starting values; mGBA tunes feel).
 static const Fixed GLIDE_VY   = Fixed::from_int(1);   // gentle fall terminal while gliding (vs PH terminal 6)
-static const Fixed UPDRAFT_VY = Fixed::from_int(-2);  // rise speed in an updraft while gliding
+static const Fixed UPDRAFT_VY = Fixed::from_int(-3);  // rise speed in an updraft while gliding (tuned up for lift margin)
 static const Fixed WIND_ACCEL = Fixed::from_raw(24);  // per-frame sideways gust push (bounded by RUN_MAX next frame)
 // Midpoint feel (playtested): single jump ~5.5 tiles. Gravity is halfway between the
 // floaty (28) and heavy (64) trials; terminal kept gentle at 6.
