@@ -3,14 +3,15 @@
 #include "logic/meters.h"      // Meter
 #include "logic/world_state.h" // World, Ability
 namespace logic {
-enum class SpellId : uint8_t { None=0, Fire };   // D3+: Ice, Light, Stone...
+enum class SpellId : uint8_t { None=0, Fire, Ice };   // D5+: Light, Stone...
 
-struct FireCast {
-    int cost = 10;   // cheap enough that a few enemy kills fund a dungeon's Fire obstacles
+// Spell-agnostic caster: spends magic + yields a projectile. The POOL tags the projectile with
+// SpellState::selected (Fire vs Ice); the caster itself doesn't care which spell it is.
+struct SpellCast {
+    int cost = 10;   // cheap enough that a few enemy kills fund a dungeon's spell obstacles
     int cooldown_ticks = 20;
     int cd = 0;
     void tick(){ if(cd>0) --cd; }
-    // Spends magic + yields a fire projectile (slower than the free bolt's 3 px/tick).
     bool try_cast(bool pressed, Meter& magic, Vec2 origin, int facing, BoltSpawn& out){
         if(!pressed || cd>0) return false;
         if(!magic.spend(cost)) return false;
@@ -21,11 +22,24 @@ struct FireCast {
     }
 };
 
-// Selected-spell + availability (M3: only Fire). refresh() picks the first owned spell.
+// Selected-spell + availability. refresh() picks the first owned spell; cycle() rotates owned spells.
 struct SpellState {
     SpellId selected = SpellId::None;
-    bool has_any(const World& w) const { return w.has(Ability::Fire); }
-    void refresh(const World& w){ selected = w.has(Ability::Fire) ? SpellId::Fire : SpellId::None; }
-    void cycle(const World& w){ refresh(w); } // M3: one spell, cycle is a no-op (wiring for D3+)
+    bool owns(const World& w, SpellId s) const {
+        return (s==SpellId::Fire && w.has(Ability::Fire)) ||
+               (s==SpellId::Ice  && w.has(Ability::Ice));
+    }
+    bool has_any(const World& w) const { return owns(w,SpellId::Fire) || owns(w,SpellId::Ice); }
+    void refresh(const World& w){                    // first owned: Fire, then Ice
+        if(owns(w,SpellId::Fire))      selected = SpellId::Fire;
+        else if(owns(w,SpellId::Ice))  selected = SpellId::Ice;
+        else                           selected = SpellId::None;
+    }
+    void cycle(const World& w){                      // rotate Fire->Ice->Fire among owned spells
+        if(!has_any(w)){ selected = SpellId::None; return; }
+        SpellId order[2] = { SpellId::Fire, SpellId::Ice };
+        int start = (selected==SpellId::Ice) ? 1 : 0;
+        for(int i=1;i<=2;++i){ SpellId c = order[(start+i)%2]; if(owns(w,c)){ selected = c; return; } }
+    }
 };
 }

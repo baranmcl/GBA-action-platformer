@@ -8,3 +8,8 @@ TEST(ice_needs_fire){ CHECK(!can_pass(GateType::Ice, 0)); CHECK(can_pass(GateTyp
 TEST(water_needs_ice){ CHECK(can_pass(GateType::Water, bit(Ability::Ice))); CHECK(!can_pass(GateType::Water, bit(Ability::Fire))); }
 TEST(gate_geometry_flags){ CHECK(gate_info(GateType::Gap).is_geometry); CHECK(!gate_info(GateType::Ice).is_geometry); }
 TEST(gap_closed_visual_is_gate_tile){ CHECK_EQ((int)gate_info(GateType::Gap).bg_tile, 3); }
+TEST(gate_cleared_by_spell){
+  CHECK(gate_cleared_by(GateType::Vine)  == SpellId::Fire);
+  CHECK(gate_cleared_by(GateType::Ice)   == SpellId::Fire);
+  CHECK(gate_cleared_by(GateType::Water) == SpellId::Ice);
+  CHECK(gate_cleared_by(GateType::Gap)   == SpellId::None); }   // geometry gate, not spell-cleared
