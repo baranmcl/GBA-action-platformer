@@ -22,9 +22,11 @@ namespace game
 {
 namespace {
     logic::Fixed fx(int v){ return logic::Fixed::from_int(v); }
-    // Door N enterable: D1 always; D2 once D1's spronk is freed; D3-8 not built yet.
+    // Door N enterable: D1 always; D2 after D1's spronk; D3 after D2's spronk; D4-8 not built yet.
     bool door_enterable(int n, const logic::World& w){
-        return n == 1 || (n == 2 && w.spronk_freed(1));
+        return n == 1
+            || (n == 2 && w.spronk_freed(1))
+            || (n == 3 && w.spronk_freed(2));
     }
 }
 

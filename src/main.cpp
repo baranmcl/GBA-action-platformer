@@ -8,6 +8,7 @@
 #include "game/scene_dungeon.h"
 #include "game/levels/dungeon1.h"
 #include "game/levels/dungeon2.h"
+#include "game/levels/dungeon3.h"
 
 int main()
 {
@@ -28,7 +29,8 @@ int main()
         const logic::LevelData* lvl = nullptr;
         if(n == 1) lvl = &DUNGEON1_DATA;
         else if(n == 2) lvl = &DUNGEON2_DATA;
-        else continue;                                // doors 3-8 not built
+        else if(n == 3) lvl = &DUNGEON3_DATA;
+        else continue;                                // doors 4-8 not built
 
         world.current_dungeon = n;
         game::DungeonResult dr = game::run_dungeon(*lvl, world, ps);
