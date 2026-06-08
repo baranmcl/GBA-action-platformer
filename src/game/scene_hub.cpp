@@ -15,13 +15,20 @@
 #include "engine/level_view.h"  // set_level_tile
 #include "engine/avatar.h"
 #include "engine/fade.h"
+#include "engine/hud.h"
 #include "game/levels/hub.h"
 
 namespace game
 {
-namespace { logic::Fixed fx(int v){ return logic::Fixed::from_int(v); } }
+namespace {
+    logic::Fixed fx(int v){ return logic::Fixed::from_int(v); }
+    // Door N enterable: D1 always; D2 once D1's spronk is freed; D3-8 not built yet.
+    bool door_enterable(int n, const logic::World& w){
+        return n == 1 || (n == 2 && w.spronk_freed(1));
+    }
+}
 
-HubResult run_hub(logic::World& world)
+HubResult run_hub(logic::World& world, logic::PlayerState& ps)
 {
     bn::bg_palettes::set_transparent_color(bn::color(8, 8, 24));
 
@@ -39,7 +46,7 @@ HubResult run_hub(logic::World& world)
     for(int i = 0; i < HUB_DATA.door_count; ++i)
     {
         const logic::DoorSpawn& dr = HUB_DATA.doors[i];
-        int t = dr.dungeon == 1 ? 5 : 6;
+        int t = door_enterable(dr.dungeon, world) ? 5 : 6; // open vs locked
         for(int dy = 0; dy < 4; ++dy)
             for(int dx = 0; dx < 2; ++dx)
                 engine::set_level_tile(lvl.view, dr.tx + dx, dr.ty - dy, t);
@@ -55,6 +62,7 @@ HubResult run_hub(logic::World& world)
     player.body.pos = { fx(HUB_DATA.spawn_tx * 8), fx(HUB_DATA.spawn_ty * 8) };
 
     engine::Avatar avatar(player, lvl.view.map_px_w, lvl.view.map_px_h, cam);
+    engine::Hud hud; // shows the persistent health/magic in the hub too
 
     int cx0 = player.body.pos.x.to_int() + player.body.half_w.to_int();
     int cy0 = player.body.pos.y.to_int() + player.body.half_h.to_int();
@@ -75,7 +83,7 @@ HubResult run_hub(logic::World& world)
             for(int i = 0; i < HUB_DATA.door_count; ++i)
             {
                 const logic::DoorSpawn& dr = HUB_DATA.doors[i];
-                if(dr.dungeon != 1) continue;
+                if(!door_enterable(dr.dungeon, world)) continue;
                 logic::Body door; // matches the 2x4 archway region
                 door.half_w = fx(8); door.half_h = fx(16);
                 door.pos = { fx(dr.tx * 8), fx((dr.ty - 3) * 8) };
@@ -90,6 +98,7 @@ HubResult run_hub(logic::World& world)
         int cx = player.body.pos.x.to_int() + player.body.half_w.to_int();
         int cy = player.body.pos.y.to_int() + player.body.half_h.to_int();
         cam.set_position(cx - hw, cy - hh);
+        hud.update(ps.health, ps.magic);
         if(fade_in_t > 0) engine::set_fade(--fade_in_t);
         bn::core::update();
     }

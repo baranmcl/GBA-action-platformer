@@ -23,7 +23,9 @@ LevelView build_level_view(const logic::Tilemap& map){
         for(int tx = 0; tx < COLS; ++tx){
             int tile_index = 0;
             if(tx < map.w && ty < map.h){
-                tile_index = map.cells[ty * map.w + tx]; // 0..4 -> bg tile index
+                int kind = map.cells[ty * map.w + tx]; // collision TileKind value
+                // collision TileKind -> bg tile index. Identity for 0/1/2; Lava(3)->13.
+                tile_index = (kind == 3) ? 13 : kind;  // gates/doors/entities are overlaid via set_level_tile
             }
             int ci = s_map_item.cell_index(tx, ty);
             bn::regular_bg_map_cell_info info(s_cells[ci]);

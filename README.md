@@ -3,17 +3,29 @@
 An original **Game Boy Advance** action platformer. Laurel, a wand-wielding Goob, must rescue
 the 8 spronks from 8 dungeons and defeat the Nightmare King.
 
-This repo currently contains **Milestone 1 — the vertical slice**: a complete, playable loop of
-Dungeon 1 that proves every system end-to-end.
+This repo is built in milestones. It currently contains **Milestone 3 — Ember Caverns + the Fire
+spell**: a puzzle-rich second dungeon on top of the M2 world framework and the M1 vertical slice.
 
-## What's playable (M1)
+## What's playable
 
-- Run, jump, and a wand **magic bolt** (ranged attack).
-- **Earn-a-power loop:** free the caged spronk → gain **Featherleap** (double-jump) + the gate
-  dissolves → reach the double-jump-only exit.
-- A patrolling **enemy**: kill it with the wand (refills magic), or take contact damage.
-- **Health + magic meters** (HUD), death/respawn.
-- **Title screen** with **SRAM save / continue**.
+**M3 — Ember Caverns (Dungeon 2) + Fire spell**
+- A **spell system**: free wand **bolt** (B), plus a selectable **Fire** spell you **cast** (R)
+  by spending magic (L cycles spells — one for now).
+- **Fire** burns **vine** gates, melts **ice** gates, and lights **braziers** — but bounces off
+  **fire-immune** enemies (use the bolt on those).
+- **Puzzles:** push a **crate** onto a **pressure plate** (held open by the block), find a hidden
+  **button**, and light a **brazier** group to open the way.
+- **Lava** hazard (damage on contact).
+- A mid-dungeon **Fire shrine** grants the spell partway through — a no-Fire first half, then a
+  Fire-powered second half.
+- **Health + magic persist** across the hub and dungeons.
+
+**M2 — World framework:** data-driven levels, a **plaza hub** with ability-gated dungeon doors,
+typed gates, and v1→v2 save migration.
+
+**M1 — Core loop:** run, jump, wand bolt, the earn-a-power loop (free the spronk), a patrolling
+enemy, HUD meters + death/respawn, and a **title screen** with **SRAM save / continue**.
+Abilities now come from **`F` shrines** (e.g. D1's Featherleap), not from rescuing the spronk.
 
 ## Controls
 
@@ -22,6 +34,9 @@ Dungeon 1 that proves every system end-to-end.
 | Move | D-pad | Arrow keys |
 | Jump / double-jump | A | X |
 | Fire wand bolt | B | Z |
+| Cast selected spell (Fire) | R | S |
+| Cycle spell | L | A |
+| Enter door (in hub) | Up | Up |
 | Start game | START | Enter |
 
 ## Play it
@@ -38,7 +53,7 @@ Requires **devkitPro / devkitARM**, **Butano** (vendored as a submodule), and **
 git submodule update --init           # fetch Butano 21.6.0
 python tools/make_placeholder_art.py  # (re)generate placeholder art
 bash tools/build_rom.sh               # build -> SpronkQuest.gba
-bash tools/host_test.sh               # run the host-side logic tests (52 tests)
+bash tools/host_test.sh               # run the host-side logic tests (104 tests)
 ```
 
 > **Windows note:** the ROM builds through devkitPro's bundled MSYS2; host tests use the mingw64
@@ -52,7 +67,7 @@ A strict three-layer split keeps gameplay logic testable off-hardware:
 ```
 include/logic/ + src/logic/   pure C++17, NO Butano types — host-unit-tested with g++
 src/engine/                   Butano glue (sprites, bg, camera, HUD, SRAM, input)
-src/game/                     scenes (title, play) + Dungeon 1 content
+src/game/                     scenes (title, hub, dungeon) + level content
 ```
 
 `tools/check_logic_purity.py` fails the build if any `bn::` type leaks into the logic layer.
@@ -61,22 +76,28 @@ Physics, collision, combat, meters, and the save format are all validated by fas
 
 ## Project status
 
-**M2 world framework: feature-complete, mGBA-verified.** Adds the data-driven level pipeline
-(author levels as ASCII `.txt` + JSON — see `tools/levels/`), a central **plaza hub** with
-ability-gated dungeon doors, a thematic gate-type framework, plaza↔dungeon transitions, and an
-expanded save with **v1→v2 migration** (existing M1 saves carry over). Dungeon 1 is now authored
-as data. See `docs/acceptance-m2.md`.
+**M3 Ember Caverns + Fire spell: feature-complete, mGBA-verified.** Adds a spell system (Fire),
+a mid-dungeon ability shrine, a generic trigger→target puzzle framework (pressure-plates, hidden
+buttons, brazier groups), pushable blocks, a lava hazard, fire-immune enemies, vine/ice gates,
+and **Dungeon 2** authored as data. Abilities are now uniformly sourced from `F` shrines, and
+health/magic persist across the hub and dungeons. See `docs/acceptance-m3.md`.
+
+**M2 world framework:** data-driven levels, the **plaza hub** with ability-gated doors, typed
+gates, and v1→v2 save migration (`docs/acceptance-m2.md`).
 
 **M1 vertical slice:** shipped (`docs/acceptance-m1.md`).
 
-Real-hardware verification pending. Next milestones: Dungeons 2–8 + their abilities (each now a
+Real-hardware verification pending. Next milestones: Dungeons 3–8 + their abilities (each a
 content milestone snapping into the M2 framework). See
 `docs/superpowers/specs/2026-06-03-spronk-quest-design.md` and the per-milestone plans in
 `docs/plans/`.
 
-### Level authoring (M2)
+### Level authoring
 
 Levels live in `tools/levels/<name>.txt` (ASCII tile grid) + `<name>.json` (metadata). Symbols:
-`#` solid, `.` empty, `^` one-way, `@` spawn, `C` caged spronk, `E` exit, `o` enemy, `G` gate,
-`1`–`8` dungeon doors. `tools/build_level.py` compiles them to `include/game/levels/<name>.h`
-(both `host_test.sh` and `build_rom.sh` regenerate these automatically).
+`#` solid, `.` empty, `^` one-way, `~` lava, `@` spawn, `C` caged spronk, `E` exit, `o` enemy,
+`G` gate, `V` vine gate, `I` ice gate, `F` ability shrine, `B` pushable block, `=` pressure
+plate, `?` hidden button, `*` brazier, `1`–`8` dungeon doors. The JSON sidecar wires enemy
+patrols, pickup abilities, and trigger→target links. `tools/build_level.py` compiles them to
+`include/game/levels/<name>.h` (both `host_test.sh` and `build_rom.sh` regenerate these
+automatically).

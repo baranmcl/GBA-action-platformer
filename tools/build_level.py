@@ -6,26 +6,38 @@ Usage: python tools/build_level.py <in.txt> <out.h>
   arrays + an `inline constexpr logic::LevelData <NAME>_DATA` (NAME = uppercased out
   basename), consumed by the engine level loader.
 
-Grid symbols:
-  #=solid(1)  .=empty(0)  ^=one-way(2)   (these set the collision tile)
+Grid symbols (collision tile in parens):
+  #=solid(1)  .=empty(0)  ^=one-way(2)  ~=lava(3)
   @=spawn(one)  C=cage  E=exit  o=enemy  G=gate  1-8=dungeon door
-  (all content symbols set collision tile 0; their positions are recorded as entities)
+  V=vine gate  I=ice gate  F=ability shrine  B=pushable block  ==pressure plate
+  ?=hidden button  *=brazier
+  (all content symbols except ~ set collision tile 0; positions recorded as entities)
 
-JSON sidecar: { "tileset":"tiles",
-                "enemies":[{"patrol":[l,r]}...],   # Nth entry -> Nth 'o' in row-major order
-                "gates":[{"type":"gap"}...] }       # Nth entry -> Nth 'G'
+JSON sidecar (Nth metadata entry -> Nth matching symbol in row-major scan order):
+  { "tileset":"tiles",
+    "enemies":[{"patrol":[l,r], "fire_immune":false}...],   # 'o'
+    "gates":[{"type":"gap"}...],                            # 'G' (V/I set their type directly)
+    "pickups":[{"ability":"fire"}...],                      # 'F' (default fire)
+    "plates":[{"target":[tx,ty]}...],                       # '='
+    "buttons":[{"target":[tx,ty]}...],                      # '?'
+    "braziers":[{"group":0}...],                            # '*' (default group 0)
+    "brazier_groups":[{"total":3,"target":[tx,ty]}...] }    # indexed by group id
 """
 import json
 import os
 import sys
 
-TILE = {'#': 1, '.': 0, '^': 2}
+TILE = {'#': 1, '.': 0, '^': 2, '~': 3}
 GATE_ENUM = {
     'gap': 'Gap', 'grapple_point': 'GrapplePoint', 'vine': 'Vine', 'ice': 'Ice',
     'water': 'Water', 'cracked_wall': 'CrackedWall', 'cracked_floor': 'CrackedFloor',
     'dark_veil': 'DarkVeil',
 }
-CONTENT = set('@CEoG12345678')
+ABILITY_ENUM = {
+    'featherleap': 'Featherleap', 'fire': 'Fire', 'ice': 'Ice', 'glide': 'Glide',
+    'dash': 'Dash', 'grapple': 'Grapple', 'stone': 'Stone', 'light': 'Light',
+}
+CONTENT = set('@CEoG12345678VIFB=?*')
 
 
 class LevelError(Exception):
@@ -48,18 +60,26 @@ def compile_level(txt_path, json_path):
     if os.path.exists(json_path):
         with open(json_path, 'r', encoding='utf-8') as f:
             meta = json.load(f)
-    json_enemies = meta.get('enemies', [])
-    json_gates = meta.get('gates', [])
+    j_enemies = meta.get('enemies', [])
+    j_gates = meta.get('gates', [])
+    j_pickups = meta.get('pickups', [])
+    j_plates = meta.get('plates', [])
+    j_buttons = meta.get('buttons', [])
+    j_braziers = meta.get('braziers', [])
+    j_brazier_groups = meta.get('brazier_groups', [])
 
     tiles = []
-    spawns = []
-    cages = []
-    exits = []
-    enemies = []   # (tx,ty,param0,param1)
-    gates = []     # (tx,ty,GateEnum)
-    doors = []     # (tx,ty,dungeon)
-    e_idx = 0
-    g_idx = 0
+    spawns, cages, exits = [], [], []
+    enemies = []        # (tx,ty,p0,p1,p2)
+    gates = []          # (tx,ty,GateEnum)
+    doors = []          # (tx,ty,dungeon)
+    pickups = []        # (tx,ty,AbilityEnum)
+    blocks = []         # (tx,ty)
+    plates = []         # (tx,ty,target_tx,target_ty)
+    buttons = []        # (tx,ty,target_tx,target_ty)
+    braziers = []       # (tx,ty,group)
+    e_idx = g_idx = f_idx = pl_idx = b_idx = br_idx = 0
+
     for y, r in enumerate(rows):
         for x, c in enumerate(r):
             if c in TILE:
@@ -75,26 +95,57 @@ def compile_level(txt_path, json_path):
             elif c == 'E':
                 exits.append((x, y))
             elif c == 'o':
-                patrol = json_enemies[e_idx].get('patrol', [x - 2, x + 2]) if e_idx < len(json_enemies) else [x - 2, x + 2]
-                enemies.append((x, y, patrol[0], patrol[1]))
+                je = j_enemies[e_idx] if e_idx < len(j_enemies) else {}
+                patrol = je.get('patrol', [x - 2, x + 2])
+                p2 = 1 if je.get('fire_immune') else 0
+                enemies.append((x, y, patrol[0], patrol[1], p2))
                 e_idx += 1
             elif c == 'G':
-                if not json_gates:
+                if not j_gates:
                     raise LevelError(f"gate 'G' at ({x},{y}) but JSON has no 'gates' entry")
-                # Nth 'G' -> Nth JSON entry; extra 'G's (e.g. a wall of one gate type) clamp to last.
-                entry = json_gates[g_idx] if g_idx < len(json_gates) else json_gates[-1]
+                entry = j_gates[g_idx] if g_idx < len(j_gates) else j_gates[-1]
                 gtype = entry['type']
                 if gtype not in GATE_ENUM:
                     raise LevelError(f"unknown gate type '{gtype}'")
                 gates.append((x, y, GATE_ENUM[gtype]))
                 g_idx += 1
+            elif c == 'V':
+                gates.append((x, y, 'Vine'))
+            elif c == 'I':
+                gates.append((x, y, 'Ice'))
+            elif c == 'F':
+                ab = (j_pickups[f_idx].get('ability', 'fire') if f_idx < len(j_pickups) else 'fire')
+                if ab not in ABILITY_ENUM:
+                    raise LevelError(f"unknown ability '{ab}' for shrine 'F'")
+                pickups.append((x, y, ABILITY_ENUM[ab]))
+                f_idx += 1
+            elif c == 'B':
+                blocks.append((x, y))
+            elif c == '=':
+                if pl_idx >= len(j_plates):
+                    raise LevelError(f"plate '=' at ({x},{y}) but JSON has no 'plates' entry #{pl_idx}")
+                t = j_plates[pl_idx]['target']
+                plates.append((x, y, t[0], t[1]))
+                pl_idx += 1
+            elif c == '?':
+                if b_idx >= len(j_buttons):
+                    raise LevelError(f"button '?' at ({x},{y}) but JSON has no 'buttons' entry #{b_idx}")
+                t = j_buttons[b_idx]['target']
+                buttons.append((x, y, t[0], t[1]))
+                b_idx += 1
+            elif c == '*':
+                grp = (j_braziers[br_idx].get('group', 0) if br_idx < len(j_braziers) else 0)
+                braziers.append((x, y, grp))
+                br_idx += 1
             elif c in '12345678':
                 doors.append((x, y, int(c)))
 
     if len(spawns) != 1:
         raise LevelError(f"need exactly one '@' spawn, found {len(spawns)}")
 
-    # Solid-border invariant (matches the collision engine's OOB-as-solid expectation).
+    brazier_groups = [(g['total'], g['target'][0], g['target'][1]) for g in j_brazier_groups]
+
+    # Solid-border invariant (collision engine treats OOB as solid).
     def tile_at(x, y):
         return tiles[y * w + x]
     for x in range(w):
@@ -106,60 +157,66 @@ def compile_level(txt_path, json_path):
 
     return {
         'w': w, 'h': h, 'tiles': tiles,
-        'spawn': spawns[0],
-        'cage': cages[0] if cages else None,
-        'exit': exits[0] if exits else None,
-        'enemies': enemies, 'gates': gates, 'doors': doors,
+        'spawn': spawns[0], 'cage': cages[0] if cages else None, 'exit': exits[0] if exits else None,
+        'enemies': enemies, 'gates': gates, 'doors': doors, 'pickups': pickups,
+        'blocks': blocks, 'plates': plates, 'buttons': buttons,
+        'braziers': braziers, 'brazier_groups': brazier_groups,
     }
 
 
 def emit_header(level, name):
     def arr(vals):
         return ', '.join(str(v) for v in vals)
-    L = []
-    L.append('#pragma once')
-    L.append('#include "logic/level_data.h"')
-    L.append('')
+
+    def emit_array(cpp_type, var, items, dummy):
+        """Emit an inline constexpr array (1-element dummy when empty) + return its count."""
+        if items:
+            body = ', '.join(items)
+            return (f'inline constexpr {cpp_type} {name}_{var}[] = {{ {body} }};', len(items))
+        return (f'inline constexpr {cpp_type} {name}_{var}[] = {{ {dummy} }};', 0)
+
+    L = ['#pragma once', '#include "logic/level_data.h"', '']
     L.append(f'inline constexpr unsigned char {name}_TILES[] = {{ {arr(level["tiles"])} }};')
-    # enemies
-    if level['enemies']:
-        items = ', '.join(f'{{{tx},{ty},{p0},{p1}}}' for (tx, ty, p0, p1) in level['enemies'])
-        L.append(f'inline constexpr logic::EntitySpawn {name}_ENEMIES[] = {{ {items} }};')
-        ecount = len(level['enemies'])
-    else:
-        L.append(f'inline constexpr logic::EntitySpawn {name}_ENEMIES[] = {{ {{0,0,0,0}} }};')
-        ecount = 0
-    # gates
-    if level['gates']:
-        items = ', '.join(f'{{{tx},{ty},logic::GateType::{gt}}}' for (tx, ty, gt) in level['gates'])
-        L.append(f'inline constexpr logic::GateSpawn {name}_GATES[] = {{ {items} }};')
-        gcount = len(level['gates'])
-    else:
-        L.append(f'inline constexpr logic::GateSpawn {name}_GATES[] = {{ {{0,0,logic::GateType::Gap}} }};')
-        gcount = 0
-    # doors
-    if level['doors']:
-        items = ', '.join(f'{{{tx},{ty},{d}}}' for (tx, ty, d) in level['doors'])
-        L.append(f'inline constexpr logic::DoorSpawn {name}_DOORS[] = {{ {items} }};')
-        dcount = len(level['doors'])
-    else:
-        L.append(f'inline constexpr logic::DoorSpawn {name}_DOORS[] = {{ {{0,0,0}} }};')
-        dcount = 0
-    # LevelData (field order MUST match logic::LevelData)
+
+    line, ecount = emit_array('logic::EntitySpawn', 'ENEMIES',
+                              [f'{{{tx},{ty},{p0},{p1},{p2}}}' for (tx, ty, p0, p1, p2) in level['enemies']],
+                              '{0,0,0,0,0}'); L.append(line)
+    line, gcount = emit_array('logic::GateSpawn', 'GATES',
+                              [f'{{{tx},{ty},logic::GateType::{gt}}}' for (tx, ty, gt) in level['gates']],
+                              '{0,0,logic::GateType::Gap}'); L.append(line)
+    line, dcount = emit_array('logic::DoorSpawn', 'DOORS',
+                              [f'{{{tx},{ty},{d}}}' for (tx, ty, d) in level['doors']],
+                              '{0,0,0}'); L.append(line)
+    line, pcount = emit_array('logic::AbilityPickup', 'PICKUPS',
+                              [f'{{{tx},{ty},logic::Ability::{ab}}}' for (tx, ty, ab) in level['pickups']],
+                              '{0,0,logic::Ability::Fire}'); L.append(line)
+    line, bcount = emit_array('logic::BlockSpawn', 'BLOCKS',
+                              [f'{{{tx},{ty}}}' for (tx, ty) in level['blocks']], '{0,0}'); L.append(line)
+    line, plcount = emit_array('logic::PlateSpawn', 'PLATES',
+                               [f'{{{tx},{ty},{ttx},{tty}}}' for (tx, ty, ttx, tty) in level['plates']],
+                               '{0,0,0,0}'); L.append(line)
+    line, btcount = emit_array('logic::ButtonSpawn', 'BUTTONS',
+                               [f'{{{tx},{ty},{ttx},{tty}}}' for (tx, ty, ttx, tty) in level['buttons']],
+                               '{0,0,0,0}'); L.append(line)
+    line, brcount = emit_array('logic::BrazierSpawn', 'BRAZIERS',
+                               [f'{{{tx},{ty},{g}}}' for (tx, ty, g) in level['braziers']],
+                               '{0,0,0}'); L.append(line)
+    line, bgcount = emit_array('logic::BrazierGroupSpawn', 'BRAZIER_GROUPS',
+                               [f'{{{tot},{ttx},{tty}}}' for (tot, ttx, tty) in level['brazier_groups']],
+                               '{0,0,0}'); L.append(line)
+
     sx, sy = level['spawn']
-    has_cage = 1 if level['cage'] else 0
     cx, cy = level['cage'] if level['cage'] else (0, 0)
-    has_exit = 1 if level['exit'] else 0
     ex, ey = level['exit'] if level['exit'] else (0, 0)
     L.append(
         f'inline constexpr logic::LevelData {name}_DATA = {{ '
-        f'{name}_TILES, {level["w"]}, {level["h"]}, '
-        f'{sx}, {sy}, '
-        f'{ "true" if has_cage else "false" }, {cx}, {cy}, '
-        f'{ "true" if has_exit else "false" }, {ex}, {ey}, '
-        f'{name}_ENEMIES, {ecount}, '
-        f'{name}_GATES, {gcount}, '
-        f'{name}_DOORS, {dcount} }};'
+        f'{name}_TILES, {level["w"]}, {level["h"]}, {sx}, {sy}, '
+        f'{ "true" if level["cage"] else "false" }, {cx}, {cy}, '
+        f'{ "true" if level["exit"] else "false" }, {ex}, {ey}, '
+        f'{name}_ENEMIES, {ecount}, {name}_GATES, {gcount}, {name}_DOORS, {dcount}, '
+        f'{name}_PICKUPS, {pcount}, {name}_BLOCKS, {bcount}, {name}_PLATES, {plcount}, '
+        f'{name}_BUTTONS, {btcount}, {name}_BRAZIERS, {brcount}, '
+        f'{name}_BRAZIER_GROUPS, {bgcount} }};'
     )
     L.append('')
     return '\n'.join(L)
@@ -177,7 +234,9 @@ def main():
     with open(out_h, 'w', encoding='utf-8') as f:
         f.write(emit_header(level, name) + '\n')
     print(f"compiled {in_txt} -> {out_h} ({level['w']}x{level['h']}, "
-          f"{len(level['enemies'])} enemies, {len(level['gates'])} gates, {len(level['doors'])} doors)")
+          f"{len(level['enemies'])} enemies, {len(level['gates'])} gates, {len(level['doors'])} doors, "
+          f"{len(level['pickups'])} pickups, {len(level['blocks'])} blocks, {len(level['plates'])} plates, "
+          f"{len(level['buttons'])} buttons, {len(level['braziers'])} braziers)")
 
 
 if __name__ == '__main__':

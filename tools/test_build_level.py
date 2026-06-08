@@ -36,11 +36,11 @@ class TestBuildLevel(unittest.TestCase):
         self.assertEqual(lvl['cage'], (3, 2))
         self.assertEqual(lvl['exit'], (4, 3))
         self.assertEqual(len(lvl['enemies']), 1)
-        self.assertEqual(lvl['enemies'][0], (4, 1, 1, 4))  # patrol from JSON
+        self.assertEqual(lvl['enemies'][0], (4, 1, 1, 4, 0))  # patrol from JSON, param2=0
 
     def test_enemy_default_patrol(self):
         lvl = compile_str(VALID, {})  # no enemies metadata -> default +-2
-        self.assertEqual(lvl['enemies'][0], (4, 1, 2, 6))
+        self.assertEqual(lvl['enemies'][0], (4, 1, 2, 6, 0))
 
     def test_missing_spawn_errors(self):
         txt = "####\n#..#\n####\n"
@@ -83,6 +83,47 @@ class TestBuildLevel(unittest.TestCase):
         self.assertIn("TESTLVL_DATA", hdr)
         self.assertIn("TESTLVL_TILES", hdr)
         self.assertIn("logic::LevelData", hdr)
+
+    # --- M3 symbols ---
+    def test_lava_is_tile_3(self):
+        txt = "#####\n#@~.#\n#####\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['tiles'][lvl['w'] * 1 + 2], 3)  # '~' at (2,1) -> lava
+
+    def test_vine_and_ice_gates(self):
+        txt = "######\n#@VI.#\n######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['gates'], [(2, 1, 'Vine'), (3, 1, 'Ice')])
+
+    def test_shrine_ability(self):
+        txt = "#####\n#@F.#\n#####\n"
+        lvl = compile_str(txt, {"pickups": [{"ability": "fire"}]})
+        self.assertEqual(lvl['pickups'], [(2, 1, 'Fire')])
+        lvl2 = compile_str(txt, {})  # default fire
+        self.assertEqual(lvl2['pickups'], [(2, 1, 'Fire')])
+
+    def test_block_plate_button_brazier(self):
+        txt = "########\n#@B=?*.#\n########\n"
+        lvl = compile_str(txt, {
+            "plates": [{"target": [6, 1]}],
+            "buttons": [{"target": [6, 2]}],
+            "braziers": [{"group": 0}],
+            "brazier_groups": [{"total": 1, "target": [5, 5]}],
+        })
+        self.assertEqual(lvl['blocks'], [(2, 1)])
+        self.assertEqual(lvl['plates'], [(3, 1, 6, 1)])
+        self.assertEqual(lvl['buttons'], [(4, 1, 6, 2)])
+        self.assertEqual(lvl['braziers'], [(5, 1, 0)])
+        self.assertEqual(lvl['brazier_groups'], [(1, 5, 5)])
+
+    def test_fire_immune_enemy_flag(self):
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4], "fire_immune": True}]})
+        self.assertEqual(lvl['enemies'][0], (4, 1, 1, 4, 1))  # param2 bit0 = fire_immune
+
+    def test_plate_requires_json_target(self):
+        txt = "#####\n#@=.#\n#####\n"
+        with self.assertRaises(build_level.LevelError):
+            compile_str(txt, {})  # plate with no target
 
 
 if __name__ == '__main__':

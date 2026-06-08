@@ -57,22 +57,28 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started.
+**Overall:** ✅ **M3 COMPLETE** — all phases (0–5 incl. 4.3) shipped and mGBA-verified (Ember Caverns end-to-end + D1 fresh-save reward flow). Branch `m3-ember-caverns`, 104/104 host. Acceptance: `docs/acceptance-m3.md`. Remaining: real-hardware flash (inherited, deferred) + finish/merge the branch.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 0 — Pure logic systems | ⬜ Not started | — | — |
-| 1 — Level compiler symbols + art | ⬜ Not started | — | — |
-| 2 — Engine: spell input + fire pool + rendering | ⬜ Not started | — | — |
-| 3 — scene_dungeon integration (additive) | ⬜ Not started | — | — |
-| 4 — Dungeon 2 content + hub unlock | ⬜ Not started | — | — |
-| 5 — Verification + docs | ⬜ Not started | — | — |
+| 0 — Pure logic systems | ✅ Shipped | `8da780b` | lava, FireCast/economy, ability pickup, pushable block, trigger→target, fire-immune, fire-clears-gate. 95/95 host (+24). |
+| 1 — Level compiler symbols + art | ✅ Shipped | `c2528c0`, `5f75d9d` | compiler symbols + LevelData arrays (16 Python + 97 host tests); ember art, ROM imports clean. |
+| 2 — Engine: spell input + fire pool + rendering | ✅ Shipped | `b27ddf0` | spell input (R/L), fire projectile pool (split cast/hit/despawn API), lava bg-index map. |
+| 3 — scene_dungeon integration (additive) | ✅ Shipped | `564fbf9` | spell state + fire pool, lava dmg, shrine, vine/ice gates (full-height columns), pushable blocks, plates/buttons/braziers→trigger→target, fire-immune enemies, spell HUD. |
+| 4 — Dungeon 2 content + hub unlock | ✅ Shipped | `564fbf9`, `d32abf1`, `f20d783`, `922098a` | D2 (64×22 dense gauntlet), hub door 2 enterable after D1, main routes D2. Playtest fixes folded in (see below). 103/103 host. |
+| 4.3 — Reward-model cleanup | ✅ Shipped | (4.3 commit) | D1 Featherleap is an `F` shrine; hardcoded grant removed. Verified on a fresh save. 104/104 host. |
+| 5 — Verification + docs | ✅ Shipped | (Phase 5 commit) | `docs/acceptance-m3.md`, README updated, plan closed out. mGBA-verified throughout. |
 
 ### Deviations
-- _(none yet)_
+- **D2 size (Task 4.x):** design called for "~8–12 screens"; the GBA 64×32-tile BG cap makes that impossible (~2 screens max). D2 is authored instead as a **dense 64×22-tile single-screen-tall gauntlet** threading all systems left→right. Documented; acceptable for the framework-proving goal.
+- **Gate/door geometry (Phase 3):** plan implied player-sized 2×4 door regions; playtest proved they're double-jumpable. Switched ALL gates/walls to **full-height 2-wide columns** (`fill_column`/`open_column`), opened fully on clear. Plates open/close dynamically (held-to-open); buttons/braziers latch.
+- **Fire cost (Phase 0 value):** designed at 25 magic; playtest showed D2's 5 Fire obstacles (vine+ice+3 braziers) can't be funded by the available enemies at 25. Lowered to **10**; D2 has 4 enemies as magic sources. `test_spell` updated.
+- **Persistent vitals (new, Phase 3/4):** added `logic::PlayerState{health,magic}` owned by `main`, threaded through `run_hub`/`run_dungeon` so vitals persist across hub↔dungeon (user request). Hub now renders the HUD.
 
 ### Discoveries
-- _(none yet)_
+- **Brazier hit-height (playtest):** a chest-height horizontal Fire shot flew OVER one-tile brazier bodies on the floor → braziers never lit → brazier-gate never opened → spronk soft-locked. Fixed by giving braziers a tall (rows 14–19) invisible hit-body decoupled from the floor visual. `src/game/scene_dungeon.cpp`.
+- **Plate over-trigger (playtest):** Laurel's 16px body AABB-overlapped the 8px plate while standing next to/above it (false opens + boundary flicker). Fixed with a center-point + `on_ground` sensor instead of AABB. `src/game/scene_dungeon.cpp`.
+- **Art legibility (playtest):** brazier/block/button all read as small brown blobs. Redesigned: brazier = grey stone bowl (flame when lit), block = X-braced crate, button = round red switch. `tools/make_placeholder_art.py`.
 
 ---
 

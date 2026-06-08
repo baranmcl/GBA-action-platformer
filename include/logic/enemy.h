@@ -8,6 +8,7 @@ struct Enemy {
     int dir = 1;                        // +1 right, -1 left
     Fixed left_bound{}, right_bound{};  // patrol range for body.pos.x (pixels)
     bool alive = true;
+    bool fire_immune = false;           // M3: survives Fire, must be killed with the bolt
     void update(const Tilemap& map);
     void kill(){ alive = false; }
 };
