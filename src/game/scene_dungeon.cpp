@@ -86,6 +86,17 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
     const int hh = lvl.view.map_px_h / 2;
     auto wx = [&](int px){ return px - hw; };
     auto wy = [&](int px){ return px - hh; };
+    // Centre the camera on the player (cx,cy in level pixels), but CLAMP so the 240x160 view never
+    // scrolls past the authored level into the blank/wrapping region of the fixed 64x32 background
+    // (the BG repeats; a tall level would otherwise show its top wrapped onto the screen bottom).
+    auto set_clamped_cam = [&](int cx, int cy){
+        const int ll = -hw, lt = -hh, lr = ll + level.w * 8, lb = lt + level.h * 8;
+        const int minx = ll + 120, maxx = lr - 120, miny = lt + 80, maxy = lb - 80;
+        int camx = cx - hw, camy = cy - hh;
+        camx = (minx <= maxx) ? (camx < minx ? minx : camx > maxx ? maxx : camx) : (ll + lr) / 2;
+        camy = (miny <= maxy) ? (camy < miny ? miny : camy > maxy ? maxy : camy) : (lt + lb) / 2;
+        cam.set_position(camx, camy);
+    };
 
     const logic::Vec2 spawn_pos { fx(level.spawn_tx * 8), fx(level.spawn_ty * 8) };
 
@@ -216,7 +227,7 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
     // Centre camera on the player before fading in (avoids a snap on frame 0).
     int cx0 = player.body.pos.x.to_int() + player.body.half_w.to_int();
     int cy0 = player.body.pos.y.to_int() + player.body.half_h.to_int();
-    cam.set_position(cx0 - hw, cy0 - hh);
+    set_clamped_cam(cx0, cy0);
     engine::set_fade(16);
     int fade_in_t = 16;
     int push_cd = 0;
@@ -386,7 +397,7 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
         hud.update(health, magic);
         int cx = player.body.pos.x.to_int() + player.body.half_w.to_int();
         int cy = player.body.pos.y.to_int() + player.body.half_h.to_int();
-        cam.set_position(cx - hw, cy - hh);
+        set_clamped_cam(cx, cy);
         if(fade_in_t > 0) engine::set_fade(--fade_in_t);
         bn::core::update();
     }
