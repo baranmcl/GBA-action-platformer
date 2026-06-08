@@ -106,6 +106,15 @@ class TestBuildLevel(unittest.TestCase):
         lvl = compile_str(txt, {})
         self.assertEqual(lvl['gates'], [(2, 1, 'Water')])
 
+    # --- M5 wind tiles ---
+    def test_wind_tiles(self):
+        txt = "#######\n#@u<>.#\n#######\n"
+        lvl = compile_str(txt, {})
+        w = lvl['w']
+        self.assertEqual(lvl['tiles'][w*1 + 2], 6)  # 'u' updraft
+        self.assertEqual(lvl['tiles'][w*1 + 3], 7)  # '<' wind-left
+        self.assertEqual(lvl['tiles'][w*1 + 4], 8)  # '>' wind-right
+
     def test_shrine_ability(self):
         txt = "#####\n#@F.#\n#####\n"
         lvl = compile_str(txt, {"pickups": [{"ability": "fire"}]})

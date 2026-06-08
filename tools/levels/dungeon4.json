@@ -1,1 +1,16 @@
-{ "tileset":"tiles", "enemies":[] }
+{
+  "tileset": "tiles",
+  "enemies": [
+    {
+      "patrol": [
+        4,
+        11
+      ]
+    }
+  ],
+  "pickups": [
+    {
+      "ability": "glide"
+    }
+  ]
+}

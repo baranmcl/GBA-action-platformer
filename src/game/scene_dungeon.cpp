@@ -239,6 +239,7 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
 
         logic::InputFrame in = engine::read_input();
         player.abilities.featherleap = world.has(logic::Ability::Featherleap);
+        player.abilities.glide       = world.has(logic::Ability::Glide);
         player.update(in, lvl.map);
         avatar.sync(player);
 
