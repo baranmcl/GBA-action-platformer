@@ -22,11 +22,12 @@ namespace game
 {
 namespace {
     logic::Fixed fx(int v){ return logic::Fixed::from_int(v); }
-    // Door N enterable: D1 always; D2 after D1's spronk; D3 after D2's spronk; D4-8 not built yet.
+    // Door N enterable: D1 always; each next door opens once the prior dungeon's spronk is freed. D5-8 not built.
     bool door_enterable(int n, const logic::World& w){
         return n == 1
             || (n == 2 && w.spronk_freed(1))
-            || (n == 3 && w.spronk_freed(2));
+            || (n == 3 && w.spronk_freed(2))
+            || (n == 4 && w.spronk_freed(3));
     }
 }
 
@@ -58,6 +59,16 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
     lvl.view.bg.set_camera(cam);
     const int hw = lvl.view.map_px_w / 2;
     const int hh = lvl.view.map_px_h / 2;
+    // Clamp the camera to the authored hub bounds so the 240x160 view doesn't show the blank
+    // margins of the fixed 64x32 background (the plaza is only 48x18). Same clamp as scene_dungeon.
+    auto set_clamped_cam = [&](int cx, int cy){
+        const int ll = -hw, lt = -hh, lr = ll + HUB_DATA.w * 8, lb = lt + HUB_DATA.h * 8;
+        const int minx = ll + 120, maxx = lr - 120, miny = lt + 80, maxy = lb - 80;
+        int camx = cx - hw, camy = cy - hh;
+        camx = (minx <= maxx) ? (camx < minx ? minx : camx > maxx ? maxx : camx) : (ll + lr) / 2;
+        camy = (miny <= maxy) ? (camy < miny ? miny : camy > maxy ? maxy : camy) : (lt + lb) / 2;
+        cam.set_position(camx, camy);
+    };
 
     logic::Player player;
     player.body.half_w = fx(8); player.body.half_h = fx(16);
@@ -68,7 +79,7 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
 
     int cx0 = player.body.pos.x.to_int() + player.body.half_w.to_int();
     int cy0 = player.body.pos.y.to_int() + player.body.half_h.to_int();
-    cam.set_position(cx0 - hw, cy0 - hh);
+    set_clamped_cam(cx0, cy0);
     engine::set_fade(16);
     int fade_in_t = 16;
 
@@ -99,7 +110,7 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
 
         int cx = player.body.pos.x.to_int() + player.body.half_w.to_int();
         int cy = player.body.pos.y.to_int() + player.body.half_h.to_int();
-        cam.set_position(cx - hw, cy - hh);
+        set_clamped_cam(cx, cy);
         hud.update(ps.health, ps.magic);
         if(fade_in_t > 0) engine::set_fade(--fade_in_t);
         bn::core::update();

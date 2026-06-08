@@ -1,8 +1,9 @@
 #include "engine/level_loader.h"
+#include "bn_common.h"               // BN_DATA_EWRAM_BSS
 namespace engine {
 namespace {
-    constexpr int CAP = 64 * 32;     // max level size (matches level_view bg capacity)
-    uint8_t s_grid[CAP];             // MUTABLE collision buffer (constexpr LevelData.tiles is read-only)
+    constexpr int CAP = 64 * 128;    // max level size (matches level_view 64x128 big-map bg); 8KB
+    BN_DATA_EWRAM_BSS uint8_t s_grid[CAP]; // MUTABLE collision buffer in EWRAM (constexpr LevelData.tiles is read-only)
     int s_w = 0, s_h = 0;
 }
 

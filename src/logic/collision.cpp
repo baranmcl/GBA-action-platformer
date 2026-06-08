@@ -20,7 +20,10 @@ void move_and_collide(Body& b, const Tilemap& map){
         b.pos.x = b.pos.x + d;
         if(overlaps_solid(b,map)){
             Fixed dir = (d.raw>0)? Fixed::from_int(1) : Fixed::from_int(-1);
-            while(overlaps_solid(b,map)) b.pos.x = b.pos.x - dir;
+            // Bounded back-out: a legit overlap is <= one tile; the guard stops an infinite loop
+            // if a body is spawned EMBEDDED in solid (backing out along one axis can't clear an
+            // overlap on the other axis). The Y-axis / next frame resolves the residual.
+            for(int g=0; g<64 && overlaps_solid(b,map); ++g) b.pos.x = b.pos.x - dir;
             b.vel.x = Fixed::from_int(0); break;
         }
         remx = remx - d;
@@ -56,7 +59,7 @@ void move_and_collide(Body& b, const Tilemap& map){
         }
         if(hit){
             Fixed dir = (d.raw>0)? Fixed::from_int(1):Fixed::from_int(-1);
-            while(overlaps_solid(b,map)) b.pos.y = b.pos.y - dir; // back out of solids only
+            for(int g=0; g<64 && overlaps_solid(b,map); ++g) b.pos.y = b.pos.y - dir; // bounded back-out
             if(d.raw>0) b.on_ground = true;
             b.vel.y = Fixed::from_int(0);
             break;

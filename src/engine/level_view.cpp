@@ -11,9 +11,10 @@
 namespace engine {
 namespace {
     constexpr int COLS = 64;
-    constexpr int ROWS = 32;
-    // Static storage (no heap — Butano forbids it). 64*32 cells = 4KB.
-    alignas(int) bn::regular_bg_map_cell s_cells[COLS * ROWS];
+    constexpr int ROWS = 128;   // 64x128 = a Butano "big map" (auto-streamed); lets levels be up to 128 tall.
+    // Static storage (no heap — Butano forbids it). 64*128 cells * 2B = 16KB — in EWRAM (BN_DATA_EWRAM_BSS),
+    // NOT the 32KB IWRAM, which it would overflow.
+    alignas(int) BN_DATA_EWRAM_BSS bn::regular_bg_map_cell s_cells[COLS * ROWS];
     bn::regular_bg_map_item s_map_item(s_cells[0], bn::size(COLS, ROWS));
 }
 
@@ -25,8 +26,10 @@ LevelView build_level_view(const logic::Tilemap& map){
             if(tx < map.w && ty < map.h){
                 int kind = map.cells[ty * map.w + tx]; // collision TileKind value
                 // collision TileKind -> bg tile index (see gates.h tile map). Identity for 0/1/2;
-                // Lava(3)->13, Water(4)->16, IcePlatform(5)->19. Gates/doors/entities overlaid via set_level_tile.
-                tile_index = (kind == 3) ? 13 : (kind == 4) ? 16 : (kind == 5) ? 19 : kind;
+                // Lava(3)->13, Water(4)->16, IcePlatform(5)->19, Updraft(6)->20, WindLeft(7)->21,
+                // WindRight(8)->22. Gates/doors/entities overlaid via set_level_tile.
+                tile_index = (kind == 3) ? 13 : (kind == 4) ? 16 : (kind == 5) ? 19
+                           : (kind == 6) ? 20 : (kind == 7) ? 21 : (kind == 8) ? 22 : kind;
             }
             int ci = s_map_item.cell_index(tx, ty);
             bn::regular_bg_map_cell_info info(s_cells[ci]);

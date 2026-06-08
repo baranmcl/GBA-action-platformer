@@ -86,6 +86,17 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
     const int hh = lvl.view.map_px_h / 2;
     auto wx = [&](int px){ return px - hw; };
     auto wy = [&](int px){ return px - hh; };
+    // Centre the camera on the player (cx,cy in level pixels), but CLAMP so the 240x160 view never
+    // scrolls past the authored level into the blank/wrapping region of the fixed 64x32 background
+    // (the BG repeats; a tall level would otherwise show its top wrapped onto the screen bottom).
+    auto set_clamped_cam = [&](int cx, int cy){
+        const int ll = -hw, lt = -hh, lr = ll + level.w * 8, lb = lt + level.h * 8;
+        const int minx = ll + 120, maxx = lr - 120, miny = lt + 80, maxy = lb - 80;
+        int camx = cx - hw, camy = cy - hh;
+        camx = (minx <= maxx) ? (camx < minx ? minx : camx > maxx ? maxx : camx) : (ll + lr) / 2;
+        camy = (miny <= maxy) ? (camy < miny ? miny : camy > maxy ? maxy : camy) : (lt + lb) / 2;
+        cam.set_position(camx, camy);
+    };
 
     const logic::Vec2 spawn_pos { fx(level.spawn_tx * 8), fx(level.spawn_ty * 8) };
 
@@ -216,7 +227,7 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
     // Centre camera on the player before fading in (avoids a snap on frame 0).
     int cx0 = player.body.pos.x.to_int() + player.body.half_w.to_int();
     int cy0 = player.body.pos.y.to_int() + player.body.half_h.to_int();
-    cam.set_position(cx0 - hw, cy0 - hh);
+    set_clamped_cam(cx0, cy0);
     engine::set_fade(16);
     int fade_in_t = 16;
     int push_cd = 0;
@@ -228,6 +239,7 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
 
         logic::InputFrame in = engine::read_input();
         player.abilities.featherleap = world.has(logic::Ability::Featherleap);
+        player.abilities.glide       = world.has(logic::Ability::Glide);
         player.update(in, lvl.map);
         avatar.sync(player);
 
@@ -287,8 +299,13 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
             }
         }
         while(spells.consume_tile_hit(lvl.map, logic::TileKind::IcePlatform, logic::SpellId::Fire, ftx, fty)){
-            engine::set_collision_tile(ftx, fty, (int)logic::TileKind::Water);       // collision VALUE 4
-            engine::set_level_tile(lvl.view, ftx, fty, WATER_BG);                    // bg INDEX 16
+            // Melt the WHOLE contiguous ice run back to water (one cast), symmetric to the freeze.
+            int x0 = ftx; while(lvl.map.at(x0 - 1, fty) == logic::TileKind::IcePlatform) --x0;
+            int x1 = ftx; while(lvl.map.at(x1 + 1, fty) == logic::TileKind::IcePlatform) ++x1;
+            for(int x = x0; x <= x1; ++x){
+                engine::set_collision_tile(x, fty, (int)logic::TileKind::Water);     // collision VALUE 4
+                engine::set_level_tile(lvl.view, x, fty, WATER_BG);                  // bg INDEX 16
+            }
         }
         spells.despawn_on_solid(lvl.map);
 
@@ -357,6 +374,16 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
         if(health.is_empty()){
             player.body.pos = spawn_pos; player.body.vel = { fx(0), fx(0) };
             health.cur = health.max; invuln = 0;
+            // Reset pushable blocks to their authored start so a block shoved into a dead corner
+            // (a soft-lock) is recoverable by dying. (Plates re-evaluate next frame; latched
+            // button/brazier gates stay solved.)
+            for(int i = 0; i < (int)blocks.size(); ++i){
+                BlockInst& bi = blocks[i];
+                engine::set_collision_tile(bi.blk.tx, bi.blk.ty, 0);          // clear where it ended up
+                bi.blk.tx = level.blocks[i].tx; bi.blk.ty = level.blocks[i].ty;
+                engine::set_collision_tile(bi.blk.tx, bi.blk.ty, 1);          // solid at the start cell
+                if(bi.sprite) bi.sprite->set_position(wx(bi.blk.tx * 8 + 4), wy(bi.blk.ty * 8 + 4));
+            }
         }
 
         // ---- ability shrines ----
@@ -379,14 +406,16 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
         }
 
         bool spronk_ok = !level.has_cage || world.spronk_freed(d);
-        if(level.has_exit && spronk_ok && logic::aabb_overlap(player.body, exit)){
+        // Must LAND on the exit (grounded), not bump it from underneath — clearing requires
+        // standing on the platform, which matters for the gated vertical climb (no head-bump cheese).
+        if(level.has_exit && spronk_ok && player.body.on_ground && logic::aabb_overlap(player.body, exit)){
             result = DungeonResult::Cleared; break;
         }
 
         hud.update(health, magic);
         int cx = player.body.pos.x.to_int() + player.body.half_w.to_int();
         int cy = player.body.pos.y.to_int() + player.body.half_h.to_int();
-        cam.set_position(cx - hw, cy - hh);
+        set_clamped_cam(cx, cy);
         if(fade_in_t > 0) engine::set_fade(--fade_in_t);
         bn::core::update();
     }

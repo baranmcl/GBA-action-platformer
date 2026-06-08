@@ -27,7 +27,8 @@ import json
 import os
 import sys
 
-TILE = {'#': 1, '.': 0, '^': 2, '~': 3, 'w': 4}   # 'w' = water (M4 damaging hazard, Ice-freezable)
+TILE = {'#': 1, '.': 0, '^': 2, '~': 3, 'w': 4,   # 'w' = water (M4 damaging hazard, Ice-freezable)
+        'u': 6, '<': 7, '>': 8}                    # M5 wind: updraft, wind-left, wind-right (non-solid)
 GATE_ENUM = {
     'gap': 'Gap', 'grapple_point': 'GrapplePoint', 'vine': 'Vine', 'ice': 'Ice',
     'water': 'Water', 'cracked_wall': 'CrackedWall', 'cracked_floor': 'CrackedFloor',
