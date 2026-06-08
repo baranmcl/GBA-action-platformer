@@ -23,3 +23,10 @@ TEST(water_and_ice_kinds){
   CHECK(m.is_solid(3,0));       // ice platform IS solid (stand on it)
   CHECK(m.is_solid(1,0));       // regular solid still solid
   CHECK(!m.is_water(3,0)); }
+TEST(wind_tiles_are_not_solid){
+  uint8_t c[] = { (uint8_t)TileKind::Updraft, (uint8_t)TileKind::WindLeft, (uint8_t)TileKind::WindRight };
+  Tilemap m{3,1,c};
+  CHECK(m.at(0,0)==TileKind::Updraft);
+  CHECK(m.at(1,0)==TileKind::WindLeft);
+  CHECK(m.at(2,0)==TileKind::WindRight);
+  CHECK(!m.is_solid(0,0)); CHECK(!m.is_solid(1,0)); CHECK(!m.is_solid(2,0)); }  // all passable

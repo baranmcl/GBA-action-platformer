@@ -4,7 +4,9 @@
 namespace logic {
 // Water=4 is a damaging hazard the Ice spell freezes into IcePlatform=5 (a standable, Fire-meltable
 // solid). IcePlatform counts as solid for collision but is distinct so Fire melts ONLY it, not walls.
-enum class TileKind : uint8_t { Empty=0, Solid=1, OneWay=2, Lava=3, Water=4, IcePlatform=5 };
+// Updraft/WindLeft/WindRight (6-8) are NON-solid M5 wind forces (player passes through + is pushed).
+enum class TileKind : uint8_t { Empty=0, Solid=1, OneWay=2, Lava=3, Water=4, IcePlatform=5,
+                                Updraft=6, WindLeft=7, WindRight=8 };
 struct Tilemap {
     int w, h;
     const uint8_t* cells; // row-major, length w*h

@@ -1,8 +1,8 @@
 #pragma once
 #include "logic/collision.h"
 namespace logic {
-struct InputFrame { bool left=false, right=false, jump_pressed=false, fire_pressed=false; };
-struct Abilities { bool featherleap=false; };
+struct InputFrame { bool left=false, right=false, jump_pressed=false, fire_pressed=false, glide_held=false; };
+struct Abilities { bool featherleap=false; bool glide=false; };
 struct Player {
     Body body;
     Abilities abilities;
