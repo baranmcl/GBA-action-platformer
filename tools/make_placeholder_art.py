@@ -118,9 +118,9 @@ def gen_tiles():
     """Background tileset: 20 tiles of 8x8 in a horizontal strip. Index order:
     0 blank, 1 ground, 2 one-way, 3 gate(closed wall), 4 cage, 5 door-open, 6 door-locked,
     7 vine, 8 ice-gate, 9 water-gate(waterfall, M4), 10 fire-wall-gate(M4), 11-12 reserved, 13 lava,
-    14 brazier-unlit, 15 brazier-lit, 16 water(M4), 17 plate, 18 button, 19 ice-platform(M4).
-    (block + shrine are SPRITES, not bg tiles.)"""
-    im = new_img(8 * 20, 8)
+    14 brazier-unlit, 15 brazier-lit, 16 water(M4), 17 plate, 18 button, 19 ice-platform(M4),
+    20 updraft(M5), 21 wind-left(M5), 22 wind-right(M5). (block + shrine are SPRITES, not bg tiles.)"""
+    im = new_img(8 * 23, 8)
     # tile 0: blank -> all index 0 (transparent, shows backdrop). nothing to draw.
     # tile 1: ground (brown with grass top, dark bottom)
     ox = 8 * 1
@@ -210,6 +210,19 @@ def gen_tiles():
     rect(im, ox, 0, ox + 7, 7, 9)           # white slab
     rect(im, ox, 6, ox + 7, 7, 8)           # cyan underside
     px(im, ox + 2, 2, 8); px(im, ox + 5, 3, 8)  # cyan cracks
+    # tile 20: updraft — upward white chevrons on a faint cyan column (M5 wind)
+    ox = 8 * 20
+    rect(im, ox + 3, 0, ox + 4, 7, 8)       # faint cyan column
+    px(im, ox+3,1,9); px(im, ox+4,1,9); px(im, ox+2,2,9); px(im, ox+5,2,9)  # chevron ^
+    px(im, ox+3,4,9); px(im, ox+4,4,9); px(im, ox+2,5,9); px(im, ox+5,5,9)  # chevron ^
+    # tile 21: wind-left — leftward white streaks (tips at the LEFT)
+    ox = 8 * 21
+    rect(im, ox, 1, ox + 5, 1, 9); rect(im, ox, 4, ox + 5, 4, 9); rect(im, ox, 6, ox + 4, 6, 9)
+    px(im, ox, 0, 9); px(im, ox, 3, 9); px(im, ox, 5, 9)
+    # tile 22: wind-right — rightward white streaks (tips at the RIGHT)
+    ox = 8 * 22
+    rect(im, ox + 2, 1, ox + 7, 1, 9); rect(im, ox + 2, 4, ox + 7, 4, 9); rect(im, ox + 3, 6, ox + 7, 6, 9)
+    px(im, ox + 7, 0, 9); px(im, ox + 7, 3, 9); px(im, ox + 7, 5, 9)
     write(im, "tiles", {"type": "regular_bg_tiles", "bpp_mode": "bpp_4"})
 
 def gen_ember_sprites():
