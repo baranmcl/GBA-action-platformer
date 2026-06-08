@@ -57,7 +57,7 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Phases 0–4 shipped AND mGBA-playtest-verified (all 7 systems working end-to-end). Branch `m3-ember-caverns` (NOT yet pushed/merged). Phase 5 (acceptance doc + close-out) + Phase 4.3 (reward-model cleanup) remain. **Paused 2026-06-05 at user request** after the plate-precision fix; resume at Phase 4.3.
+**Overall:** ✅ **M3 COMPLETE** — all phases (0–5 incl. 4.3) shipped and mGBA-verified (Ember Caverns end-to-end + D1 fresh-save reward flow). Branch `m3-ember-caverns`, 104/104 host. Acceptance: `docs/acceptance-m3.md`. Remaining: real-hardware flash (inherited, deferred) + finish/merge the branch.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
@@ -66,8 +66,8 @@ notes and commit messages.
 | 2 — Engine: spell input + fire pool + rendering | ✅ Shipped | `b27ddf0` | spell input (R/L), fire projectile pool (split cast/hit/despawn API), lava bg-index map. |
 | 3 — scene_dungeon integration (additive) | ✅ Shipped | `564fbf9` | spell state + fire pool, lava dmg, shrine, vine/ice gates (full-height columns), pushable blocks, plates/buttons/braziers→trigger→target, fire-immune enemies, spell HUD. |
 | 4 — Dungeon 2 content + hub unlock | ✅ Shipped | `564fbf9`, `d32abf1`, `f20d783`, `922098a` | D2 (64×22 dense gauntlet), hub door 2 enterable after D1, main routes D2. Playtest fixes folded in (see below). 103/103 host. |
-| 4.3 — Reward-model cleanup | ⬜ Not started | — | Place a Featherleap `F` pickup in dungeon1.txt + REMOVE the hardcoded `world.grant(Ability::Featherleap)` on the spronk-free path in scene_dungeon. Resume HERE. |
-| 5 — Verification + docs | ⬜ Not started | — | `docs/acceptance-m3.md`, README update, plan close-out, push/merge branch. |
+| 4.3 — Reward-model cleanup | ✅ Shipped | (4.3 commit) | D1 Featherleap is an `F` shrine; hardcoded grant removed. Verified on a fresh save. 104/104 host. |
+| 5 — Verification + docs | ✅ Shipped | (Phase 5 commit) | `docs/acceptance-m3.md`, README updated, plan closed out. mGBA-verified throughout. |
 
 ### Deviations
 - **D2 size (Task 4.x):** design called for "~8–12 screens"; the GBA 64×32-tile BG cap makes that impossible (~2 screens max). D2 is authored instead as a **dense 64×22-tile single-screen-tall gauntlet** threading all systems left→right. Documented; acceptable for the framework-proving goal.
