@@ -3,10 +3,19 @@
 An original **Game Boy Advance** action platformer. Laurel, a wand-wielding Goob, must rescue
 the 8 spronks from 8 dungeons and defeat the Nightmare King.
 
-This repo is built in milestones. It currently contains **Milestone 3 — Ember Caverns + the Fire
-spell**: a puzzle-rich second dungeon on top of the M2 world framework and the M1 vertical slice.
+This repo is built in milestones. It currently contains **Milestone 4 — Frost Hollow + the Ice
+spell**: a frozen third dungeon with reversible water↔ice terrain, on top of M1–M3.
 
 ## What's playable
+
+**M4 — Frost Hollow (Dungeon 3) + Ice spell**
+- The **Ice spell** ⚡ (cast with R) — and since you carry **Fire** in from D2, **L now cycles
+  Fire↔Ice** (the HUD shows the selected spell).
+- **Reversible water↔ice:** cast **Ice** at a water gap to **freeze it into a bridge**; cast
+  **Fire** at the bridge to **melt it back**.
+- **Elemental gates:** Fire burns vines and melts an ice wall; **Ice extinguishes a wall of fire**.
+- **Water** is a damaging hazard; the freeze bridge is the clean way across (with a ceiling so you
+  can't just jump over).
 
 **M3 — Ember Caverns (Dungeon 2) + Fire spell**
 - A **spell system**: free wand **bolt** (B), plus a selectable **Fire** spell you **cast** (R)
@@ -53,7 +62,7 @@ Requires **devkitPro / devkitARM**, **Butano** (vendored as a submodule), and **
 git submodule update --init           # fetch Butano 21.6.0
 python tools/make_placeholder_art.py  # (re)generate placeholder art
 bash tools/build_rom.sh               # build -> SpronkQuest.gba
-bash tools/host_test.sh               # run the host-side logic tests (104 tests)
+bash tools/host_test.sh               # run the host-side logic tests (117 tests)
 ```
 
 > **Windows note:** the ROM builds through devkitPro's bundled MSYS2; host tests use the mingw64
@@ -76,18 +85,21 @@ Physics, collision, combat, meters, and the save format are all validated by fas
 
 ## Project status
 
-**M3 Ember Caverns + Fire spell: feature-complete, mGBA-verified.** Adds a spell system (Fire),
-a mid-dungeon ability shrine, a generic trigger→target puzzle framework (pressure-plates, hidden
-buttons, brazier groups), pushable blocks, a lava hazard, fire-immune enemies, vine/ice gates,
-and **Dungeon 2** authored as data. Abilities are now uniformly sourced from `F` shrines, and
-health/magic persist across the hub and dungeons. See `docs/acceptance-m3.md`.
+**M4 Frost Hollow + Ice spell: feature-complete, mGBA-verified.** Generalizes the spell system to
+two typed spells (Fire+Ice, `L` cycles), adds reversible **water↔ice** terrain (Ice freezes water
+into bridges, Fire melts them back), a water hazard, an Ice-extinguished **fire-wall** gate, and
+**Dungeon 3** authored as data. See `docs/acceptance-m4.md`.
+
+**M3 Ember Caverns + Fire spell:** a spell system, mid-dungeon ability shrine, trigger→target
+puzzles (plates/buttons/braziers), pushable blocks, lava, fire-immune enemies, and Dungeon 2.
+Abilities come from `F` shrines; health/magic persist across the hub (`docs/acceptance-m3.md`).
 
 **M2 world framework:** data-driven levels, the **plaza hub** with ability-gated doors, typed
 gates, and v1→v2 save migration (`docs/acceptance-m2.md`).
 
 **M1 vertical slice:** shipped (`docs/acceptance-m1.md`).
 
-Real-hardware verification pending. Next milestones: Dungeons 3–8 + their abilities (each a
+Real-hardware verification pending. Next milestones: Dungeons 4–8 + their abilities (each a
 content milestone snapping into the M2 framework). See
 `docs/superpowers/specs/2026-06-03-spronk-quest-design.md` and the per-milestone plans in
 `docs/plans/`.
@@ -95,9 +107,9 @@ content milestone snapping into the M2 framework). See
 ### Level authoring
 
 Levels live in `tools/levels/<name>.txt` (ASCII tile grid) + `<name>.json` (metadata). Symbols:
-`#` solid, `.` empty, `^` one-way, `~` lava, `@` spawn, `C` caged spronk, `E` exit, `o` enemy,
-`G` gate, `V` vine gate, `I` ice gate, `F` ability shrine, `B` pushable block, `=` pressure
-plate, `?` hidden button, `*` brazier, `1`–`8` dungeon doors. The JSON sidecar wires enemy
-patrols, pickup abilities, and trigger→target links. `tools/build_level.py` compiles them to
+`#` solid, `.` empty, `^` one-way, `~` lava, `w` water, `@` spawn, `C` caged spronk, `E` exit,
+`o` enemy, `G` gate, `V` vine gate, `I` ice gate, `X` fire-wall gate, `W` water gate, `F` ability
+shrine, `B` pushable block, `=` pressure plate, `?` hidden button, `*` brazier, `1`–`8` dungeon
+doors. The JSON sidecar wires enemy patrols, pickup abilities, and trigger→target links. `tools/build_level.py` compiles them to
 `include/game/levels/<name>.h` (both `host_test.sh` and `build_rom.sh` regenerate these
 automatically).

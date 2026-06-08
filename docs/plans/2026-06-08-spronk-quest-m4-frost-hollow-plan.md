@@ -57,7 +57,7 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started. Branch `m4-frost-hollow` (design spec already committed there).
+**Overall:** ✅ **M4 COMPLETE** — all phases shipped and mGBA-verified (Frost Hollow end-to-end: Ice spell, cycle, freeze-bridges, fire-wall gate, dual-spell, hazard). Branch `m4-frost-hollow`, 117/117 host. Acceptance: `docs/acceptance-m4.md`. Remaining: real-hardware flash (inherited, deferred) + finish/merge the branch.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
@@ -65,8 +65,8 @@ notes and commit messages.
 | 1 — Compiler symbols + art | ✅ Shipped | `3229fb1` | w/W symbols (+2 compiler tests); art (tiles 9/16/19 + ice_proj). ROM build deferred to Ph3 (see Deviations) |
 | 2 — Engine: typed spell pool + tile render | ✅ Shipped | `5d7721e` | SpellPool (typed + tile-hit), level_view tiles. (HUD icon moved to Ph3.) |
 | 3 — scene_dungeon integration (additive) | ✅ Shipped | `fa6e3ad` | water hazard, freeze/melt, dual-spell gates, HUD icon. First green ROM; 111/111 host |
-| 4 — Dungeon 3 content + hub unlock | ⬜ Not started | — | — |
-| 5 — Verification + docs | ⬜ Not started | — | — |
+| 4 — Dungeon 3 content + hub unlock | ✅ Shipped | `98c05ae`, `e212e83`, `cbc8756` | D3 gauntlet + Door 3; playtest fixes (flood-freeze, ceilings, fire-wall gate) folded in. 117/117 host |
+| 5 — Verification + docs | ✅ Shipped | (this commit) | mGBA-verified end-to-end; `docs/acceptance-m4.md`, README, plan close-out |
 
 ### Deviations
 - **Phase 1.2 ROM smoke-test deferred:** Phase 0's `FireCast`→`SpellCast` rename immediately breaks `engine/fire_pool.{h,cpp}` (it references `logic::FireCast`), so NO ROM build is green between Phase 0 and the Phase 2 `SpellPool` rename. Phase 1's art was verified by successful asset generation (`tiles.bmp`=160px/20 tiles, `ice_proj.bmp` written) instead of a ROM build; the first green ROM is at end of Phase 3 (as already noted for Phases 2–3).
@@ -489,7 +489,7 @@ if(invuln == 0 && logic::hazard_overlap(player.body, lvl.map)){ health.damage(20
 
 ## Phase 4 — Dungeon 3 content + hub unlock
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `98c05ae` (+ playtest fixes `e212e83`, `cbc8756`) on 2026-06-08
 
 ### Task 4.1 — Author Dungeon 3 (`dungeon3.txt` + `.json`)
 
@@ -535,7 +535,7 @@ bool door_enterable(int n, const logic::World& w){
 
 ## Phase 5 — Verification + docs
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED on 2026-06-08 (mGBA-verified; acceptance-m4 + README + close-out)
 
 - [ ] **Task 5.1 — mGBA playthrough.** Because D3's Fire-first half needs Fire, reach D3 by playing through (D1→D2→D3) OR boot a save that already owns Fire + has D2 cleared (so Door 3 is open). On a fresh save, that means clearing D1 (Featherleap) and D2 (Fire) first. Verify end-to-end: reach the Ice shrine using Fire/bolt; earn Ice; HUD icon swaps; `L` cycles Fire↔Ice; **Ice freezes a wide water gap into a crossable platform**; **Fire melts an ice platform back to water** (and you can re-freeze it); the **Water gate** opens only with Ice; the dual-spell climax requires cycling; water damages (not instakill) and is escapable; spronk → exit clears; **Door 3 was locked until D2 cleared**; D3 saves on clear. Tune gap widths so the freeze is mandatory (wider than a double-jump). Log any fix as a Discovery.
 - [ ] **Task 5.2 — `docs/acceptance-m4.md`.** Map each design criterion (§9 of the spec) → status + evidence, mirroring `docs/acceptance-m3.md`. Note the host-test count and any deviations/discoveries.
