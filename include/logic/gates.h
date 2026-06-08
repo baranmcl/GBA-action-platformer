@@ -12,6 +12,7 @@ enum class GateType : uint8_t {
     CrackedWall,  // obstacle: Dash
     CrackedFloor, // obstacle: Stone (ground-pound)
     DarkVeil,     // obstacle: Light
+    FireWall,     // obstacle: Ice (extinguishes the flames) — mirror of the Ice gate
     Count
 };
 struct GateInfo { Ability required; bool is_geometry; uint8_t bg_tile; }; // bg_tile = the CLOSED-state visual tile index (a wall the player sees while gated)
@@ -24,6 +25,7 @@ constexpr GateInfo GATE_TABLE[(int)GateType::Count] = {
     /*CrackedWall*/  { Ability::Dash,         false, 10 },
     /*CrackedFloor*/ { Ability::Stone,        false, 11 },
     /*DarkVeil*/     { Ability::Light,        false, 12 },
+    /*FireWall*/     { Ability::Ice,          false, 10 },  // wall of flames; Ice extinguishes it
 };
 // Tile-index map (graphics/tiles.bmp): 0 blank, 1 ground, 2 one-way, 3 gate(closed wall),
 // 4 cage, 5 door-open, 6 door-locked, 7-12 reserved for M3+ obstacle-gate art, 13 lava,

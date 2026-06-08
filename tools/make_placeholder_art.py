@@ -117,7 +117,7 @@ def gen_bolt():
 def gen_tiles():
     """Background tileset: 20 tiles of 8x8 in a horizontal strip. Index order:
     0 blank, 1 ground, 2 one-way, 3 gate(closed wall), 4 cage, 5 door-open, 6 door-locked,
-    7 vine, 8 ice-gate, 9 water-gate(waterfall, M4), 10-12 reserved (D5+ gates), 13 lava,
+    7 vine, 8 ice-gate, 9 water-gate(waterfall, M4), 10 fire-wall-gate(M4), 11-12 reserved, 13 lava,
     14 brazier-unlit, 15 brazier-lit, 16 water(M4), 17 plate, 18 button, 19 ice-platform(M4).
     (block + shrine are SPRITES, not bg tiles.)"""
     im = new_img(8 * 20, 8)
@@ -195,6 +195,11 @@ def gen_tiles():
     rect(im, ox, 0, ox + 7, 7, 8)           # cyan fill
     rect(im, ox + 1, 0, ox + 1, 7, 9); rect(im, ox + 4, 0, ox + 4, 7, 9)  # white streaks
     rect(im, ox + 6, 0, ox + 6, 7, 9)
+    # tile 10: fire-wall gate — a wall of flames (red body, gold tongues), Ice extinguishes it
+    ox = 8 * 10
+    rect(im, ox, 0, ox + 7, 7, 13)          # red fill
+    rect(im, ox + 1, 1, ox + 2, 5, 6); rect(im, ox + 5, 0, ox + 6, 4, 6)  # gold flame tongues
+    px(im, ox + 3, 2, 9); px(im, ox + 4, 5, 9)  # white-hot flecks
     # tile 16: water — damaging hazard pool (cyan with white glints), Ice freezes it
     ox = 8 * 16
     rect(im, ox, 0, ox + 7, 7, 8)           # cyan body

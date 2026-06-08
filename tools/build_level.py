@@ -37,7 +37,7 @@ ABILITY_ENUM = {
     'featherleap': 'Featherleap', 'fire': 'Fire', 'ice': 'Ice', 'glide': 'Glide',
     'dash': 'Dash', 'grapple': 'Grapple', 'stone': 'Stone', 'light': 'Light',
 }
-CONTENT = set('@CEoG12345678VIWFB=?*')   # 'W' = Water gate (M4, Ice-cleared)
+CONTENT = set('@CEoG12345678VIWXFB=?*')   # 'W' Water gate, 'X' Fire-wall gate (both M4, Ice-cleared)
 
 
 class LevelError(Exception):
@@ -114,7 +114,9 @@ def compile_level(txt_path, json_path):
             elif c == 'I':
                 gates.append((x, y, 'Ice'))
             elif c == 'W':
-                gates.append((x, y, 'Water'))   # M4 Water gate, cleared by the Ice spell
+                gates.append((x, y, 'Water'))     # M4 Water gate, cleared by the Ice spell
+            elif c == 'X':
+                gates.append((x, y, 'FireWall'))  # M4 fire-wall gate, Ice extinguishes it
             elif c == 'F':
                 ab = (j_pickups[f_idx].get('ability', 'fire') if f_idx < len(j_pickups) else 'fire')
                 if ab not in ABILITY_ENUM:

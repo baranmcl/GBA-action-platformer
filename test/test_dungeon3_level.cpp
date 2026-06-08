@@ -12,13 +12,14 @@ TEST(d3_has_water_tiles){
   bool water=false;
   for(int i=0;i<DUNGEON3_DATA.w*DUNGEON3_DATA.h;++i) if(DUNGEON3_DATA.tiles[i]==(uint8_t)TileKind::Water) water=true;
   CHECK(water); }
-TEST(d3_has_water_gate_and_fire_obstacle){
-  bool water_gate=false, fire_obstacle=false;
+TEST(d3_has_ice_gate_and_fire_obstacle){
+  bool ice_cleared=false, fire_obstacle=false;
   for(int i=0;i<DUNGEON3_DATA.gate_count;++i){
-    if(DUNGEON3_DATA.gates[i].type==GateType::Water) water_gate=true;
-    if(DUNGEON3_DATA.gates[i].type==GateType::Vine || DUNGEON3_DATA.gates[i].type==GateType::Ice) fire_obstacle=true;
+    GateType t = DUNGEON3_DATA.gates[i].type;
+    if(gate_cleared_by(t)==SpellId::Ice) ice_cleared=true;            // fire-wall (or water) gate
+    if(t==GateType::Vine || t==GateType::Ice) fire_obstacle=true;     // Fire-cleared
   }
-  CHECK(water_gate);                 // Ice-cleared
+  CHECK(ice_cleared);                // an Ice-cleared gate exists
   CHECK(fire_obstacle); }            // proves dual-spell (Fire still needed)
 TEST(d3_cage_exit_enemy){
   CHECK(DUNGEON3_DATA.has_cage); CHECK(DUNGEON3_DATA.has_exit);

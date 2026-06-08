@@ -11,5 +11,6 @@ TEST(gap_closed_visual_is_gate_tile){ CHECK_EQ((int)gate_info(GateType::Gap).bg_
 TEST(gate_cleared_by_spell){
   CHECK(gate_cleared_by(GateType::Vine)  == SpellId::Fire);
   CHECK(gate_cleared_by(GateType::Ice)   == SpellId::Fire);
-  CHECK(gate_cleared_by(GateType::Water) == SpellId::Ice);
-  CHECK(gate_cleared_by(GateType::Gap)   == SpellId::None); }   // geometry gate, not spell-cleared
+  CHECK(gate_cleared_by(GateType::Water)    == SpellId::Ice);
+  CHECK(gate_cleared_by(GateType::FireWall) == SpellId::Ice);   // Ice extinguishes a fire wall
+  CHECK(gate_cleared_by(GateType::Gap)      == SpellId::None); } // geometry gate, not spell-cleared
