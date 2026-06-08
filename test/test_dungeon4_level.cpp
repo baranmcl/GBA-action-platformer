@@ -1,7 +1,7 @@
 #include "test_framework.h"
 #include "game/levels/dungeon4.h"
 using namespace logic;
-TEST(d4_is_vertical){ CHECK(DUNGEON4_DATA.h > 22); CHECK(DUNGEON4_DATA.h <= 32); }
+TEST(d4_is_vertical){ CHECK(DUNGEON4_DATA.h > 22); CHECK(DUNGEON4_DATA.h <= 128); }  // tall climb (big-map bg cap)
 TEST(d4_border_solid){
   const auto& L=DUNGEON4_DATA;
   for(int x=0;x<L.w;++x){ CHECK_EQ((int)L.tiles[x],1); CHECK_EQ((int)L.tiles[(L.h-1)*L.w+x],1); } }

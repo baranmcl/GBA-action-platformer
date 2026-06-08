@@ -4,7 +4,7 @@ namespace logic {
 static const Fixed RUN_ACCEL = Fixed::from_raw(24);
 static const Fixed RUN_MAX   = Fixed::from_int(2);
 static const Fixed FRICTION  = Fixed::from_raw(24);
-static const Fixed JUMP_VY   = Fixed::from_int(-4);
+static const Fixed JUMP_VY   = Fixed::from_raw(-812);  // ~3.2 px -> single jump ~3.5 tiles (was -4 = 5.5; tighter platforming so Featherleap/Glide matter)
 // M5 wind kit (starting values; mGBA tunes feel).
 static const Fixed GLIDE_VY   = Fixed::from_int(1);   // gentle fall terminal while gliding (vs PH terminal 6)
 static const Fixed UPDRAFT_VY = Fixed::from_int(-3);  // rise speed in an updraft while gliding (tuned up for lift margin)
