@@ -72,3 +72,19 @@ TEST(wind_pushes_horizontally){
     InputFrame in{}; p.update(in,m);
     CHECK(p.body.vel.x > Fixed::from_int(0));            // pushed right
 }
+TEST(ice_floor_is_slippery){
+    auto coast = [](uint8_t floor_kind){
+        static uint8_t c[6*3]; for(int i=0;i<6*3;++i) c[i]=0;
+        for(int x=0;x<6;++x) c[2*6+x]=floor_kind;       // floor at row 2
+        Tilemap m{6,3,c};
+        Player p; p.body.half_w=Fixed::from_int(3); p.body.half_h=Fixed::from_int(3);
+        p.body.pos={Fixed::from_int(8),Fixed::from_int(8)};
+        InputFrame settle{}; for(int i=0;i<4;++i) p.update(settle,m);   // land on the floor
+        p.body.vel.x = Fixed::from_int(2);                              // moving right
+        InputFrame none{}; for(int i=0;i<4;++i) p.update(none,m);       // coast, no input
+        return p.body.vel.x;
+    };
+    Fixed v_ice = coast((uint8_t)TileKind::IcePlatform);
+    Fixed v_gnd = coast((uint8_t)TileKind::Solid);
+    CHECK(v_ice > v_gnd);                                // slides further on ice (less friction)
+}

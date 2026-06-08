@@ -299,8 +299,13 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
             }
         }
         while(spells.consume_tile_hit(lvl.map, logic::TileKind::IcePlatform, logic::SpellId::Fire, ftx, fty)){
-            engine::set_collision_tile(ftx, fty, (int)logic::TileKind::Water);       // collision VALUE 4
-            engine::set_level_tile(lvl.view, ftx, fty, WATER_BG);                    // bg INDEX 16
+            // Melt the WHOLE contiguous ice run back to water (one cast), symmetric to the freeze.
+            int x0 = ftx; while(lvl.map.at(x0 - 1, fty) == logic::TileKind::IcePlatform) --x0;
+            int x1 = ftx; while(lvl.map.at(x1 + 1, fty) == logic::TileKind::IcePlatform) ++x1;
+            for(int x = x0; x <= x1; ++x){
+                engine::set_collision_tile(x, fty, (int)logic::TileKind::Water);     // collision VALUE 4
+                engine::set_level_tile(lvl.view, x, fty, WATER_BG);                  // bg INDEX 16
+            }
         }
         spells.despawn_on_solid(lvl.map);
 
