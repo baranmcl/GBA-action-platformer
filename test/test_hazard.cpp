@@ -9,3 +9,13 @@ TEST(body_over_lava_detected){
   CHECK(lava_overlap(b,m)==true);
   b.pos={Fixed::from_int(2), Fixed::from_int(0)};   // row0 only
   CHECK(lava_overlap(b,m)==false); }
+TEST(body_over_water_detected){
+  uint8_t cells[] = {0,0, 4,4};      // bottom row water (kind 4)
+  Tilemap m{2,2,cells};
+  Body b{}; b.half_w=Fixed::from_int(3); b.half_h=Fixed::from_int(3);
+  b.pos={Fixed::from_int(2), Fixed::from_int(8)};   // overlaps row1
+  CHECK(water_overlap(b,m)==true);
+  CHECK(hazard_overlap(b,m)==true);   // combined helper sees water
+  b.pos={Fixed::from_int(2), Fixed::from_int(0)};
+  CHECK(water_overlap(b,m)==false);
+  CHECK(hazard_overlap(b,m)==false); }

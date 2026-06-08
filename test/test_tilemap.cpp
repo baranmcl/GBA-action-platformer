@@ -14,3 +14,12 @@ TEST(tile_lava_is_not_solid_but_is_lava){
   CHECK(m.is_lava(1,0)); CHECK(!m.is_lava(0,0));
   CHECK(!m.is_solid(1,0));      // lava is NOT solid (you fall in)
   CHECK(!m.is_oneway(1,0)); }
+TEST(water_and_ice_kinds){
+  uint8_t cells4[] = { (uint8_t)TileKind::Empty, (uint8_t)TileKind::Solid,
+                       (uint8_t)TileKind::Water, (uint8_t)TileKind::IcePlatform };
+  Tilemap m{4,1,cells4};
+  CHECK(m.is_water(2,0));
+  CHECK(!m.is_solid(2,0));      // water is NOT solid
+  CHECK(m.is_solid(3,0));       // ice platform IS solid (stand on it)
+  CHECK(m.is_solid(1,0));       // regular solid still solid
+  CHECK(!m.is_water(3,0)); }

@@ -1,0 +1,34 @@
+{
+  "tileset": "tiles",
+  "enemies": [
+    {
+      "patrol": [
+        6,
+        11
+      ]
+    },
+    {
+      "patrol": [
+        23,
+        26
+      ]
+    },
+    {
+      "patrol": [
+        31,
+        33
+      ]
+    },
+    {
+      "patrol": [
+        54,
+        57
+      ]
+    }
+  ],
+  "pickups": [
+    {
+      "ability": "ice"
+    }
+  ]
+}

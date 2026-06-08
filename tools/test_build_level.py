@@ -95,6 +95,17 @@ class TestBuildLevel(unittest.TestCase):
         lvl = compile_str(txt, {})
         self.assertEqual(lvl['gates'], [(2, 1, 'Vine'), (3, 1, 'Ice')])
 
+    # --- M4 symbols ---
+    def test_water_is_tile_4(self):
+        txt = "#####\n#@w.#\n#####\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['tiles'][lvl['w'] * 1 + 2], 4)  # 'w' at (2,1) -> water
+
+    def test_water_gate(self):
+        txt = "#####\n#@W.#\n#####\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['gates'], [(2, 1, 'Water')])
+
     def test_shrine_ability(self):
         txt = "#####\n#@F.#\n#####\n"
         lvl = compile_str(txt, {"pickups": [{"ability": "fire"}]})

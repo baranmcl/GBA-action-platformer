@@ -115,11 +115,12 @@ def gen_bolt():
     write(im, "bolt", {"type": "sprite"})
 
 def gen_tiles():
-    """Background tileset: 19 tiles of 8x8 in a horizontal strip. Index order:
+    """Background tileset: 20 tiles of 8x8 in a horizontal strip. Index order:
     0 blank, 1 ground, 2 one-way, 3 gate(closed wall), 4 cage, 5 door-open, 6 door-locked,
-    7 vine, 8 ice, 9-12 reserved (D3+ gates), 13 lava, 14 brazier-unlit, 15 brazier-lit,
-    16 free, 17 plate, 18 button. (block + shrine are SPRITES, not bg tiles.)"""
-    im = new_img(8 * 19, 8)
+    7 vine, 8 ice-gate, 9 water-gate(waterfall, M4), 10 fire-wall-gate(M4), 11-12 reserved, 13 lava,
+    14 brazier-unlit, 15 brazier-lit, 16 water(M4), 17 plate, 18 button, 19 ice-platform(M4).
+    (block + shrine are SPRITES, not bg tiles.)"""
+    im = new_img(8 * 20, 8)
     # tile 0: blank -> all index 0 (transparent, shows backdrop). nothing to draw.
     # tile 1: ground (brown with grass top, dark bottom)
     ox = 8 * 1
@@ -189,6 +190,26 @@ def gen_tiles():
     rect(im, ox + 2, 3, ox + 5, 5, 13)      # red dome
     rect(im, ox + 2, 3, ox + 5, 3, 6)       # gold rim
     px(im, ox + 3, 4, 7)                    # highlight
+    # tile 9: Water gate — vertical waterfall (cyan streaks on a blue wall), cleared by Ice
+    ox = 8 * 9
+    rect(im, ox, 0, ox + 7, 7, 8)           # cyan fill
+    rect(im, ox + 1, 0, ox + 1, 7, 9); rect(im, ox + 4, 0, ox + 4, 7, 9)  # white streaks
+    rect(im, ox + 6, 0, ox + 6, 7, 9)
+    # tile 10: fire-wall gate — a wall of flames (red body, gold tongues), Ice extinguishes it
+    ox = 8 * 10
+    rect(im, ox, 0, ox + 7, 7, 13)          # red fill
+    rect(im, ox + 1, 1, ox + 2, 5, 6); rect(im, ox + 5, 0, ox + 6, 4, 6)  # gold flame tongues
+    px(im, ox + 3, 2, 9); px(im, ox + 4, 5, 9)  # white-hot flecks
+    # tile 16: water — damaging hazard pool (cyan with white glints), Ice freezes it
+    ox = 8 * 16
+    rect(im, ox, 0, ox + 7, 7, 8)           # cyan body
+    rect(im, ox, 0, ox + 7, 0, 9)           # white surface line
+    px(im, ox + 2, 3, 9); px(im, ox + 5, 5, 9)  # glints
+    # tile 19: ice platform — frozen white/cyan slab (distinct from the ice GATE tile 8)
+    ox = 8 * 19
+    rect(im, ox, 0, ox + 7, 7, 9)           # white slab
+    rect(im, ox, 6, ox + 7, 7, 8)           # cyan underside
+    px(im, ox + 2, 2, 8); px(im, ox + 5, 3, 8)  # cyan cracks
     write(im, "tiles", {"type": "regular_bg_tiles", "bpp_mode": "bpp_4"})
 
 def gen_ember_sprites():
@@ -199,6 +220,12 @@ def gen_ember_sprites():
     rect(fp, 3, 3, 4, 4, 13)                 # red center
     px(fp, 1, 4, 6); px(fp, 6, 3, 6); px(fp, 4, 1, 6); px(fp, 3, 6, 6)
     write(fp, "fire_proj", {"type": "sprite"})
+    # ice projectile 8x8 (cyan/white orb) — M4, the Ice spell's shot
+    ip = new_img(8, 8)
+    rect(ip, 2, 2, 5, 5, 8)                  # cyan core
+    rect(ip, 3, 3, 4, 4, 9)                  # white center
+    px(ip, 1, 4, 8); px(ip, 6, 3, 8); px(ip, 4, 1, 8); px(ip, 3, 6, 8)
+    write(ip, "ice_proj", {"type": "sprite"})
     # fire enemy 16x16 (red variant of the green enemy)
     fe = new_img(16, 16)
     rect(fe, 3, 5, 12, 14, 13)               # red body
