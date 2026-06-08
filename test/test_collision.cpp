@@ -10,6 +10,13 @@ TEST(lands_on_floor){
   move_and_collide(b, mk());
   CHECK(b.on_ground==true);
   CHECK(b.pos.y.to_int() <= 24-6); }
+TEST(embedded_body_with_x_velocity_terminates){
+  // A body spawned INSIDE the floor with horizontal velocity must not hang (bounded back-out).
+  Body b{}; b.half_w=Fixed::from_int(3); b.half_h=Fixed::from_int(3);
+  b.pos={Fixed::from_int(8), Fixed::from_int(24)};   // embedded in the row-3 floor
+  b.vel={Fixed::from_int(2), Fixed::from_int(0)};    // patrol-style horizontal velocity
+  move_and_collide(b, mk());                          // must RETURN (no infinite loop)
+  CHECK(b.vel.x.raw==0); }                            // x resolved/stopped
 TEST(oneway_blocks_from_above){
   Body b{}; b.half_w=Fixed::from_int(3); b.half_h=Fixed::from_int(3);
   b.pos={Fixed::from_int(8), Fixed::from_int(10)}; b.vel={Fixed::from_int(0), Fixed::from_int(6)};
