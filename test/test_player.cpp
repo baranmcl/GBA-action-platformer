@@ -88,3 +88,26 @@ TEST(ice_floor_is_slippery){
     Fixed v_gnd = coast((uint8_t)TileKind::Solid);
     CHECK(v_ice > v_gnd);                                // slides further on ice (less friction)
 }
+TEST(dash_sets_horizontal_blink){
+  static uint8_t c[20*3]; for(int i=0;i<20*3;++i) c[i]=0; for(int x=0;x<20;++x) c[2*20+x]=1; // floor row 2
+  Tilemap m{20,3,c};
+  Player p; p.body.half_w=Fixed::from_int(3); p.body.half_h=Fixed::from_int(3);
+  p.body.pos={Fixed::from_int(8),Fixed::from_int(8)}; p.abilities.dash=true;
+  InputFrame settle{}; for(int i=0;i<30;++i) p.update(settle,m);    // settle to the floor -> grounds + charges the dash
+  InputFrame R{}; R.right=true; InputFrame none{};
+  p.update(R,m); p.update(none,m); p.update(R,m);                   // double-tap right -> dash
+  CHECK(p.dash.active());
+  CHECK(p.body.vel.x > Fixed::from_int(2));        // exceeds the run cap (RUN_MAX=2) -> dash override happened
+  CHECK(p.body.vel.y == Fixed::from_int(0)); }     // horizontal blink: vy zeroed
+// NOTE: deliberately do NOT pin the exact DASH_VX value — Phase 4 tunes it in mGBA; assert the
+// observable contract (exceeds run cap + vy zeroed + active), which survives retuning.
+TEST(no_dash_without_ability_in_player){
+  static uint8_t c[20*3]; for(int i=0;i<20*3;++i) c[i]=0; for(int x=0;x<20;++x) c[2*20+x]=1;
+  Tilemap m{20,3,c};
+  Player p; p.body.half_w=Fixed::from_int(3); p.body.half_h=Fixed::from_int(3);
+  p.body.pos={Fixed::from_int(8),Fixed::from_int(8)};               // abilities.dash defaults false
+  InputFrame settle{}; for(int i=0;i<30;++i) p.update(settle,m);
+  InputFrame R{}; R.right=true; InputFrame none{};
+  p.update(R,m); p.update(none,m); p.update(R,m);                   // double-tap without owning dash
+  CHECK(!p.dash.active());
+  CHECK(p.body.vel.x <= Fixed::from_int(2)); }                      // capped at RUN_MAX, no blink
