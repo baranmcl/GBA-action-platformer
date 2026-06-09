@@ -37,7 +37,14 @@ int main()
         else continue;                                // doors 6-8 not built
 
         world.current_dungeon = n;
-        game::DungeonResult dr = game::run_dungeon(*lvl, world, ps);
+        game::DungeonResult dr;
+        do {
+            dr = game::run_dungeon(*lvl, world, ps);
+            if(dr == game::DungeonResult::Restart){    // START: level reset — re-run fresh + refill vitals
+                ps.health.cur = ps.health.max;         // (anti-soft-lock: e.g. stranded with no magic before a spell gate)
+                ps.magic.cur  = ps.magic.max;
+            }
+        } while(dr == game::DungeonResult::Restart);
         world.current_dungeon = 0;                    // back in the hub before saving
         if(dr == game::DungeonResult::Cleared)
             engine::write_world(world);               // persist earned spronk/ability

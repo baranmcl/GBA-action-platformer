@@ -68,7 +68,8 @@ notes and commit messages.
 | 4 — Verification + docs | ⬜ Not started | — | mGBA playthrough next |
 
 ### Deviations
-- _(none yet)_
+- **Phase 4 (playtest-driven): level-reset button (START).** Added `DungeonResult::Restart`; START re-runs the current dungeon fresh (rebuilt gates/enemies → renewable magic) and `main.cpp` refills health+magic. General anti-soft-lock safety net for ALL dungeons, beyond M6 scope but surfaced by D5 playtest. Files: `include/game/scene_dungeon.h`, `src/game/scene_dungeon.cpp`, `src/main.cpp`.
+- **Phase 4 (playtest-driven): D5 art/spacing tweaks.** Blue Water gate → red FireWall `X` (Ice extinguishes; matches the M4 decision, reads more intuitively); spike↔cracked-wall platform widened 2→6 tiles so one dash can't clear both beats.
 
 ### Discoveries
 - **bg-index conflict (verified against source, pre-execution):** `gates.h` `GATE_TABLE` assigns BOTH `CrackedWall` and `FireWall` `bg_tile = 10`, but tile 10's art (`make_placeholder_art.py` `gen_tiles`) is the fire-wall flames. The obstacle-gate art block is tiles **7–12** and is FULL: 7=vine, 8=ice-gate, 9=water-gate, 10=fire-wall, **11=reserved for M7 `CrackedFloor`/Stone, 12=reserved for M8 `DarkVeil`/Light** (per the `GATE_TABLE` rows + the `gen_tiles` docstring). The art strip is `new_img(8 * 23, 8)` — all 23 slots (0–22) are already accounted for. So **11/12 are NOT free** — reusing them would collide with M7/M8. **Resolution:** widen the strip to `8 * 25` and add two NEW tiles — **23 = cracked-wall** (`GATE_TABLE` CrackedWall `bg_tile` 10→**23**) and **24 = spikes** (`level_view` maps collision `Spikes(9)`→**24**). This mirrors how M5 widened 20→23 for wind tiles; it is the only conflict-free choice.

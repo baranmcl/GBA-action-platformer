@@ -236,6 +236,7 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
     while(true)
     {
         if(bn::keypad::select_pressed()) { result = DungeonResult::Quit; break; }
+        if(bn::keypad::start_pressed())  { result = DungeonResult::Restart; break; }  // anti-soft-lock level reset
 
         logic::InputFrame in = engine::read_input();
         player.abilities.featherleap = world.has(logic::Ability::Featherleap);
