@@ -63,9 +63,9 @@ notes and commit messages.
 |---|---|---|---|
 | 0 — Pure logic (DashState, Spikes tile, Player dash, hazard) | ✅ Shipped | `55d95e3`,`0a6e41e`,`e56f42b` | 142/142 host, +10 tests |
 | 1 — Compiler symbols + art (resolve cracked-wall bg-index conflict) | ✅ Shipped | `b0a14a4`,`b6ef019` | ROM builds; 21 compiler tests |
-| 2 — scene_dungeon integration (dash wiring, i-frames, cracked-wall smash) | ⬜ Not started | — | — |
-| 3 — Dungeon 5 content + hub Door 5 | ⬜ Not started | — | — |
-| 4 — Verification + docs | ⬜ Not started | — | — |
+| 2 — scene_dungeon integration (dash wiring, i-frames, cracked-wall smash) | ✅ Shipped | `3e1872b` | ROM builds clean |
+| 3 — Dungeon 5 content + hub Door 5 | ✅ Shipped | `24f666d`,`889604f` | 149 host; mGBA pending (P4) |
+| 4 — Verification + docs | ⬜ Not started | — | mGBA playthrough next |
 
 ### Deviations
 - _(none yet)_
@@ -314,7 +314,7 @@ def test_cracked_wall_gate(self):
 
 ## Phase 2 — scene_dungeon integration (additive)
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED on 2026-06-09 (branch `m6-sunken-ruins`): `3e1872b` (dash wiring + i-frame skip on both damage sites + cracked-wall smash in the gate loop). ROM builds clean.
 
 **Files:** Modify `src/game/scene_dungeon.cpp` only. Additive; no host test (Butano-bound; verified by build + mGBA).
 
@@ -341,7 +341,7 @@ if(!gi.open && gi.spawn.type == logic::GateType::CrackedWall
 
 ## Phase 3 — Dungeon 5 content + hub Door 5
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED on 2026-06-09 (branch `m6-sunken-ruins`): `24f666d` (D5 64×24 authored as data, +7 host tests → 149), `889604f` (route n==5 + hub Door 5). ROM builds clean. **mGBA playthrough pending (Phase 4).**
 
 ### Task 3.1 — Author Dungeon 5 (combo flooded temple)
 
