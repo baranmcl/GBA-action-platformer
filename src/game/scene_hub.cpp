@@ -22,12 +22,13 @@ namespace game
 {
 namespace {
     logic::Fixed fx(int v){ return logic::Fixed::from_int(v); }
-    // Door N enterable: D1 always; each next door opens once the prior dungeon's spronk is freed. D5-8 not built.
+    // Door N enterable: D1 always; each next door opens once the prior dungeon's spronk is freed. D6-8 not built.
     bool door_enterable(int n, const logic::World& w){
         return n == 1
             || (n == 2 && w.spronk_freed(1))
             || (n == 3 && w.spronk_freed(2))
-            || (n == 4 && w.spronk_freed(3));
+            || (n == 4 && w.spronk_freed(3))
+            || (n == 5 && w.spronk_freed(4));
     }
 }
 
