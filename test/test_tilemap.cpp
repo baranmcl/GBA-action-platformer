@@ -30,3 +30,6 @@ TEST(wind_tiles_are_not_solid){
   CHECK(m.at(1,0)==TileKind::WindLeft);
   CHECK(m.at(2,0)==TileKind::WindRight);
   CHECK(!m.is_solid(0,0)); CHECK(!m.is_solid(1,0)); CHECK(!m.is_solid(2,0)); }  // all passable
+TEST(spikes_kind){
+  uint8_t c[]={0,(uint8_t)TileKind::Spikes}; Tilemap m{2,1,c};
+  CHECK(m.is_spikes(1,0)); CHECK(!m.is_solid(1,0)); CHECK(!m.is_spikes(0,0)); }  // damaging but non-solid

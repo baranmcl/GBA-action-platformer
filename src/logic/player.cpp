@@ -10,6 +10,7 @@ static const Fixed JUMP_VY   = Fixed::from_raw(-812);  // ~3.2 px -> single jump
 static const Fixed GLIDE_VY   = Fixed::from_int(1);   // gentle fall terminal while gliding (vs PH terminal 6)
 static const Fixed UPDRAFT_VY = Fixed::from_int(-3);  // rise speed in an updraft while gliding (tuned up for lift margin)
 static const Fixed WIND_ACCEL = Fixed::from_raw(24);  // per-frame sideways gust push (bounded by RUN_MAX next frame)
+static const Fixed DASH_VX    = Fixed::from_int(6);   // M6 Blink burst speed (~6 px/frame; DASH_FRAMES -> ~5 tiles)
 // Midpoint feel (playtested): single jump ~5.5 tiles. Gravity is halfway between the
 // floaty (28) and heavy (64) trials; terminal kept gentle at 6.
 static const PhysicsParams PH { Fixed::from_raw(46), Fixed::from_int(6) };
@@ -51,6 +52,13 @@ void Player::update(const InputFrame& in, const Tilemap& map){
     int wd = wind_dir(body, map);                                     // gusts push regardless of ability
     if(wd > 0)      body.vel.x = body.vel.x + WIND_ACCEL;
     else if(wd < 0) body.vel.x = body.vel.x - WIND_ACCEL;
+    // --- M6 dash: a horizontal i-frame blink; overrides accel/friction/gravity/wind while active ---
+    // (applied AFTER the wind kit so a gust can't add to the dash velocity)
+    dash.tick(in.left, in.right, body.on_ground, abilities.dash);
+    if(dash.active()){
+        body.vel.x = (dash.dir() > 0) ? DASH_VX : Fixed::from_raw(-DASH_VX.raw); // no Fixed::operator*(int): sign-branch
+        body.vel.y = Fixed::from_int(0);
+    }
     move_and_collide(body, map);
 
     // refresh the air-jump charge whenever grounded (only if Featherleap is owned)

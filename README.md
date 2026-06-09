@@ -3,10 +3,21 @@
 An original **Game Boy Advance** action platformer. Laurel, a wand-wielding Goob, must rescue
 the 8 spronks from 8 dungeons and defeat the Nightmare King.
 
-This repo is built in milestones. It currently contains **Milestone 5 — Gale Cliffs + the Wind
-Cloak (Glide)**: a tall, vertically-scrolling fourth dungeon with a full wind kit, on top of M1–M4.
+This repo is built in milestones. It currently contains **Milestone 6 — Sunken Ruins + Blink
+(Dash)**: a flooded fifth dungeon that combines every earned power, on top of M1–M5.
 
 ## What's playable
+
+**M6 — Sunken Ruins (Dungeon 5) + Dash**
+- **Blink / Dash** — a traversal ability: **double-tap a direction** for a fast horizontal burst
+  (~5 tiles), in the air or on the ground, with **i-frames** — one air-dash per jump (recharges
+  when you land).
+- **Dash through spikes** unharmed (the i-frames), and **smash cracked walls** by dashing into them.
+- A **combo dungeon**: the first half threads **Fire, Featherleap, Ice, and Glide** together
+  (vine gate, climb, fire-wall gate, updraft); the second half is dash-only (spikes, cracked wall,
+  an **air-dash + glide** gap).
+- **Level reset:** stuck (e.g. out of magic before a gate)? Press **START** to restart the dungeon
+  with full health/magic.
 
 **M5 — Gale Cliffs (Dungeon 4) + Glide**
 - The **Wind Cloak / Glide** — a traversal ability: after jumping, **hold A** to fall slowly with
@@ -52,11 +63,13 @@ Abilities now come from **`F` shrines** (e.g. D1's Featherleap), not from rescui
 | Move | D-pad | Arrow keys |
 | Jump / double-jump | A | X |
 | Glide (hold after jumping) | A (held) | X (held) |
+| Dash / Blink | double-tap ←/→ | double-tap Arrow |
 | Fire wand bolt | B | Z |
-| Cast selected spell (Fire) | R | S |
+| Cast selected spell (Fire/Ice) | R | S |
 | Cycle spell | L | A |
 | Enter door (in hub) | Up | Up |
-| Start game | START | Enter |
+| Reset level (in a dungeon) | START | Enter |
+| Start game (title) | START | Enter |
 
 ## Play it
 
@@ -72,7 +85,7 @@ Requires **devkitPro / devkitARM**, **Butano** (vendored as a submodule), and **
 git submodule update --init           # fetch Butano 21.6.0
 python tools/make_placeholder_art.py  # (re)generate placeholder art
 bash tools/build_rom.sh               # build -> SpronkQuest.gba
-bash tools/host_test.sh               # run the host-side logic tests (132 tests)
+bash tools/host_test.sh               # run the host-side logic tests (149 tests)
 ```
 
 > **Windows note:** the ROM builds through devkitPro's bundled MSYS2; host tests use the mingw64
@@ -94,6 +107,11 @@ Physics, collision, combat, meters, and the save format are all validated by fas
 **before** the ROM is ever built.
 
 ## Project status
+
+**M6 Sunken Ruins + Dash: feature-complete, mGBA-verified.** Adds **Blink / Dash** — a double-tap
+i-frame air-dash that blinks through spikes and smashes cracked walls — plus a `Spikes` hazard, a
+combo **Dungeon 5** that uses the whole carried kit (Fire/Featherleap/Ice/Glide) alongside the dash,
+and a **START level-reset** safety net for every dungeon. See `docs/acceptance-m6.md`.
 
 **M5 Gale Cliffs + Glide: feature-complete, mGBA-verified.** Adds the **Wind Cloak / Glide**
 traversal ability and a tile-based **wind kit** (glide, updraft shafts, gust zones), a tall

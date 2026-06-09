@@ -19,3 +19,13 @@ TEST(body_over_water_detected){
   b.pos={Fixed::from_int(2), Fixed::from_int(0)};
   CHECK(water_overlap(b,m)==false);
   CHECK(hazard_overlap(b,m)==false); }
+TEST(body_over_spikes_detected){
+  uint8_t cells[] = {0,0, (uint8_t)TileKind::Spikes,(uint8_t)TileKind::Spikes};   // bottom row spikes (kind 9)
+  Tilemap m{2,2,cells};
+  Body b{}; b.half_w=Fixed::from_int(3); b.half_h=Fixed::from_int(3);
+  b.pos={Fixed::from_int(2), Fixed::from_int(8)};   // overlaps row1
+  CHECK(spikes_overlap(b,m)==true);
+  CHECK(hazard_overlap(b,m)==true);                 // combined helper sees spikes
+  b.pos={Fixed::from_int(2), Fixed::from_int(0)};
+  CHECK(spikes_overlap(b,m)==false);
+  CHECK(hazard_overlap(b,m)==false); }

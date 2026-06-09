@@ -236,10 +236,12 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
     while(true)
     {
         if(bn::keypad::select_pressed()) { result = DungeonResult::Quit; break; }
+        if(bn::keypad::start_pressed())  { result = DungeonResult::Restart; break; }  // anti-soft-lock level reset
 
         logic::InputFrame in = engine::read_input();
         player.abilities.featherleap = world.has(logic::Ability::Featherleap);
         player.abilities.glide       = world.has(logic::Ability::Glide);
+        player.abilities.dash        = world.has(logic::Ability::Dash);
         player.update(in, lvl.map);
         avatar.sync(player);
 
@@ -255,6 +257,12 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
         for(GateInst& gi : gates){
             logic::SpellId clears = logic::gate_cleared_by(gi.spawn.type);
             if(!gi.open && clears != logic::SpellId::None && spells.consume_hit(gi.body, clears)){
+                gi.open = true;
+                open_column(lvl.view, gi.spawn.tx, level.h);
+            }
+            // M6: cracked walls aren't spell-cleared (gate_cleared_by==None); a dashing body smashes them on contact.
+            if(!gi.open && gi.spawn.type == logic::GateType::CrackedWall
+               && player.dash.active() && logic::aabb_overlap(player.body, gi.body)){
                 gi.open = true;
                 open_column(lvl.view, gi.spawn.tx, level.h);
             }
@@ -277,8 +285,8 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
                 inst.e.kill(); magic.heal(25); inst.sprite->set_visible(false);
             } else if(spells.consume_hit(inst.e.body, logic::SpellId::Fire)){
                 if(!inst.e.fire_immune){ inst.e.kill(); inst.sprite->set_visible(false); } // no magic refill from fire
-            } else if(invuln == 0 && logic::aabb_overlap(player.body, inst.e.body)){
-                health.damage(20); invuln = 45;
+            } else if(invuln == 0 && !player.dash.invincible() && logic::aabb_overlap(player.body, inst.e.body)){
+                health.damage(20); invuln = 45;   // dash i-frames blink through contact
             }
         }
 
@@ -309,8 +317,8 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
         }
         spells.despawn_on_solid(lvl.map);
 
-        // ---- hazards (lava or water): same damage ----
-        if(invuln == 0 && logic::hazard_overlap(player.body, lvl.map)){ health.damage(20); invuln = 45; }
+        // ---- hazards (lava, water, or spikes): same damage; dash i-frames blink through ----
+        if(invuln == 0 && !player.dash.invincible() && logic::hazard_overlap(player.body, lvl.map)){ health.damage(20); invuln = 45; }
 
         // ---- pushable blocks: push detection, gravity, sprite ----
         if(push_cd > 0) --push_cd;

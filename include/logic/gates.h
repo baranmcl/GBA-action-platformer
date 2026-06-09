@@ -22,14 +22,16 @@ constexpr GateInfo GATE_TABLE[(int)GateType::Count] = {
     /*Vine*/         { Ability::Fire,         false, 7 },  // tiles 7-12 are M3+ obstacle-gate art (not in tiles.bmp yet)
     /*Ice*/          { Ability::Fire,         false, 8 },
     /*Water*/        { Ability::Ice,          false, 9 },
-    /*CrackedWall*/  { Ability::Dash,         false, 10 },
+    /*CrackedWall*/  { Ability::Dash,         false, 23 },  // bg 23 (NOT 10: tile 10 is FireWall's flame art; 11/12 reserved for M7/M8)
     /*CrackedFloor*/ { Ability::Stone,        false, 11 },
     /*DarkVeil*/     { Ability::Light,        false, 12 },
     /*FireWall*/     { Ability::Ice,          false, 10 },  // wall of flames; Ice extinguishes it
 };
 // Tile-index map (graphics/tiles.bmp): 0 blank, 1 ground, 2 one-way, 3 gate(closed wall),
 // 4 cage, 5 door-open, 6 door-locked, 7-12 reserved for M3+ obstacle-gate art, 13 lava,
-// 14/15 brazier, 16 water (M4), 17 plate, 18 button, 19 ice-platform (M4). (9 = Water-gate waterfall.)
+// 14/15 brazier, 16 water (M4), 17 plate, 18 button, 19 ice-platform (M4),
+// 20 updraft, 21 wind-left, 22 wind-right (M5), 23 cracked-wall (M6), 24 spikes (M6).
+// (9 = Water-gate waterfall. CrackedWall uses 23 because tile 10 is FireWall's flame art.)
 inline const GateInfo& gate_info(GateType t){ return GATE_TABLE[(int)t]; }
 inline bool can_pass(GateType t, uint16_t abilities){ return (abilities >> (int)gate_info(t).required) & 1u; }
 

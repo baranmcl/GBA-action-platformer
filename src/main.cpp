@@ -10,6 +10,7 @@
 #include "game/levels/dungeon2.h"
 #include "game/levels/dungeon3.h"
 #include "game/levels/dungeon4.h"
+#include "game/levels/dungeon5.h"
 
 int main()
 {
@@ -32,10 +33,18 @@ int main()
         else if(n == 2) lvl = &DUNGEON2_DATA;
         else if(n == 3) lvl = &DUNGEON3_DATA;
         else if(n == 4) lvl = &DUNGEON4_DATA;
-        else continue;                                // doors 5-8 not built
+        else if(n == 5) lvl = &DUNGEON5_DATA;
+        else continue;                                // doors 6-8 not built
 
         world.current_dungeon = n;
-        game::DungeonResult dr = game::run_dungeon(*lvl, world, ps);
+        game::DungeonResult dr;
+        do {
+            dr = game::run_dungeon(*lvl, world, ps);
+            if(dr == game::DungeonResult::Restart){    // START: level reset — re-run fresh + refill vitals
+                ps.health.cur = ps.health.max;         // (anti-soft-lock: e.g. stranded with no magic before a spell gate)
+                ps.magic.cur  = ps.magic.max;
+            }
+        } while(dr == game::DungeonResult::Restart);
         world.current_dungeon = 0;                    // back in the hub before saving
         if(dr == game::DungeonResult::Cleared)
             engine::write_world(world);               // persist earned spronk/ability
