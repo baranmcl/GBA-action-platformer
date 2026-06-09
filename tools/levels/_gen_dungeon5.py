@@ -51,8 +51,10 @@ row(17, 13, 18, '^')              # p1 one-way ledge (floor->p1 ~5 tiles; p1->to
 # --- Station D: ice-magic enemy ---
 put(24, 'o')                      # magic source for the Ice (water) beat
 
-# --- Station E: Water gate (Ice) — full wall at cols 27-28 ---
-put(27, 'W')
+# --- Station E: Fire-wall gate (Ice extinguishes) — full wall at cols 27-28 ---
+# Use the RED flame wall (X), not the blue Water gate: Ice-clears-blue-water reads as
+# confusing; Ice-extinguishes-red-fire is intuitive (matches the M4 user decision).
+put(27, 'X')
 
 # --- Station F: Glide updraft (D4 idiom: ride up THROUGH a cap, fall back onto it) ---
 block(31, 13, 32, FLOOR, 'u')     # updraft cols31-32 rows13-22 (carves the floor base)
@@ -66,15 +68,18 @@ put(39, 'F')                      # ability: dash (set in dungeon5.json)
 # --- Station H: spike corridor (dash i-frames blink through) ---
 row(FLOOR, 41, 43, 's')           # 3-wide spikes (<= one dash)
 
-# --- Station I: cracked wall (dash smashes it) — full wall cols 46-47 ---
-put(46, 'K')                      # runway from col44-45; point-blank dash smashes it
+# wide solid platform cols 44-49 (6 tiles) VISIBLY separates the spike beat from the
+# cracked-wall beat, so one dash can't clear both — each is a distinct, legible dash use.
+
+# --- Station I: cracked wall (dash smashes it) — full wall cols 50-51 ---
+put(50, 'K')                      # land on the platform, then a FRESH dash smashes it
 
 # --- Station J: air-dash + glide gap (combo beat) — 6-wide lava, too wide to jump ---
-row(FLOOR, 50, 55, '~')           # jump + air-dash (~5) + glide to reach the far ledge (col56)
+row(FLOOR, 54, 59, '~')           # land on the K platform (52-53), then air-dash (~5) + glide across
 
 # --- Station K: spronk + exit ---
-put(59, 'C')
-put(60, 'E')
+put(61, 'C')
+put(62, 'E')
 
 # --- validate solid border before writing ---
 for x in range(W):
