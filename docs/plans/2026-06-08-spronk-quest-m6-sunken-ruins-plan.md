@@ -57,7 +57,7 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started. Branch `m6-sunken-ruins` (design spec already committed there).
+**Overall:** ✅ All 5 phases shipped on `m6-sunken-ruins`; mGBA-verified D1→D5; 149/149 host. Pending only the merge to main.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
@@ -65,7 +65,7 @@ notes and commit messages.
 | 1 — Compiler symbols + art (resolve cracked-wall bg-index conflict) | ✅ Shipped | `b0a14a4`,`b6ef019` | ROM builds; 21 compiler tests |
 | 2 — scene_dungeon integration (dash wiring, i-frames, cracked-wall smash) | ✅ Shipped | `3e1872b` | ROM builds clean |
 | 3 — Dungeon 5 content + hub Door 5 | ✅ Shipped | `24f666d`,`889604f` | 149 host; mGBA pending (P4) |
-| 4 — Verification + docs | ⬜ Not started | — | mGBA playthrough next |
+| 4 — Verification + docs | ✅ Shipped | (docs) | mGBA D1→D5; acceptance-m6 + README; reset button |
 
 ### Deviations
 - **Phase 4 (playtest-driven): level-reset button (START).** Added `DungeonResult::Restart`; START re-runs the current dungeon fresh (rebuilt gates/enemies → renewable magic) and `main.cpp` refills health+magic. General anti-soft-lock safety net for ALL dungeons, beyond M6 scope but surfaced by D5 playtest. Files: `include/game/scene_dungeon.h`, `src/game/scene_dungeon.cpp`, `src/main.cpp`.
@@ -370,7 +370,7 @@ if(!gi.open && gi.spawn.type == logic::GateType::CrackedWall
 
 ## Phase 4 — Verification + docs
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED on 2026-06-09 (branch `m6-sunken-ruins`): mGBA playthrough D1→D5 passed (all 8 §10 criteria); two playtest tweaks (red FireWall, separated dash beats) + the START level-reset shipped; `docs/acceptance-m6.md` + README updated. 149/149 host. Pending: merge to main.
 
 - [ ] **Task 4.1 — mGBA playthrough.** Reach D5 via a save with D4 cleared (or play through). Verify: **double-tap dashes** (~5 tiles, air + ground, one air-dash per airtime); **i-frames blink through** a spike corridor unharmed; **cracked walls smash** on a dash; **air-dash gaps** cross; the **combo beat(s)** work; the **first half** uses the carried kit; Dash shrine grants Dash; spronk→exit clears; **Door 5 was locked until D4 cleared**; D5 saves on clear. Tune `DASH_VX`/`DASH_FRAMES`/`WINDOW` + corridor widths for feel; log fixes as Discoveries.
 - [ ] **Task 4.2 — `docs/acceptance-m6.md`.** Map each design §10 criterion → status + evidence, mirroring `docs/acceptance-m5.md`. Note the host-test count + deviations/discoveries.
