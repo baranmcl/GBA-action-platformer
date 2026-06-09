@@ -115,12 +115,13 @@ def gen_bolt():
     write(im, "bolt", {"type": "sprite"})
 
 def gen_tiles():
-    """Background tileset: 20 tiles of 8x8 in a horizontal strip. Index order:
+    """Background tileset: 25 tiles of 8x8 in a horizontal strip. Index order:
     0 blank, 1 ground, 2 one-way, 3 gate(closed wall), 4 cage, 5 door-open, 6 door-locked,
     7 vine, 8 ice-gate, 9 water-gate(waterfall, M4), 10 fire-wall-gate(M4), 11-12 reserved, 13 lava,
     14 brazier-unlit, 15 brazier-lit, 16 water(M4), 17 plate, 18 button, 19 ice-platform(M4),
-    20 updraft(M5), 21 wind-left(M5), 22 wind-right(M5). (block + shrine are SPRITES, not bg tiles.)"""
-    im = new_img(8 * 23, 8)
+    20 updraft(M5), 21 wind-left(M5), 22 wind-right(M5), 23 cracked-wall(M6), 24 spikes(M6).
+    (block + shrine are SPRITES, not bg tiles.)"""
+    im = new_img(8 * 25, 8)
     # tile 0: blank -> all index 0 (transparent, shows backdrop). nothing to draw.
     # tile 1: ground (brown with grass top, dark bottom)
     ox = 8 * 1
@@ -223,6 +224,20 @@ def gen_tiles():
     ox = 8 * 22
     rect(im, ox + 2, 1, ox + 7, 1, 9); rect(im, ox + 2, 4, ox + 7, 4, 9); rect(im, ox + 3, 6, ox + 7, 6, 9)
     px(im, ox + 7, 0, 9); px(im, ox + 7, 3, 9); px(im, ox + 7, 5, 9)
+    # tile 23: cracked wall (M6) — grey stone block with dark zig-zag crack lines (Dash smashes it)
+    ox = 8 * 23
+    rect(im, ox, 0, ox + 7, 7, 12)          # grey stone fill
+    rect(im, ox, 0, ox + 7, 0, 1)           # dark top mortar line
+    # jagged crack down the middle
+    px(im, ox + 3, 1, 1); px(im, ox + 4, 2, 1); px(im, ox + 3, 3, 1); px(im, ox + 2, 4, 1)
+    px(im, ox + 3, 5, 1); px(im, ox + 4, 6, 1); px(im, ox + 4, 7, 1)
+    px(im, ox + 1, 2, 14); px(im, ox + 6, 5, 14)  # shadow speckle
+    # tile 24: spikes (M6) — dark base with upward red/grey triangular spikes (damaging hazard)
+    ox = 8 * 24
+    rect(im, ox, 6, ox + 7, 7, 1)           # dark base
+    for bx in (0, 3, 6):                     # three triangle spikes
+        px(im, ox + bx + 1, 5, 12); rect(im, ox + bx + 1, 4, ox + bx + 1, 5, 12)
+        px(im, ox + bx, 5, 13); px(im, ox + bx + 1, 1, 15)   # red flank + bright tip
     write(im, "tiles", {"type": "regular_bg_tiles", "bpp_mode": "bpp_4"})
 
 def gen_ember_sprites():
