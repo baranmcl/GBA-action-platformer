@@ -115,6 +115,17 @@ class TestBuildLevel(unittest.TestCase):
         self.assertEqual(lvl['tiles'][w*1 + 3], 7)  # '<' wind-left
         self.assertEqual(lvl['tiles'][w*1 + 4], 8)  # '>' wind-right
 
+    # --- M6 symbols ---
+    def test_spike_is_tile_9(self):
+        txt = "#####\n#@s.#\n#####\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['tiles'][lvl['w'] * 1 + 2], 9)  # 's' at (2,1) -> spikes (non-solid hazard)
+
+    def test_cracked_wall_gate(self):
+        txt = "#####\n#@K.#\n#####\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['gates'], [(2, 1, 'CrackedWall')])
+
     def test_shrine_ability(self):
         txt = "#####\n#@F.#\n#####\n"
         lvl = compile_str(txt, {"pickups": [{"ability": "fire"}]})
