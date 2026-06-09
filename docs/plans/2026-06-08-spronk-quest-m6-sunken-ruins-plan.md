@@ -62,7 +62,7 @@ notes and commit messages.
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 0 — Pure logic (DashState, Spikes tile, Player dash, hazard) | ✅ Shipped | `55d95e3`,`0a6e41e`,`e56f42b` | 142/142 host, +10 tests |
-| 1 — Compiler symbols + art (resolve cracked-wall bg-index conflict) | ⬜ Not started | — | — |
+| 1 — Compiler symbols + art (resolve cracked-wall bg-index conflict) | ✅ Shipped | `b0a14a4`,`b6ef019` | ROM builds; 21 compiler tests |
 | 2 — scene_dungeon integration (dash wiring, i-frames, cracked-wall smash) | ⬜ Not started | — | — |
 | 3 — Dungeon 5 content + hub Door 5 | ⬜ Not started | — | — |
 | 4 — Verification + docs | ⬜ Not started | — | — |
@@ -274,7 +274,7 @@ TEST(dash_sets_horizontal_blink){
 
 ## Phase 1 — Compiler symbols + art (resolve the bg-index conflict)
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED on 2026-06-09 (branch `m6-sunken-ruins`): `b0a14a4` (art: strip→25, cracked-wall 23, spikes 24, CrackedWall bg 10→23, level_view 9→24), `b6ef019` (compiler symbols s/K). ROM builds clean (`ROM fixed!`); 21 compiler tests pass.
 
 ### Task 1.1 — Fix the CrackedWall bg-tile conflict + add art
 
