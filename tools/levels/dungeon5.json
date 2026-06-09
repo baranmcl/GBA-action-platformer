@@ -1,0 +1,10 @@
+{
+  "tileset": "tiles",
+  "enemies": [
+    { "patrol": [4, 8] },
+    { "patrol": [22, 26] }
+  ],
+  "pickups": [
+    { "ability": "dash" }
+  ]
+}
