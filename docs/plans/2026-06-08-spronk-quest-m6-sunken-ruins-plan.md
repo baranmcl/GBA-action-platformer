@@ -61,7 +61,7 @@ notes and commit messages.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 0 — Pure logic (DashState, Spikes tile, Player dash, hazard) | ⬜ Not started | — | — |
+| 0 — Pure logic (DashState, Spikes tile, Player dash, hazard) | ✅ Shipped | `55d95e3`,`0a6e41e`,`e56f42b` | 142/142 host, +10 tests |
 | 1 — Compiler symbols + art (resolve cracked-wall bg-index conflict) | ⬜ Not started | — | — |
 | 2 — scene_dungeon integration (dash wiring, i-frames, cracked-wall smash) | ⬜ Not started | — | — |
 | 3 — Dungeon 5 content + hub Door 5 | ⬜ Not started | — | — |
@@ -122,7 +122,7 @@ Per `/writing-plans-enhanced` Step 3. Stated once; treat as pasted into each tas
 
 ## Phase 0 — Pure logic: Dash + Spikes
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED on 2026-06-08 (branch `m6-sunken-ruins`): `55d95e3` (Spikes+hazard), `0a6e41e` (DashState), `e56f42b` (Player dash). 142/142 host tests, purity clean (+10 tests: tilemap 1, hazard 1, dash 6, player 2).
 
 ### Task 0.1 — `TileKind::Spikes` + hazard
 
