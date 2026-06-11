@@ -19,10 +19,10 @@ TEST(find_entrance_by_id){
 TEST(find_entrance_fallback_to_spawn){
     // id not present -> fall back to the room's default spawn tile, facing +1.
     EntranceSpawn e = find_entrance(ROOM, 99);
-    CHECK_EQ(e.tx, 9); CHECK_EQ(e.ty, 9); CHECK_EQ(e.facing, 1);
+    CHECK_EQ(e.id, 0); CHECK_EQ(e.tx, 9); CHECK_EQ(e.ty, 9); CHECK_EQ(e.facing, 1);
 }
 TEST(room_door_at_overlap){
-    // Player AABB centred on door 0's tile (12,5) -> px (96..). Body pos is top-left in px.
+    // Player AABB top-left aligned with door 0's tile (12,5) -> px (96,40); both bodies overlap.
     Body p{}; p.half_w = Fixed::from_int(8); p.half_h = Fixed::from_int(16);
     p.pos = { Fixed::from_int(12*8), Fixed::from_int(5*8) };
     const RoomDoorSpawn* d = room_door_at(ROOM, p);

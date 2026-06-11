@@ -14,7 +14,9 @@ inline EntranceSpawn find_entrance(const LevelData& room, int id){
     return EntranceSpawn{ 0, room.spawn_tx, room.spawn_ty, 1 };
 }
 
-// Return the first room-door whose 1-tile (16x16) trigger body overlaps the player, else null.
+// Return the first room-door overlapping the player. The trigger is a forgiving 16x16px
+// (2x2 tile) box anchored at the door tile's top-left (matching the codebase's tile-body
+// convention); doors activate on UP-press in the scene, so a generous overlap region is intended.
 inline const RoomDoorSpawn* room_door_at(const LevelData& room, const Body& player){
     for(int i = 0; i < room.room_door_count; ++i){
         const RoomDoorSpawn& d = room.room_doors[i];
