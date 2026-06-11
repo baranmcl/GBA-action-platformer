@@ -1,3 +1,4 @@
+// Current-writer (v3) coverage lives in test_world_state_v3.cpp; this file keeps v1->migration + corruption-rejection cases.
 #include "test_framework.h"
 #include "logic/world_state.h"
 #include <cstring>
@@ -8,7 +9,6 @@ TEST(world_free_and_grant){ World w; w.free_spronk(1); w.grant(Ability::Featherl
 TEST(save_v2_roundtrip){ World w; w.free_spronk(1); w.grant(Ability::Featherleap); w.grant(Ability::Fire); w.current_dungeon=2;
   SaveData s = make_save(w); World w2; CHECK(load_save(s,w2)==true);
   CHECK(w2.spronk_freed(1)); CHECK(w2.has(Ability::Featherleap)); CHECK(w2.has(Ability::Fire)); CHECK_EQ((int)w2.current_dungeon,2); }
-TEST(save_v2_is_version_2){ World w; SaveData s = make_save(w); CHECK_EQ((int)s.version, 2); }
 TEST(empty_sram_rejected){ SaveData s{}; World w2; CHECK(load_save(s,w2)==false); }
 TEST(bad_checksum_rejected){ World w; SaveData s=make_save(w); s.checksum ^= 0xFFu; World w2; CHECK(load_save(s,w2)==false); }
 TEST(v1_save_migrates){ // build a v1-layout 16-byte buffer (v1 was 12 bytes; rest zero)
