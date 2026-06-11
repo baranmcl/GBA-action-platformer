@@ -2,7 +2,7 @@
 #include "logic/level_data.h"
 using namespace logic;
 
-// A minimal room: 1 entrance, 1 room-door, no other content.
+// A minimal room: 2 entrances, 1 room-door, no other content.
 static constexpr unsigned char R_TILES[] = { 1 };
 static constexpr EntranceSpawn  R_ENTR[]  = { {0, 3, 5, 1}, {1, 10, 5, -1} };
 static constexpr RoomDoorSpawn  R_DOORS[] = { {12, 5, 1, 0} };  // at (12,5) -> room 1, entrance 0
@@ -34,4 +34,13 @@ TEST(dungeondata_indexes_rooms){
     CHECK_EQ(dg.room_count, 2);
     CHECK_EQ(dg.start_room, 0);
     CHECK(dg.rooms[1] == &ROOMB);
+}
+
+TEST(latch_id_defaults_to_minus_one){
+    GateSpawn g{ 4, 5, GateType::Gap };           // old 3-field literal still compiles
+    CHECK_EQ(g.latch_id, -1);
+    BrazierGroupSpawn bg{ 3, 8, 9 };               // old 3-field literal still compiles
+    CHECK_EQ(bg.latch_id, -1);
+    GateSpawn g2{ 4, 5, GateType::Vine, 7 };       // explicit latch id
+    CHECK_EQ(g2.latch_id, 7);
 }
