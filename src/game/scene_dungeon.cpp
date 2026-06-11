@@ -28,6 +28,7 @@
 #include "logic/pushable_block.h"
 #include "logic/puzzle.h"
 #include "logic/gates.h"
+#include "logic/room_graph.h"   // find_entrance, room_door_at
 #include "engine/input.h"
 #include "engine/spell_input.h"
 #include "engine/level_loader.h"  // load_level, set_collision_tile
@@ -37,6 +38,7 @@
 #include "engine/spell_pool.h"
 #include "engine/hud.h"
 #include "engine/fade.h"
+#include "engine/save.h"        // write_world (persist latches)
 
 namespace game
 {
@@ -44,6 +46,12 @@ namespace
 {
     logic::Fixed fx(int v){ return logic::Fixed::from_int(v); }
     int px2t(logic::Fixed p){ return logic::Tilemap::px_to_tile(p); }
+
+    struct RoomOutcome {
+        enum Kind { ExitDungeon, Quit, Restart, GoToRoom } kind;
+        int target_room = 0;
+        int target_entrance = 0;
+    };
 
     struct EnemyInst { logic::Enemy e; bn::optional<bn::sprite_ptr> sprite; };
     struct GateInst  { logic::GateSpawn spawn; logic::Body body; bool open = false; };
@@ -73,7 +81,7 @@ namespace
     }
 }
 
-static DungeonResult play_room_single(const logic::LevelData& level, logic::World& world, logic::PlayerState& ps)
+static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, logic::World& world, logic::PlayerState& ps)
 {
     const int d = world.current_dungeon;
     bn::bg_palettes::set_transparent_color(bn::color(8, 8, 24));
@@ -98,11 +106,13 @@ static DungeonResult play_room_single(const logic::LevelData& level, logic::Worl
         cam.set_position(camx, camy);
     };
 
-    const logic::Vec2 spawn_pos { fx(level.spawn_tx * 8), fx(level.spawn_ty * 8) };
+    logic::EntranceSpawn ent = logic::find_entrance(level, entrance_id);
+    const logic::Vec2 spawn_pos { fx(ent.tx * 8), fx(ent.ty * 8) };
 
     logic::Player player;
     player.body.half_w = fx(8); player.body.half_h = fx(16);
     player.body.pos = spawn_pos;
+    player.facing = ent.facing;   // face inward at the entrance
 
     logic::Meter& health = ps.health;   // persist across hub <-> dungeon (no reset on entry)
     logic::Meter& magic  = ps.magic;
@@ -167,7 +177,8 @@ static DungeonResult play_room_single(const logic::LevelData& level, logic::Worl
         GateInst& gi = gates.back();
         const logic::GateInfo& info = logic::gate_info(g.type);
         bool passable = info.is_geometry && logic::can_pass(g.type, world.abilities);
-        if(passable){ gi.open = true; }                              // geometry gate already owned -> open
+        bool latched_open = (g.latch_id >= 0) && world.latched(g.latch_id);
+        if(passable || latched_open){ gi.open = true; }              // geometry gate owned OR latch set -> open
         else { fill_column(lvl.view, g.tx, level.h, info.bg_tile); } // closed -> full-height vine/ice wall
     }
 
@@ -221,7 +232,9 @@ static DungeonResult play_room_single(const logic::LevelData& level, logic::Worl
     for(int g = 0; g < level.brazier_group_count && g < 16; ++g){
         const logic::BrazierGroupSpawn& bg = level.brazier_groups[g];
         logic::Trigger t = logic::Trigger::braziers(bg.total); t.target_tx = bg.target_tx; t.target_ty = bg.target_ty;
-        triggers.push_back(TriggerInst{ t, 0, 0, g, false });
+        bool pre = (bg.latch_id >= 0) && world.latched(bg.latch_id);
+        triggers.push_back(TriggerInst{ t, 0, 0, g, pre });
+        if(pre) open_column(lvl.view, bg.target_tx, level.h);
     }
 
     // Centre camera on the player before fading in (avoids a snap on frame 0).
@@ -232,11 +245,15 @@ static DungeonResult play_room_single(const logic::LevelData& level, logic::Worl
     int fade_in_t = 16;
     int push_cd = 0;
 
-    DungeonResult result = DungeonResult::Quit;
     while(true)
     {
-        if(bn::keypad::select_pressed()) { result = DungeonResult::Quit; break; }
-        if(bn::keypad::start_pressed())  { result = DungeonResult::Restart; break; }  // anti-soft-lock level reset
+        if(bn::keypad::select_pressed()) { return RoomOutcome{ RoomOutcome::Quit }; }
+        if(bn::keypad::start_pressed())  { return RoomOutcome{ RoomOutcome::Restart }; }  // anti-soft-lock level reset
+        if(bn::keypad::up_pressed()){
+            if(const logic::RoomDoorSpawn* dr = logic::room_door_at(level, player.body)){
+                return RoomOutcome{ RoomOutcome::GoToRoom, dr->target_room, dr->target_entrance };
+            }
+        }
 
         logic::InputFrame in = engine::read_input();
         player.abilities.featherleap = world.has(logic::Ability::Featherleap);
@@ -259,12 +276,20 @@ static DungeonResult play_room_single(const logic::LevelData& level, logic::Worl
             if(!gi.open && clears != logic::SpellId::None && spells.consume_hit(gi.body, clears)){
                 gi.open = true;
                 open_column(lvl.view, gi.spawn.tx, level.h);
+                if(gi.spawn.latch_id >= 0 && !world.latched(gi.spawn.latch_id)){
+                    world.set_latch(gi.spawn.latch_id);
+                    engine::write_world(world);
+                }
             }
             // M6: cracked walls aren't spell-cleared (gate_cleared_by==None); a dashing body smashes them on contact.
             if(!gi.open && gi.spawn.type == logic::GateType::CrackedWall
                && player.dash.active() && logic::aabb_overlap(player.body, gi.body)){
                 gi.open = true;
                 open_column(lvl.view, gi.spawn.tx, level.h);
+                if(gi.spawn.latch_id >= 0 && !world.latched(gi.spawn.latch_id)){
+                    world.set_latch(gi.spawn.latch_id);
+                    engine::write_world(world);
+                }
             }
         }
         for(BrazierInst& bi : braziers){
@@ -371,7 +396,14 @@ static DungeonResult play_room_single(const logic::LevelData& level, logic::Worl
                 case logic::TriggerKind::Braziers: {
                     int n = 0; for(BrazierInst& bi : braziers) if(bi.group == ti.group && bi.lit) ++n;
                     ti.trig.lit = n;
-                    if(!ti.applied && ti.trig.active()){ ti.applied = true; open_column(lvl.view, ti.trig.target_tx, level.h); } // latch
+                    if(!ti.applied && ti.trig.active()){
+                        ti.applied = true; open_column(lvl.view, ti.trig.target_tx, level.h); // latch
+                        const logic::BrazierGroupSpawn& bgs = level.brazier_groups[ti.group];
+                        if(bgs.latch_id >= 0 && !world.latched(bgs.latch_id)){
+                            world.set_latch(bgs.latch_id);
+                            engine::write_world(world);
+                        }
+                    }
                     break; }
             }
         }
@@ -417,7 +449,7 @@ static DungeonResult play_room_single(const logic::LevelData& level, logic::Worl
         // Must LAND on the exit (grounded), not bump it from underneath — clearing requires
         // standing on the platform, which matters for the gated vertical climb (no head-bump cheese).
         if(level.has_exit && spronk_ok && player.body.on_ground && logic::aabb_overlap(player.body, exit)){
-            result = DungeonResult::Cleared; break;
+            return RoomOutcome{ RoomOutcome::ExitDungeon };
         }
 
         hud.update(health, magic);
@@ -427,13 +459,18 @@ static DungeonResult play_room_single(const logic::LevelData& level, logic::Worl
         if(fade_in_t > 0) engine::set_fade(--fade_in_t);
         bn::core::update();
     }
-
-    engine::fade_out(16);
-    return result;
 }
 
 DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world, logic::PlayerState& ps)
 {
-    return play_room_single(*dungeon.rooms[dungeon.start_room], world, ps);
+    RoomOutcome out = play_room(*dungeon.rooms[dungeon.start_room], 0, world, ps);
+    engine::fade_out(16);
+    switch(out.kind){
+        case RoomOutcome::ExitDungeon: return DungeonResult::Cleared;
+        case RoomOutcome::Quit:        return DungeonResult::Quit;
+        case RoomOutcome::Restart:     return DungeonResult::Restart;
+        case RoomOutcome::GoToRoom:    return DungeonResult::Cleared; // temporary: real loop in Task 5.3
+    }
+    return DungeonResult::Quit;
 }
 }
