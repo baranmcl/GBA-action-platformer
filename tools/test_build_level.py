@@ -167,6 +167,13 @@ class TestBuildLevel(unittest.TestCase):
         lvl = compile_str(txt, {})  # no entrance metadata -> id by order, facing +1
         self.assertEqual(lvl['entrances'], [(0, 2, 1, 1)])
 
+    def test_entrance_mixed_metadata(self):
+        # Two N's, JSON only for the first; the second falls back to scan-order
+        # index (1) + facing +1. Pins the documented primary-key default behavior.
+        txt = "######\n#@N.N#\n######\n"  # N at (2,1) and (4,1)
+        lvl = compile_str(txt, {"entrances": [{"id": 5, "facing": -1}]})
+        self.assertEqual(lvl['entrances'], [(5, 2, 1, -1), (1, 4, 1, 1)])
+
     def test_room_door_symbol(self):
         txt = "######\n#@.D.#\n######\n"
         lvl = compile_str(txt, {"room_doors": [{"target_room": 2, "target_entrance": 1}]})
@@ -194,12 +201,18 @@ class TestBuildLevel(unittest.TestCase):
         self.assertEqual(lvl['brazier_groups'], [(1, 5, 5, -1)])  # default not-latched
 
     def test_emit_header_has_room_fields(self):
-        txt = "######\n#@ND.#\n######\n"
+        txt = "######\n#@ND.#\n######\n"  # N at (2,1), D at (3,1)
         lvl = compile_str(txt, {"entrances": [{"id": 0, "facing": 1}],
                                 "room_doors": [{"target_room": 1, "target_entrance": 0}]})
         hdr = build_level.emit_header(lvl, "TESTRM")
         self.assertIn("TESTRM_ENTRANCES", hdr)
         self.assertIn("TESTRM_ROOM_DOORS", hdr)
+        # Pin the exact emitted C++ tuple content so a field-order swap in the
+        # entrance/room-door emit f-strings is caught.
+        # Entrance: {id, tx, ty, facing} -> {0,2,1,1}
+        self.assertIn("{0,2,1,1}", hdr)
+        # Room-door: {tx, ty, target_room, target_entrance} -> {3,1,1,0}
+        self.assertIn("{3,1,1,0}", hdr)
 
 
 if __name__ == '__main__':

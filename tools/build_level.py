@@ -12,7 +12,7 @@ Grid symbols (collision tile in parens):
   V=vine gate  I=ice gate  W=water gate  X=fire-wall gate  K=cracked-wall gate(Dash)
   F=ability shrine  B=pushable block  ==pressure plate
   ?=hidden button  *=brazier
-  N=entrance  D=room-door
+  N=entrance (JSON: {"id":N,"facing":±1}; id defaults to scan-order index, facing to +1)  D=room-door
   (all content symbols except ~ set collision tile 0; positions recorded as entities)
 
 JSON sidecar (Nth metadata entry -> Nth matching symbol in row-major scan order):
