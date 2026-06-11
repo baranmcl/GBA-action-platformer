@@ -1,11 +1,6 @@
-{
-  "tileset": "tiles",
-  "enemies": [
-    { "patrol": [3, 10] },
-    { "patrol": [4, 14] }
-  ],
-  "entrances": [ { "id": 0, "facing": 1 } ],
-  "room_doors": [ { "target_room": 0, "target_entrance": 1 } ],
-  "braziers": [ { "group": 0 } ],
-  "brazier_groups": [ { "total": 1, "target": [16, 1], "latch_id": 0 } ]
-}
+{ "tileset":"tiles",
+  "entrances":[{"id":0,"facing":1}],
+  "room_doors":[{"target_room":0,"target_entrance":1}],
+  "enemies":[{"patrol":[3,9]},{"patrol":[4,12]}],
+  "braziers":[{"group":0}],
+  "brazier_groups":[{"total":1,"target":[16,1],"latch_id":0}] }
