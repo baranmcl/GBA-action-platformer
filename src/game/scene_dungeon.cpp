@@ -473,7 +473,7 @@ DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world
             case RoomOutcome::Restart:
                 ps.health.cur = ps.health.max;   // anti-soft-lock: refill vitals, replay same room
                 ps.magic.cur  = ps.magic.max;
-                break;
+                break;   // cur_room/cur_entrance unchanged -> replay same room
             case RoomOutcome::GoToRoom:
                 cur_room = out.target_room;
                 cur_entrance = out.target_entrance;
