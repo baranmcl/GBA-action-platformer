@@ -73,7 +73,7 @@ namespace
     }
 }
 
-DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, logic::PlayerState& ps)
+static DungeonResult play_room_single(const logic::LevelData& level, logic::World& world, logic::PlayerState& ps)
 {
     const int d = world.current_dungeon;
     bn::bg_palettes::set_transparent_color(bn::color(8, 8, 24));
@@ -430,5 +430,10 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
 
     engine::fade_out(16);
     return result;
+}
+
+DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world, logic::PlayerState& ps)
+{
+    return play_room_single(*dungeon.rooms[dungeon.start_room], world, ps);
 }
 }

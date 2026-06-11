@@ -11,6 +11,7 @@
 #include "game/levels/dungeon3.h"
 #include "game/levels/dungeon4.h"
 #include "game/levels/dungeon5.h"
+#include "game/levels/dungeons.h"
 
 int main()
 {
@@ -28,12 +29,12 @@ int main()
     {
         game::HubResult hr = game::run_hub(world, ps); // returns when a door is entered
         int n = hr.enter_dungeon;                     // 1..8; M3 supports 1 and 2 (others locked)
-        const logic::LevelData* lvl = nullptr;
-        if(n == 1) lvl = &DUNGEON1_DATA;
-        else if(n == 2) lvl = &DUNGEON2_DATA;
-        else if(n == 3) lvl = &DUNGEON3_DATA;
-        else if(n == 4) lvl = &DUNGEON4_DATA;
-        else if(n == 5) lvl = &DUNGEON5_DATA;
+        const logic::DungeonData* lvl = nullptr;
+        if(n == 1) lvl = &DUNGEON1_DUNGEON;
+        else if(n == 2) lvl = &DUNGEON2_DUNGEON;
+        else if(n == 3) lvl = &DUNGEON3_DUNGEON;
+        else if(n == 4) lvl = &DUNGEON4_DUNGEON;
+        else if(n == 5) lvl = &DUNGEON5_DUNGEON;
         else continue;                                // doors 6-8 not built
 
         world.current_dungeon = n;
