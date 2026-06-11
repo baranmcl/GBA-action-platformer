@@ -61,7 +61,7 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** 4/6 phases shipped (all host-testable phases done, 162/162 host tests + 29 Python compiler tests green). Phase 5 in progress; Phases 5–6 use the ROM toolchain + emulator.
+**Overall:** 5/6 phases shipped (162/162 host tests + 29 Python compiler tests green; ROM builds clean). Phase 6 in progress — automatable build done by subagent, interactive emulator QA handed to the user.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
@@ -69,10 +69,11 @@ notes and commit messages.
 | 2 — Room-graph pure helpers | ✅ Shipped | `95edcbf`, `ec637a7` | spec+quality reviewed |
 | 3 — Save format v3 (latches) | ✅ Shipped | `bbabbf9`, `6a51676` | spec+quality reviewed; see Deviations |
 | 4 — Level compiler authoring | ✅ Shipped | `103eb72`, `9427e10` | spec+quality reviewed |
-| 5 — Engine/game room loop | 🚧 In progress | — | claimed 2026-06-11, branch `feat/room-to-room-dungeons`; needs ROM toolchain (`make`) |
-| 6 — Vertical slice + manual QA | ⬜ Not started | — | needs emulator |
+| 5 — Engine/game room loop | ✅ Shipped | `262575f`, `90989e8`, `47ed5bb`, `dac7a46`, `8c80062` | spec+quality reviewed; ROM builds clean; Restart deviation below |
+| 6 — Vertical slice + manual QA | 🚧 In progress | — | claimed 2026-06-11; ROM-build part automatable, 7-step emulator QA → user (mGBA at `C:/Program Files/mGBA/mGBA.exe`) |
 
 ### Deviations
+- **Task 5.3 (Restart handling moved into `run_dungeon`):** As designed in the plan, START (`DungeonResult::Restart`) is now consumed inside `run_dungeon` (refills vitals + re-enters the *current* room) rather than being returned to `main.cpp`'s old `do/while`. With multi-room dungeons, START resets the room you're stuck in, not the dungeon start. `DungeonResult::Restart` remains defined but is now internal-only (never returned). `main.cpp` simplified to a single `run_dungeon` call.
 - **Task 3.1 (SaveData layout):** The implementer kept `magic`+`version` at offsets 0–5 (matching v1/v2) and placed `uint32_t latches` at offset 12, instead of the plan's prescribed offset-4 placement. Rationale: version detection stays at a stable offset across all save versions and the v2 field offsets stay layout-compatible (so the v2 migration branch reads via struct members safely). `sizeof(SaveData)==16` still holds (latches@12 is 4-byte aligned); checksum is non-contiguous `[0..10]+[12..15]` skipping the checksum byte at [11]. Verified correct by spec + quality review. Also fixed a latent bug in the plan's migration test (`0x0004` commented "Fire" → `0x0002`, since `Ability::Fire`=bit 1).
 
 ### Discoveries
@@ -726,7 +727,7 @@ git commit -m "feat(tools): compile N (entrance) and D (room-door) symbols + bra
 
 ## Phase 5 — Engine/game room loop
 
-**Execution Status:** 🚧 IN PROGRESS — claimed 2026-06-11 (branch `feat/room-to-room-dungeons`)
+**Execution Status:** ✅ SHIPPED at `262575f`, `90989e8`, `47ed5bb`, `dac7a46`, `8c80062` on 2026-06-11 (spec + code-quality reviewed; ROM builds clean; 162/162 host tests green). Runtime behavior verified in Phase 6 manual QA.
 
 The keystone, and the **only `bn::` phase**. Splits `run_dungeon` into a per-room `play_room` and an outer room-loop `run_dungeon(DungeonData)`, applies latches on room build, spawns at entrances, and transitions on room-door overlap+UP. This phase is **not host-testable** (Butano types); it is verified by (a) the Phase 2 pure helpers it calls, (b) a clean ROM compile, and (c) the Phase 6 manual playtest. Do NOT weaken or invent host tests that pull `bn::` into the logic layer to "cover" this — the three-layer rule forbids it; rely on the pure helpers + manual QA instead.
 
@@ -985,7 +986,7 @@ git commit -m "feat(game): run_dungeon room loop with hard-cut fades; Restart re
 
 ## Phase 6 — Vertical slice + manual QA
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** 🚧 IN PROGRESS — claimed 2026-06-11 (branch `feat/room-to-room-dungeons`). Build/author steps automatable; the 7-step interactive emulator QA (Step 6) is handed to the user (mGBA).
 
 A real 2-room test dungeon proving the whole path end-to-end: walk to a door, press UP, hard-cut to room 2 at the linked entrance; solve a latching brazier puzzle, leave and re-enter, confirm the shortcut stays open after a save/reload.
 
