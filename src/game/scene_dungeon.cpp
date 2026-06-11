@@ -462,14 +462,23 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
 
 DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world, logic::PlayerState& ps)
 {
-    RoomOutcome out = play_room(*dungeon.rooms[dungeon.start_room], 0, world, ps);
-    engine::fade_out(16);
-    switch(out.kind){
-        case RoomOutcome::ExitDungeon: return DungeonResult::Cleared;
-        case RoomOutcome::Quit:        return DungeonResult::Quit;
-        case RoomOutcome::Restart:     return DungeonResult::Restart;
-        case RoomOutcome::GoToRoom:    return DungeonResult::Cleared; // temporary: real loop in Task 5.3
+    int cur_room = dungeon.start_room;
+    int cur_entrance = 0;
+    while(true){
+        RoomOutcome out = play_room(*dungeon.rooms[cur_room], cur_entrance, world, ps);
+        engine::fade_out(16);   // one fade-out per room exit; next play_room fades in
+        switch(out.kind){
+            case RoomOutcome::ExitDungeon: return DungeonResult::Cleared;
+            case RoomOutcome::Quit:        return DungeonResult::Quit;
+            case RoomOutcome::Restart:
+                ps.health.cur = ps.health.max;   // anti-soft-lock: refill vitals, replay same room
+                ps.magic.cur  = ps.magic.max;
+                break;
+            case RoomOutcome::GoToRoom:
+                cur_room = out.target_room;
+                cur_entrance = out.target_entrance;
+                break;
+        }
     }
-    return DungeonResult::Quit;
 }
 }
