@@ -1,5 +1,9 @@
 {
   "tileset": "tiles",
+  "enemies": [
+    { "patrol": [3, 10] },
+    { "patrol": [4, 14] }
+  ],
   "entrances": [ { "id": 0, "facing": 1 } ],
   "room_doors": [ { "target_room": 0, "target_entrance": 1 } ],
   "braziers": [ { "group": 0 } ],
