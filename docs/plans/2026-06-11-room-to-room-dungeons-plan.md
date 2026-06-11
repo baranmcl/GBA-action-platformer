@@ -61,15 +61,15 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** 3/6 phases shipped (host-testable phases done, 162/162 host tests green). Phases 5–6 pending the devkitPro ROM toolchain + emulator.
+**Overall:** 4/6 phases shipped (all host-testable phases done, 162/162 host tests + 29 Python compiler tests green). Phase 5 in progress; Phases 5–6 use the ROM toolchain + emulator.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Logic data model | ✅ Shipped | `5a87e0c`, `8fb7e3d`, `f8d6fde` | spec+quality reviewed |
 | 2 — Room-graph pure helpers | ✅ Shipped | `95edcbf`, `ec637a7` | spec+quality reviewed |
 | 3 — Save format v3 (latches) | ✅ Shipped | `bbabbf9`, `6a51676` | spec+quality reviewed; see Deviations |
-| 4 — Level compiler authoring | 🚧 In progress | — | claimed 2026-06-11, branch `feat/room-to-room-dungeons` |
-| 5 — Engine/game room loop | ⬜ Not started | — | needs ROM toolchain (`make`) |
+| 4 — Level compiler authoring | ✅ Shipped | `103eb72`, `9427e10` | spec+quality reviewed |
+| 5 — Engine/game room loop | 🚧 In progress | — | claimed 2026-06-11, branch `feat/room-to-room-dungeons`; needs ROM toolchain (`make`) |
 | 6 — Vertical slice + manual QA | ⬜ Not started | — | needs emulator |
 
 ### Deviations
@@ -77,6 +77,7 @@ notes and commit messages.
 
 ### Discoveries
 - **Pre-existing:** A level compiler already exists (`tools/build_level.py`, tested by `tools/test_build_level.py`). The spec listed "authoring tool" as out of scope; this plan extends the existing compiler with two new symbols (Phase 4). The larger Tiled/CSV importer remains out of scope.
+- **ROM toolchain env (this Windows machine):** devkitPro is installed at `C:/devkitPro`, but the shell's `DEVKITPRO` env points to the non-existent Linux path `/opt/devkitpro` and `arm-none-eabi-g++` is not on PATH. A plain `make` will fail. Build the ROM with the corrected env: `DEVKITPRO=/c/devkitPro DEVKITARM=/c/devkitPro/devkitARM PATH="/c/devkitPro/devkitARM/bin:/c/devkitPro/tools/bin:$PATH" make`. (`arm-none-eabi-g++.exe` confirmed at `C:/devkitPro/devkitARM/bin`; `make` at `C:/devkitPro/msys2/usr/bin/make`.) Phase 5/6 build steps must use this. A full end-to-end Butano build has not yet been run — the Phase 5.1 implementer performs the first one and captures any further fixups here.
 
 ---
 
@@ -538,7 +539,7 @@ git commit -m "feat(logic): SRAM save v3 adds World.latches; migrate v1/v2 with 
 
 ## Phase 4 — Level compiler authoring (entrances + room-doors + brazier latch)
 
-**Execution Status:** 🚧 IN PROGRESS — claimed 2026-06-11 (branch `feat/room-to-room-dungeons`)
+**Execution Status:** ✅ SHIPPED at `103eb72`, `9427e10` on 2026-06-11 (spec + code-quality reviewed; 29 Python compiler tests + 162/162 host tests green)
 
 Extends `tools/build_level.py` so rooms can be authored in `.txt`/JSON. Adds the `N` (entrance) and `D` (room-door) grid symbols, an optional `latch_id` on brazier groups, and emits the new `LevelData` trailing fields. The per-dungeon **room table** (`DungeonData`) is hand-written in a small header for v1 (few rooms) — a descriptor generator is deferred (YAGNI).
 
@@ -725,7 +726,7 @@ git commit -m "feat(tools): compile N (entrance) and D (room-door) symbols + bra
 
 ## Phase 5 — Engine/game room loop
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** 🚧 IN PROGRESS — claimed 2026-06-11 (branch `feat/room-to-room-dungeons`)
 
 The keystone, and the **only `bn::` phase**. Splits `run_dungeon` into a per-room `play_room` and an outer room-loop `run_dungeon(DungeonData)`, applies latches on room build, spawns at entrances, and transitions on room-door overlap+UP. This phase is **not host-testable** (Butano types); it is verified by (a) the Phase 2 pure helpers it calls, (b) a clean ROM compile, and (c) the Phase 6 manual playtest. Do NOT weaken or invent host tests that pull `bn::` into the logic layer to "cover" this — the three-layer rule forbids it; rely on the pure helpers + manual QA instead.
 
