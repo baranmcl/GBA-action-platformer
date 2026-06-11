@@ -61,6 +61,14 @@ namespace
     // src_tx/ty: plate or button tile to test; group: brazier group (Braziers kind)
     struct TriggerInst { logic::Trigger trig; int src_tx, src_ty, group; bool applied = false; };
 
+    // Persist a progress latch to SRAM on first trigger; no-op if already set or unlatched (-1).
+    void persist_latch(logic::World& world, int latch_id){
+        if(latch_id >= 0 && !world.latched(latch_id)){
+            world.set_latch(latch_id);
+            engine::write_world(world);
+        }
+    }
+
     logic::Body tile_body(int tx, int ty, int hw, int hh){
         logic::Body b{}; b.half_w = fx(hw); b.half_h = fx(hh);
         b.pos = { fx(tx * 8), fx(ty * 8) }; return b;
@@ -177,6 +185,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         GateInst& gi = gates.back();
         const logic::GateInfo& info = logic::gate_info(g.type);
         bool passable = info.is_geometry && logic::can_pass(g.type, world.abilities);
+        // latched_open: a shortcut opened on a prior visit, persisted in SRAM — re-open it on room load.
         bool latched_open = (g.latch_id >= 0) && world.latched(g.latch_id);
         if(passable || latched_open){ gi.open = true; }              // geometry gate owned OR latch set -> open
         else { fill_column(lvl.view, g.tx, level.h, info.bg_tile); } // closed -> full-height vine/ice wall
@@ -232,9 +241,9 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     for(int g = 0; g < level.brazier_group_count && g < 16; ++g){
         const logic::BrazierGroupSpawn& bg = level.brazier_groups[g];
         logic::Trigger t = logic::Trigger::braziers(bg.total); t.target_tx = bg.target_tx; t.target_ty = bg.target_ty;
-        bool pre = (bg.latch_id >= 0) && world.latched(bg.latch_id);
-        triggers.push_back(TriggerInst{ t, 0, 0, g, pre });
-        if(pre) open_column(lvl.view, bg.target_tx, level.h);
+        bool latched_open = (bg.latch_id >= 0) && world.latched(bg.latch_id);
+        triggers.push_back(TriggerInst{ t, 0, 0, g, latched_open });
+        if(latched_open) open_column(lvl.view, bg.target_tx, level.h);
     }
 
     // Centre camera on the player before fading in (avoids a snap on frame 0).
@@ -276,20 +285,14 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             if(!gi.open && clears != logic::SpellId::None && spells.consume_hit(gi.body, clears)){
                 gi.open = true;
                 open_column(lvl.view, gi.spawn.tx, level.h);
-                if(gi.spawn.latch_id >= 0 && !world.latched(gi.spawn.latch_id)){
-                    world.set_latch(gi.spawn.latch_id);
-                    engine::write_world(world);
-                }
+                persist_latch(world, gi.spawn.latch_id);
             }
             // M6: cracked walls aren't spell-cleared (gate_cleared_by==None); a dashing body smashes them on contact.
             if(!gi.open && gi.spawn.type == logic::GateType::CrackedWall
                && player.dash.active() && logic::aabb_overlap(player.body, gi.body)){
                 gi.open = true;
                 open_column(lvl.view, gi.spawn.tx, level.h);
-                if(gi.spawn.latch_id >= 0 && !world.latched(gi.spawn.latch_id)){
-                    world.set_latch(gi.spawn.latch_id);
-                    engine::write_world(world);
-                }
+                persist_latch(world, gi.spawn.latch_id);
             }
         }
         for(BrazierInst& bi : braziers){
@@ -398,11 +401,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                     ti.trig.lit = n;
                     if(!ti.applied && ti.trig.active()){
                         ti.applied = true; open_column(lvl.view, ti.trig.target_tx, level.h); // latch
-                        const logic::BrazierGroupSpawn& bgs = level.brazier_groups[ti.group];
-                        if(bgs.latch_id >= 0 && !world.latched(bgs.latch_id)){
-                            world.set_latch(bgs.latch_id);
-                            engine::write_world(world);
-                        }
+                        persist_latch(world, level.brazier_groups[ti.group].latch_id);
                     }
                     break; }
             }
