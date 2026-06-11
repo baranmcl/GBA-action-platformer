@@ -214,6 +214,18 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         bi.sprite->set_camera(cam);
     }
 
+    // ---- room-doors (bg tile 5 open-door; 2-tall arch: floor tile + air tile above) ----
+    for(int i = 0; i < level.room_door_count && i < 8; ++i){
+        const logic::RoomDoorSpawn& rd = level.room_doors[i];
+        engine::set_level_tile(lvl.view, rd.tx, rd.ty,     5);
+        engine::set_level_tile(lvl.view, rd.tx, rd.ty - 1, 5);
+    }
+    // ---- exit marker (bg tile 5 open-door; 2-tall arch so the tester can see where to go) ----
+    if(level.has_exit){
+        engine::set_level_tile(lvl.view, level.exit_tx, level.exit_ty,     5);
+        engine::set_level_tile(lvl.view, level.exit_tx, level.exit_ty - 1, 5);
+    }
+
     // ---- braziers (bg tile 14 unlit; Body for fire-hit) ----
     bn::vector<BrazierInst, 16> braziers;
     for(int i = 0; i < level.brazier_count && i < 16; ++i){
