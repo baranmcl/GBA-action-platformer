@@ -4,6 +4,7 @@
 namespace logic {
 enum class Ability : uint8_t { Featherleap=0, Fire, Ice, Glide, Dash, Grapple, Stone, Light };
 
+// Runtime-only game state; NOT persisted directly. Serialize via make_save/load_save (SaveData is the 16-byte SRAM layout).
 struct World {
     uint16_t spronks_freed = 0;  // bit (d-1) = dungeon d's spronk (d in 1..8)
     uint16_t abilities = 0;      // bit (int)Ability
@@ -37,11 +38,12 @@ struct SaveData {
     uint32_t latches;        // [12..15] World.latches (4-byte aligned -> no padding)
 };
 static_assert(std::is_trivially_copyable<SaveData>::value, "SaveData must be trivially copyable (SRAM)");
-static_assert(sizeof(SaveData) == 16, "SaveData v3 layout changed — bump version + migrate");
+static_assert(sizeof(SaveData) == 16, "SaveData layout changed (now v3, sizeof must stay 16) — bump SAVE_VERSION and add a migration branch");
 
 static constexpr uint32_t SAVE_MAGIC = 0x5350524B; // "SPRK"
 static constexpr uint16_t SAVE_VERSION = 3;
 
+// contiguous-range checksum; used by v1/v2 migration. v3 uses checksum_v3 (non-contiguous).
 inline uint8_t checksum_bytes(const uint8_t* p, int n){ uint32_t s=0; for(int i=0;i<n;++i) s+=p[i]; return (uint8_t)(s&0xFF); }
 
 // v3 checksum covers bytes [0..10] (header) + [12..15] (latches), skipping checksum byte [11] itself
