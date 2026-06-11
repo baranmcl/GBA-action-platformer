@@ -61,19 +61,19 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started.
+**Overall:** 3/6 phases shipped (host-testable phases done, 162/162 host tests green). Phases 5–6 pending the devkitPro ROM toolchain + emulator.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 1 — Logic data model | ⬜ Not started | — | — |
-| 2 — Room-graph pure helpers | ⬜ Not started | — | — |
-| 3 — Save format v3 (latches) | ⬜ Not started | — | — |
-| 4 — Level compiler authoring | ⬜ Not started | — | — |
-| 5 — Engine/game room loop | ⬜ Not started | — | — |
-| 6 — Vertical slice + manual QA | ⬜ Not started | — | — |
+| 1 — Logic data model | ✅ Shipped | `5a87e0c`, `8fb7e3d`, `f8d6fde` | spec+quality reviewed |
+| 2 — Room-graph pure helpers | ✅ Shipped | `95edcbf`, `ec637a7` | spec+quality reviewed |
+| 3 — Save format v3 (latches) | ✅ Shipped | `bbabbf9`, `6a51676` | spec+quality reviewed; see Deviations |
+| 4 — Level compiler authoring | 🚧 In progress | — | claimed 2026-06-11, branch `feat/room-to-room-dungeons` |
+| 5 — Engine/game room loop | ⬜ Not started | — | needs ROM toolchain (`make`) |
+| 6 — Vertical slice + manual QA | ⬜ Not started | — | needs emulator |
 
 ### Deviations
-- _(none yet)_
+- **Task 3.1 (SaveData layout):** The implementer kept `magic`+`version` at offsets 0–5 (matching v1/v2) and placed `uint32_t latches` at offset 12, instead of the plan's prescribed offset-4 placement. Rationale: version detection stays at a stable offset across all save versions and the v2 field offsets stay layout-compatible (so the v2 migration branch reads via struct members safely). `sizeof(SaveData)==16` still holds (latches@12 is 4-byte aligned); checksum is non-contiguous `[0..10]+[12..15]` skipping the checksum byte at [11]. Verified correct by spec + quality review. Also fixed a latent bug in the plan's migration test (`0x0004` commented "Fire" → `0x0002`, since `Ability::Fire`=bit 1).
 
 ### Discoveries
 - **Pre-existing:** A level compiler already exists (`tools/build_level.py`, tested by `tools/test_build_level.py`). The spec listed "authoring tool" as out of scope; this plan extends the existing compiler with two new symbols (Phase 4). The larger Tiled/CSV importer remains out of scope.
@@ -91,7 +91,7 @@ notes and commit messages.
 
 ## Phase 1 — Logic data model
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `5a87e0c`, `8fb7e3d`, `f8d6fde` on 2026-06-11 (spec + code-quality reviewed; 153/153 host tests green)
 
 Adds the pure-logic types. Uses **default member initializers on trailing fields** so every existing generated `LevelData` literal keeps compiling unchanged.
 
@@ -257,7 +257,7 @@ git commit -m "feat(logic): add optional latch_id to GateSpawn and BrazierGroupS
 
 ## Phase 2 — Room-graph pure helpers
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `95edcbf`, `ec637a7` on 2026-06-11 (spec + code-quality reviewed; 157/157 host tests green)
 
 Two pure functions the scene will call: resolve an entrance to a spawn position, and find a room-door overlapping the player. Both `bn::`-free and host-tested. This keeps the testable decision logic out of the `bn::`-heavy scene.
 
@@ -377,7 +377,7 @@ git commit -m "feat(logic): room_graph helpers find_entrance + room_door_at"
 
 ## Phase 3 — Save format v3 (latches)
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `bbabbf9`, `6a51676` on 2026-06-11 (spec + code-quality reviewed; 162/162 host tests green; layout deviation recorded in Execution Status › Deviations)
 
 Adds `World.latches` and bumps the SRAM save to v3, reusing the existing pad bytes so size stays 16. Migrates v1/v2 with `latches = 0`.
 
@@ -538,7 +538,7 @@ git commit -m "feat(logic): SRAM save v3 adds World.latches; migrate v1/v2 with 
 
 ## Phase 4 — Level compiler authoring (entrances + room-doors + brazier latch)
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** 🚧 IN PROGRESS — claimed 2026-06-11 (branch `feat/room-to-room-dungeons`)
 
 Extends `tools/build_level.py` so rooms can be authored in `.txt`/JSON. Adds the `N` (entrance) and `D` (room-door) grid symbols, an optional `latch_id` on brazier groups, and emits the new `LevelData` trailing fields. The per-dungeon **room table** (`DungeonData`) is hand-written in a small header for v1 (few rooms) — a descriptor generator is deferred (YAGNI).
 
