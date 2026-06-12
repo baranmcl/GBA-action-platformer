@@ -1,6 +1,8 @@
 #include "test_framework.h"
 #include "logic/grapple.h"
 #include "logic/tilemap.h"
+#include "logic/physics.h"   // Body
+#include "logic/fixed.h"
 using namespace logic;
 
 // Shared 12x9 all-Empty map with two GrapplePoint anchors on mid-row 4:
@@ -33,10 +35,55 @@ TEST(anchor_respects_range){
     CHECK(!nearest_grapple_anchor(m, 5, 4, 1, 1, ax, ay));
 }
 TEST(anchor_above_is_targetable){
-    uint8_t c[5*7]; for(int i=0;i<35;++i) c[i]=(uint8_t)TileKind::Empty;
-    c[1*5 + 2] = (uint8_t)TileKind::GrapplePoint;   // (2,1) directly above (2,4)
-    Tilemap m{ 5,7,c };
+    constexpr int W=5,H=7; uint8_t c[W*H]; for(int i=0;i<W*H;++i) c[i]=(uint8_t)TileKind::Empty;
+    c[1*W + 2] = (uint8_t)TileKind::GrapplePoint;   // (2,1) directly above (2,4)
+    Tilemap m{ W,H,c };
     int ax, ay;
     CHECK(nearest_grapple_anchor(m, 2, 4, /*facing*/1, 6, ax, ay));   // directly above -> targetable
     CHECK_EQ(ax,2); CHECK_EQ(ay,1);
+}
+
+// Body "at tile (tx,ty)" = top-left at (tx*8, ty*8). The 2x4-tile player's CENTRE is therefore
+// at (tx*8+8, ty*8+16) = tile (tx+1, ty+2) — the latch scans from that centre tile.
+static Body body_at_tile(int tx, int ty){
+    Body b{}; b.half_w = Fixed::from_int(8); b.half_h = Fixed::from_int(16);
+    b.pos = { Fixed::from_int(tx*8), Fixed::from_int(ty*8) };
+    return b;
+}
+
+TEST(grapple_latches_only_with_ability_and_anchor){
+    Tilemap m = make_map();                 // anchor at (8,4)
+    Body b = body_at_tile(5,4);             // centre tile (6,6); anchor (8,4) is ahead + up, in range
+    GrappleState g;
+    CHECK(!g.latch(true, b, /*facing*/1, m, /*has*/false)); // no ability
+    CHECK(!g.active());
+    CHECK(g.latch(true, b, 1, m, /*has*/true));             // ability + anchor in arc -> latched
+    CHECK(g.active());
+}
+TEST(grapple_no_latch_without_fire){
+    Tilemap m = make_map(); Body b = body_at_tile(5,4); GrappleState g;
+    CHECK(!g.latch(false, b, 1, m, true));   // not fired
+    CHECK(!g.active());
+}
+TEST(grapple_pull_velocity_points_at_anchor){
+    Tilemap m = make_map(); Body b = body_at_tile(5,4); GrappleState g;
+    g.latch(true, b, 1, m, true);            // anchor (8,4) -> centre px (68,36); player centre (48,48)
+    Vec2 v = g.pull_velocity(b);
+    CHECK(v.x.raw > 0);                       // pulling right (anchor is right of player)
+    CHECK(v.x <= GrappleState::GRAPPLE_VX);   // per-axis magnitude clamped to GRAPPLE_VX
+}
+TEST(grapple_ends_on_arrival){
+    Tilemap m = make_map(); GrappleState g;
+    Body b = body_at_tile(5,4);
+    g.latch(true, b, 1, m, true);             // target = anchor tile (8,4)
+    b.pos = { Fixed::from_int(60), Fixed::from_int(20) };  // body centre = (68,36) -> centre tile (8,4)
+    g.post(b, /*moved*/true);
+    CHECK(!g.active());                        // reached the anchor tile -> ended
+}
+TEST(grapple_ends_when_blocked){
+    Tilemap m = make_map(); GrappleState g;
+    Body b = body_at_tile(5,4);
+    g.latch(true, b, 1, m, true);
+    g.post(b, /*moved*/false);   // collision stopped the body before arrival
+    CHECK(!g.active());
 }
