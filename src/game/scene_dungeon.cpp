@@ -296,6 +296,8 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     int fade_in_t = 16;
     int push_cd = 0;
     int grapple_pull_cd = 0;
+    int miss_vine_t   = 0;  // counts down from 10; >0 => miss-vine animation active
+    int miss_vine_dir = 1;  // facing direction when the miss was fired
 
     while(true)
     {
@@ -345,13 +347,48 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                     grapple_pull_cd = 8;
                 }
             } else if(!target){
-                in.grapple_fire = true;                    // no pullable block -> player anchor-grapple
+                // No pullable block — try pulling a nearby non-immune enemy one tile toward the player.
+                EnemyInst* etarget = nullptr;
+                int ebest_dist = 999;
+                for(EnemyInst& ei : enemies){
+                    if(!ei.e.alive || ei.e.fire_immune) continue; // immune enemies resist the vine
+                    int etx = px2t(ei.e.body.pos.x + ei.e.body.half_w);
+                    int ety = px2t(ei.e.body.pos.y + ei.e.body.half_h);
+                    int dxt = etx - ptx, dyt = ety - pty;
+                    int adx = dxt < 0 ? -dxt : dxt, ady = dyt < 0 ? -dyt : dyt;
+                    if(adx > logic::GrappleState::RANGE || ady > logic::GrappleState::RANGE) continue;
+                    int sx = (dxt > 0) - (dxt < 0);
+                    if(sx == -player.facing && dxt != 0) continue; // arc rule: exclude strictly-behind
+                    int dist = adx + ady; // Manhattan distance (nearest)
+                    if(dist < ebest_dist){ ebest_dist = dist; etarget = &ei; }
+                }
+                if(etarget && grapple_pull_cd == 0){
+                    int etx = px2t(etarget->e.body.pos.x + etarget->e.body.half_w);
+                    int ety = px2t(etarget->e.body.pos.y + etarget->e.body.half_h);
+                    int edxt = etx - ptx; // enemy col minus player col
+                    int edir = (edxt > 0) ? -1 : 1; // nudge enemy toward player (one tile = 8 px)
+                    int dest_tx = etx + edir;
+                    // Guard: only nudge if the destination tile is non-solid and within map bounds.
+                    if(dest_tx >= 0 && dest_tx < lvl.map.w && !lvl.map.is_solid(dest_tx, ety)){
+                        etarget->e.body.pos.x = etarget->e.body.pos.x + logic::Fixed::from_int(8 * edir);
+                    }
+                    grapple_pull_cd = 8; // consumed by enemy pull — don't fire anchor grapple
+                } else if(!etarget){
+                    in.grapple_fire = true; // no block, no enemy -> player anchor-grapple
+                }
             }
         }
         bool cast_spell = si.cast && (spell.selected == logic::SpellId::Fire ||
                                       spell.selected == logic::SpellId::Ice);
+        // Capture the "tried to anchor-grapple" flag BEFORE player.update consumes it.
+        bool tried_anchor = want_grapple && in.grapple_fire;
         player.update(in, lvl.map);
         avatar.sync(player);
+        // Miss detection: player tried an anchor-grapple but nothing latched (no grapple point in range).
+        if(tried_anchor && !player.grapple.active()){
+            miss_vine_t   = 10;
+            miss_vine_dir = player.facing;
+        }
 
         logic::Vec2 muzzle = { player.body.pos.x + player.body.half_w,
                                player.body.pos.y + player.body.half_h };
@@ -533,7 +570,9 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         }
 
         // ---- vine VFX: draw dot segments along player->anchor while grapple active ----
+        if(miss_vine_t > 0) --miss_vine_t;
         if(player.grapple.active()){
+            // Latched: draw dots from player to anchor (unchanged).
             int px_ = player.body.pos.x.to_int() + player.body.half_w.to_int();
             int py_ = player.body.pos.y.to_int() + player.body.half_h.to_int();
             int ax_ = player.grapple.anchor_tx * 8 + 4;
@@ -542,6 +581,31 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                 int t = i + 1;  // t in 1..VINE_SEGS (skip the player pos itself)
                 int sx_ = px_ + (ax_ - px_) * t / (VINE_SEGS + 1);
                 int sy_ = py_ + (ay_ - py_) * t / (VINE_SEGS + 1);
+                vine_segs[i].set_position(sx_ - hw, sy_ - hh);
+                vine_segs[i].set_visible(true);
+            }
+        } else if(miss_vine_t > 0){
+            // Miss: shoot vine out and retract. Duration 10 frames; peaks at frame 5.
+            // reach in tiles: extend 0->RANGE over first half, retract RANGE->0 over second half.
+            // miss_vine_t counts down from 10 to 1; elapsed = 10 - miss_vine_t (0=just fired).
+            int elapsed = 10 - miss_vine_t;           // 0..9 as the timer runs from 10 down to 1
+            int half = 5;
+            // phase: 0..half-1 = extending, half..9 = retracting
+            int reach_tiles;
+            if(elapsed < half){
+                reach_tiles = (logic::GrappleState::RANGE * (elapsed + 1)) / half; // 0->RANGE
+            } else {
+                reach_tiles = (logic::GrappleState::RANGE * (10 - elapsed)) / half; // RANGE->0
+            }
+            if(reach_tiles < 1) reach_tiles = 1; // always at least one segment visible while active
+            int px_ = player.body.pos.x.to_int() + player.body.half_w.to_int();
+            int py_ = player.body.pos.y.to_int() + player.body.half_h.to_int();
+            int reach_px = reach_tiles * 8;
+            for(int i = 0; i < VINE_SEGS; ++i){
+                // Space VINE_SEGS dots evenly from player to reach point.
+                int t = i + 1;
+                int sx_ = px_ + (miss_vine_dir * reach_px * t) / (VINE_SEGS + 1);
+                int sy_ = py_;  // horizontal shot (stays at player centre height)
                 vine_segs[i].set_position(sx_ - hw, sy_ - hh);
                 vine_segs[i].set_visible(true);
             }
