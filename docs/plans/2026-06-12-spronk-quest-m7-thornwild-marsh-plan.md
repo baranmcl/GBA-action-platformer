@@ -61,12 +61,12 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started.
+**Overall:** 1/4 phases shipped (Phase 1 grapple logic done, 179/179 host tests green). Phase 2 next.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 1 — Pure logic (anchors, spell-cycle, grapple, pull-block) | ⬜ Not started | — | host-testable |
-| 2 — Level compiler (anchor + pullable symbols) | ⬜ Not started | — | host-testable (Python) |
+| 1 — Pure logic (anchors, spell-cycle, grapple, pull-block) | ✅ Shipped | `23c8bb8`/`c5b9925`, `a31c719`/`da9c46a`, `412d171`, `3f0aeaf`/`c57a413`, `bc2e073`/`7384735`, `ace02a4`/`a8e0117` | Tasks 1.1–1.6; each spec+quality reviewed; 179/179 |
+| 2 — Level compiler (anchor + pullable symbols) | 🚧 In progress | — | claimed 2026-06-12, branch `feat/m7-thornwild-marsh`; host-testable (Python) |
 | 3 — Engine/scene wiring (anchor art, vine VFX, R-branch, block-pull) | ⬜ Not started | — | needs ROM toolchain |
 | 4 — Content: Thornwild Marsh multi-room + hub Door 6 + manual QA | ⬜ Not started | — | needs ROM + emulator |
 
@@ -91,7 +91,7 @@ notes and commit messages.
 
 ## Phase 1 — Pure logic: anchors, spell-cycle, grapple state, pull-block
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED on 2026-06-12 (Tasks 1.1–1.6; each spec + code-quality reviewed; 179/179 host tests green). Final commit `a8e0117`.
 
 All pure C++17, host-tested. This is the testable crux of the milestone.
 
