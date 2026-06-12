@@ -5,13 +5,13 @@ inline constexpr unsigned char D6_ROOM0_TILES[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 inline constexpr logic::EntitySpawn D6_ROOM0_ENEMIES[] = { {0,0,0,0,0} };
 inline constexpr logic::GateSpawn D6_ROOM0_GATES[] = { {0,0,logic::GateType::Gap} };
 inline constexpr logic::DoorSpawn D6_ROOM0_DOORS[] = { {0,0,0} };
-inline constexpr logic::AbilityPickup D6_ROOM0_PICKUPS[] = { {10,19,logic::Ability::Fire} };
+inline constexpr logic::AbilityPickup D6_ROOM0_PICKUPS[] = { {10,18,logic::Ability::Fire} };
 inline constexpr logic::BlockSpawn D6_ROOM0_BLOCKS[] = { {0,0} };
 inline constexpr logic::PlateSpawn D6_ROOM0_PLATES[] = { {0,0,0,0} };
 inline constexpr logic::ButtonSpawn D6_ROOM0_BUTTONS[] = { {0,0,0,0} };
 inline constexpr logic::BrazierSpawn D6_ROOM0_BRAZIERS[] = { {0,0,0} };
 inline constexpr logic::BrazierGroupSpawn D6_ROOM0_BRAZIER_GROUPS[] = { {0,0,0,-1} };
-inline constexpr logic::EntranceSpawn D6_ROOM0_ENTRANCES[] = { {1,25,19,-1} };
-inline constexpr logic::RoomDoorSpawn D6_ROOM0_ROOM_DOORS[] = { {26,19,1,0} };
-inline constexpr logic::LevelData D6_ROOM0_DATA = { D6_ROOM0_TILES, 32, 22, 3, 19, false, 0, 0, false, 0, 0, D6_ROOM0_ENEMIES, 0, D6_ROOM0_GATES, 0, D6_ROOM0_DOORS, 0, D6_ROOM0_PICKUPS, 1, D6_ROOM0_BLOCKS, 0, D6_ROOM0_PLATES, 0, D6_ROOM0_BUTTONS, 0, D6_ROOM0_BRAZIERS, 0, D6_ROOM0_BRAZIER_GROUPS, 0, D6_ROOM0_ENTRANCES, 1, D6_ROOM0_ROOM_DOORS, 1 };
+inline constexpr logic::EntranceSpawn D6_ROOM0_ENTRANCES[] = { {1,25,18,-1} };
+inline constexpr logic::RoomDoorSpawn D6_ROOM0_ROOM_DOORS[] = { {26,18,1,0} };
+inline constexpr logic::LevelData D6_ROOM0_DATA = { D6_ROOM0_TILES, 32, 22, 3, 18, false, 0, 0, false, 0, 0, D6_ROOM0_ENEMIES, 0, D6_ROOM0_GATES, 0, D6_ROOM0_DOORS, 0, D6_ROOM0_PICKUPS, 1, D6_ROOM0_BLOCKS, 0, D6_ROOM0_PLATES, 0, D6_ROOM0_BUTTONS, 0, D6_ROOM0_BRAZIERS, 0, D6_ROOM0_BRAZIER_GROUPS, 0, D6_ROOM0_ENTRANCES, 1, D6_ROOM0_ROOM_DOORS, 1 };
 
