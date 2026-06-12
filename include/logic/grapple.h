@@ -48,10 +48,29 @@ struct GrappleState {
 
     // End the pull when the body's CENTRE TILE reaches the anchor tile (tile-level arrival — robust
     // even when a floor prevents exact vertical alignment), or when blocked (the body didn't move).
-    void post(const Body& body, bool moved){
+    // On arrival: snap the player standing on the first solid tile at/below the anchor column and
+    // zero velocity so no residual pull carries them past (e.g. into a lava pit).
+    // On wall-stop (!moved): zero velocity and end (kill residual; no position snap).
+    void post(Body& body, const Tilemap& map, bool moved){
         int ctx = Tilemap::px_to_tile(body.pos.x + body.half_w);
         int cty = Tilemap::px_to_tile(body.pos.y + body.half_h);
-        if((ctx == anchor_tx && cty == anchor_ty) || !moved) pulling = false;
+        if(ctx == anchor_tx && cty == anchor_ty){
+            // Arrived at anchor tile: snap onto the platform directly below.
+            int fy = anchor_ty;
+            for(; fy < map.h; ++fy){
+                if(map.is_solid(anchor_tx, fy)) break;
+            }
+            if(fy < map.h){
+                body.pos.x = Fixed::from_int(anchor_tx*8 + 4) - body.half_w;
+                body.pos.y = Fixed::from_int(fy*8) - body.half_h - body.half_h;
+            }
+            body.vel = Vec2{ Fixed::from_int(0), Fixed::from_int(0) };
+            pulling = false;
+        } else if(!moved){
+            // Blocked before arrival: kill residual velocity so no slide/fling.
+            body.vel = Vec2{ Fixed::from_int(0), Fixed::from_int(0) };
+            pulling = false;
+        }
     }
 private:
     static Fixed clamp_axis(Fixed d){

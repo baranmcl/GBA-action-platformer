@@ -69,7 +69,7 @@ void Player::update(const InputFrame& in, const Tilemap& map){
     move_and_collide(body, map);
     if(grapple.active()){
         bool moved = body.pos.x.raw != grapple_prev.x.raw || body.pos.y.raw != grapple_prev.y.raw;
-        grapple.post(body, moved);
+        grapple.post(body, map, moved);
     }
 
     // refresh the air-jump charge whenever grounded (only if Featherleap is owned)
