@@ -23,6 +23,7 @@ struct SpellCast {
 };
 
 // Selected-spell + availability. refresh() picks the first owned spell; cycle() rotates owned spells.
+// NOTE: SpellId::Grapple is a non-magic traversal tool sharing the L-cycle/R-fire UI; the scene branches on selected==Grapple rather than firing a projectile (SpellCast never sees it).
 struct SpellState {
     SpellId selected = SpellId::None;
     bool owns(const World& w, SpellId s) const {
@@ -40,7 +41,7 @@ struct SpellState {
     void cycle(const World& w){                      // rotate Fire->Ice->Grapple among owned spells
         if(!has_any(w)){ selected = SpellId::None; return; }
         SpellId order[3] = { SpellId::Fire, SpellId::Ice, SpellId::Grapple };
-        int start = (selected==SpellId::Ice) ? 1 : (selected==SpellId::Grapple) ? 2 : 0;
+        int start = (selected==SpellId::Ice) ? 1 : (selected==SpellId::Grapple) ? 2 : 0;  // None/unknown -> Fire slot (has_any guard above rejects None first)
         for(int i=1;i<=3;++i){ SpellId c = order[(start+i)%3]; if(owns(w,c)){ selected = c; return; } }
     }
 };
