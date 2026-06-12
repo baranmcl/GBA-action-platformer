@@ -17,8 +17,10 @@
 #include "bn_sprite_items_ice_proj.h"
 #include "bn_sprite_items_bolt.h"
 #include "bn_sprite_items_grapple_icon.h"
+#include "bn_sprite_items_heart_container.h"
 
 #include "logic/tilemap.h"
+#include "logic/world_state.h"   // max_health_for, collect/has heart container
 #include "logic/player.h"
 #include "logic/dungeon1.h"      // try_free_spronk
 #include "logic/enemy.h"
@@ -69,6 +71,7 @@ namespace
         return start_ty + 1;
     }
     struct ShrineInst { logic::AbilityPickup pk; logic::Body body; bn::optional<bn::sprite_ptr> sprite; };
+    struct HeartInst  { logic::HeartContainerSpawn hc; logic::Body body; bn::optional<bn::sprite_ptr> sprite; bool collected = false; };
     // src_tx/ty: plate or button tile to test; group: brazier group (Braziers kind)
     struct TriggerInst { logic::Trigger trig; int src_tx, src_ty, group; bool applied = false; };
 
@@ -223,6 +226,21 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         si.sprite->set_camera(cam);
         si.sprite->set_position(wx(p.tx * 8 + 8), wy(p.ty * 8 + 8));
         si.sprite->set_visible(!world.has(p.ability));   // already taken on a continued game
+    }
+
+    // ---- heart containers (permanent max-HP upgrade pickup) ----
+    // Spawn only if NOT already collected (persisted in latches bits [24..31]); a collected
+    // one stays hidden forever. Body matches the tile-sized shrine pickup; sprite grounded on
+    // the content row exactly like the shrine (centre at tile-centre + 8).
+    bn::vector<HeartInst, 4> hearts;
+    for(int i = 0; i < level.heart_container_count && i < 4; ++i){
+        const logic::HeartContainerSpawn& hc = level.heart_containers[i];
+        if(world.heart_container_collected(hc.id)) continue;  // already taken -> never show it
+        hearts.push_back(HeartInst{ hc, tile_body(hc.tx, hc.ty, 6, 8), {}, false });
+        HeartInst& hi = hearts.back();
+        hi.sprite = bn::sprite_items::heart_container.create_sprite(0, 0);
+        hi.sprite->set_camera(cam);
+        hi.sprite->set_position(wx(hc.tx * 8 + 8), wy(hc.ty * 8 + 8));
     }
 
     // ---- pushable blocks (solid collision cell + 8x8 sprite) ----
@@ -550,6 +568,19 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                 if(si2.sprite) si2.sprite->set_visible(false);
             }
         }
+        // ---- heart containers: collect on overlap -> grow max HP + refill to full, persist. ----
+        for(HeartInst& hi : hearts){
+            if(hi.collected) continue;
+            if(logic::aabb_overlap(player.body, hi.body)){
+                world.collect_heart_container(hi.hc.id);
+                health.max = logic::max_health_for(world);   // grow the cap (+25 per container)
+                health.cur = health.max;                     // and refill to full — the payoff moment
+                engine::write_world(world);                  // persist immediately (same path as latches)
+                hi.collected = true;
+                if(hi.sprite) hi.sprite->set_visible(false);
+            }
+        }
+
         refresh_spell_icon();   // reflect cycle (L) and shrine pickups in the HUD icon
 
         // ---- spronk rescue (marks the dungeon cleared; abilities now come from F pickups) ----
@@ -625,6 +656,10 @@ DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world
 {
     int cur_room = dungeon.start_room;
     int cur_entrance = 0;
+    // Sync the max-HP cap to the collected heart containers (PlayerState defaults to 100/100, but a
+    // continued game may have upgrades). Only raise the CAP here; the pickup itself refills to full.
+    ps.health.max = logic::max_health_for(world);
+    if(ps.health.cur > ps.health.max) ps.health.cur = ps.health.max;
     logic::SpellState spell; spell.refresh(world);  // selected spell persists across room transitions
     while(true){
         RoomOutcome out = play_room(*dungeon.rooms[cur_room], cur_entrance, world, ps, spell);

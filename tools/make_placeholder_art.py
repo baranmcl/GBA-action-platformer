@@ -308,6 +308,37 @@ def gen_hud():
         rect(im, 0, 0, 6, 6, idx)
         write(im, name, {"type": "sprite"})
 
+def gen_heart_container():
+    """Heart-container pickup 16x16 — a red heart on the transparent backdrop (palette idx 0).
+    Permanent max-HP upgrade. Red body (pal 13) with a rose-light highlight (pal 7) and a
+    near-black outline (pal 1), so it reads as a classic heart distinct from every gate/flame tile."""
+    im = new_img(16, 16)
+    # Classic heart silhouette: two top lobes (rows 3-5) + a downward V to the tip (row 12).
+    # Filled red body, drawn as a per-row span table (x0,x1 inclusive) over the 16x16 field.
+    spans = {
+        3:  [(3, 6), (9, 12)],     # two lobe tops
+        4:  [(2, 7), (8, 13)],
+        5:  [(2, 13)],             # lobes merge
+        6:  [(2, 13)],
+        7:  [(3, 12)],
+        8:  [(4, 11)],
+        9:  [(5, 10)],
+        10: [(6, 9)],
+        11: [(7, 8)],
+        12: [(7, 8)],              # tip
+    }
+    for y, segs in spans.items():
+        for x0, x1 in segs:
+            rect(im, x0, y, x1, y, 13)        # red body
+    # Rose-light highlight glint on the upper-left lobe.
+    rect(im, 3, 4, 4, 5, 7)
+    px(im, 4, 3, 7)
+    # Near-black outline along the bottom V edges (gives the heart depth).
+    px(im, 6, 11, 1); px(im, 9, 11, 1)
+    px(im, 6, 12, 1); px(im, 9, 12, 1)
+    px(im, 7, 13, 1); px(im, 8, 13, 1)
+    write(im, "heart_container", {"type": "sprite"})
+
 def gen_grapple_icon():
     """Grapple HUD icon 8x8 — a green hook glyph, clearly distinct from the cyan Ice orb.
     Uses bright green (pal 4) + dark green (pal 5) + near-black outline (pal 1).
@@ -339,4 +370,5 @@ if __name__ == "__main__":
     gen_hud()
     gen_ember_sprites()
     gen_grapple_icon()
+    gen_heart_container()
     print("placeholder sprites + bg tiles + hud + ember art generated.")

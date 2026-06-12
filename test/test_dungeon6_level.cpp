@@ -347,6 +347,46 @@ TEST(d6_pull_block_onto_plate_solvable){
     CHECK_EQ(gt.tx, blk.tx + 1);
 }
 
+TEST(d6_room1_has_heart_container){
+    // Part B reward: Room 1 has EXACTLY one heart container, on the floor content row (ty==18) with
+    // a solid floor below, sealed in the pocket BEHIND the brazier shortcut wall (col >= the brazier
+    // group's target column, i.e. inside the area the brazier opens). It must NOT be reachable before
+    // lighting the brazier: the 2-wide shortcut wall (the brazier target column + the next) seals it.
+    const LevelData& L = DUNGEON6_ROOM1_DATA;
+    CHECK_EQ(L.heart_container_count, 1);
+    const HeartContainerSpawn& hc = L.heart_containers[0];
+    CHECK_EQ(hc.ty, 18);                          // floor content row
+    CHECK(d6_solid(L, hc.tx, hc.ty + 2));         // solid floor two below (grounds the 16px sprite)
+    CHECK(!d6_solid(L, hc.tx, hc.ty));            // the container's own tile is open (stands on it)
+    // The container is in the pocket to the RIGHT of the brazier shortcut wall the brazier opens.
+    CHECK_EQ(L.brazier_group_count, 1);
+    int wall_tx = L.brazier_groups[0].target_tx;  // open_column opens columns wall_tx and wall_tx+1
+    CHECK(hc.tx > wall_tx + 1);                    // container sits beyond the 2-wide opened wall
+    // Pocket SEALED until lit: the full-height shortcut wall (both opened columns) is solid on the
+    // content row, so the player cannot cross into the pocket before the brazier opens it.
+    CHECK(d6_solid(L, wall_tx,     18));
+    CHECK(d6_solid(L, wall_tx + 1, 18));
+}
+
+TEST(d6_room1_block_cannot_fall_off){
+    // Soft-lock fix (III): the pull-block's reachable horizontal range sits entirely on a CONTINUOUS
+    // solid sub-floor (row 19), so the block can never drop a vertical level (which would strand it
+    // off the plate, unrecoverable). The block starts at blk.tx and is pulled LEFT toward the player;
+    // a solid stopper wall one tile left of the plate caps the range so it can't be pulled off the
+    // sub-floor's left edge. Reachable columns = [plate.tx, block.tx]; assert solid directly below
+    // every one of them, AND a solid stopper at plate.tx-1 (block.row) so it can't go further left.
+    const LevelData& L = DUNGEON6_ROOM1_DATA;
+    const BlockSpawn& blk = L.blocks[0];
+    const PlateSpawn& pl  = L.plates[0];
+    int lo = pl.tx, hi = blk.tx;                  // pull range: plate (left) .. block start (right)
+    CHECK(lo <= hi);
+    for(int x = lo; x <= hi; ++x)
+        CHECK(d6_solid(L, x, blk.ty + 1));        // continuous solid sub-floor under the whole range
+    // Stopper wall: the tile one column LEFT of the plate, on the block's row, is solid -> the block
+    // cannot be over-pulled off the sub-floor's left edge.
+    CHECK(d6_solid(L, pl.tx - 1, blk.ty));
+}
+
 // ----------------------------------------------------------------------------
 // R8: the D6 player carries the FULL kit (Featherleap double-jump, Glide, Dash, Fire, Ice).
 // Puzzles must resist ALL of them, not just Dash. These two invariants encode the geometry that

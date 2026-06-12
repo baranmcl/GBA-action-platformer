@@ -5,4 +5,5 @@
   "gates":[{"type":"gap"}],
   "plates":[{"target":[16,18]}],
   "braziers":[{"group":0}],
-  "brazier_groups":[{"total":1,"target":[27,18],"latch_id":0}] }
+  "brazier_groups":[{"total":1,"target":[27,18],"latch_id":0}],
+  "heart_containers":[{"id":0}] }

@@ -10,6 +10,7 @@
 #include "logic/player.h"
 #include "logic/gates.h"
 #include "logic/collision.h"   // aabb_overlap
+#include "logic/world_state.h" // max_health_for (heart-container max-HP sync)
 #include "engine/input.h"
 #include "engine/level_loader.h"
 #include "engine/level_view.h"  // set_level_tile
@@ -36,6 +37,11 @@ namespace {
 HubResult run_hub(logic::World& world, logic::PlayerState& ps)
 {
     bn::bg_palettes::set_transparent_color(bn::color(8, 8, 24));
+
+    // Keep the HUD's max-HP correct in the hub too: reflect any collected heart containers
+    // (PlayerState defaults to 100/100). Only raise the CAP here; pickups refill to full.
+    ps.health.max = logic::max_health_for(world);
+    if(ps.health.cur > ps.health.max) ps.health.cur = ps.health.max;
 
     engine::LoadedLevel lvl = engine::load_level(HUB_DATA);
 
