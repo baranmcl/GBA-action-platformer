@@ -71,6 +71,14 @@ TEST(grapple_pull_velocity_points_at_anchor){
     Vec2 v = g.pull_velocity(b);
     CHECK(v.x.raw > 0);                       // pulling right (anchor is right of player)
     CHECK(v.x <= GrappleState::GRAPPLE_VX);   // per-axis magnitude clamped to GRAPPLE_VX
+    CHECK(v.y.raw < 0);                       // anchor is above the player -> pulled up
+}
+TEST(grapple_continues_mid_pull){
+    Tilemap m = make_map(); GrappleState g;
+    Body b = body_at_tile(5,4);          // centre tile (6,6); anchor (8,4) — not yet reached
+    g.latch(true, b, 1, m, true);
+    g.post(b, /*moved*/true);            // moved, but centre tile != anchor tile
+    CHECK(g.active());                   // still pulling (did not terminate early)
 }
 TEST(grapple_ends_on_arrival){
     Tilemap m = make_map(); GrappleState g;

@@ -26,7 +26,7 @@ struct GrappleState {
     static constexpr int RANGE = 6;                          // tiles (feel-tunable)
     static constexpr Fixed GRAPPLE_VX = Fixed::from_int(5);  // ~5 px/frame per-axis pull (feel-tunable)
     bool pulling = false;
-    int ax = 0, ay = 0;                                      // latched anchor tile
+    int anchor_tx = 0, anchor_ty = 0;                        // latched anchor tile
 
     bool active() const { return pulling; }
 
@@ -35,14 +35,14 @@ struct GrappleState {
         if(!fire || pulling || !has_grapple) return false;
         int ptx = Tilemap::px_to_tile(body.pos.x + body.half_w);   // scan from the body CENTRE tile
         int pty = Tilemap::px_to_tile(body.pos.y + body.half_h);
-        if(!nearest_grapple_anchor(map, ptx, pty, facing, RANGE, ax, ay)) return false;
+        if(!nearest_grapple_anchor(map, ptx, pty, facing, RANGE, anchor_tx, anchor_ty)) return false;
         pulling = true; return true;
     }
 
     // Velocity toward the anchor tile centre, per-axis clamped to ±GRAPPLE_VX (converges near it).
     Vec2 pull_velocity(const Body& body) const {
         Fixed cx = body.pos.x + body.half_w, cy = body.pos.y + body.half_h;
-        Fixed tx = Fixed::from_int(ax*8 + 4), ty = Fixed::from_int(ay*8 + 4);
+        Fixed tx = Fixed::from_int(anchor_tx*8 + 4), ty = Fixed::from_int(anchor_ty*8 + 4);
         return { clamp_axis(tx - cx), clamp_axis(ty - cy) };
     }
 
@@ -51,7 +51,7 @@ struct GrappleState {
     void post(const Body& body, bool moved){
         int ctx = Tilemap::px_to_tile(body.pos.x + body.half_w);
         int cty = Tilemap::px_to_tile(body.pos.y + body.half_h);
-        if((ctx == ax && cty == ay) || !moved) pulling = false;
+        if((ctx == anchor_tx && cty == anchor_ty) || !moved) pulling = false;
     }
 private:
     static Fixed clamp_axis(Fixed d){
