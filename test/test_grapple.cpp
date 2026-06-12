@@ -95,3 +95,32 @@ TEST(grapple_ends_when_blocked){
     g.post(b, /*moved*/false);   // collision stopped the body before arrival
     CHECK(!g.active());
 }
+
+#include "logic/player.h"
+
+TEST(player_update_pulls_toward_anchor){
+    // 14x12 map: solid border + a floor at row 9; one anchor to the right at the player's height.
+    uint8_t cells[14*12];
+    for(int i=0;i<14*12;++i) cells[i]=(uint8_t)TileKind::Empty;
+    for(int x=0;x<14;++x){ cells[0*14+x]=(uint8_t)TileKind::Solid; cells[11*14+x]=(uint8_t)TileKind::Solid; }
+    for(int y=0;y<12;++y){ cells[y*14+0]=(uint8_t)TileKind::Solid; cells[y*14+13]=(uint8_t)TileKind::Solid; }
+    for(int x=0;x<14;++x) cells[9*14+x]=(uint8_t)TileKind::Solid;          // floor row 9
+    cells[7*14 + 9] = (uint8_t)TileKind::GrapplePoint;                     // anchor (9,7), right of player
+    Tilemap m{ 14, 12, cells };
+
+    Player p;
+    p.body.half_w = Fixed::from_int(8); p.body.half_h = Fixed::from_int(16);
+    p.body.pos = { Fixed::from_int(3*8), Fixed::from_int(5*8) };           // drop onto the floor
+    p.facing = 1; p.abilities.grapple = true;
+
+    InputFrame idle{};
+    for(int i=0;i<20;++i) p.update(idle, m);                              // settle on the floor
+    Fixed x0 = p.body.pos.x;
+    InputFrame fire{}; fire.grapple_fire = true;
+    p.update(fire, m);                                                    // latch + first pull step
+    CHECK(p.body.pos.x > x0);                                             // moved right toward (9,7)
+    InputFrame hold{};
+    for(int i=0;i<40 && p.grapple.active(); ++i) p.update(hold, m);       // run pull to completion
+    CHECK(!p.grapple.active());                                           // ended (centre tile reached anchor, or wall)
+    CHECK(p.body.pos.x > x0);
+}
