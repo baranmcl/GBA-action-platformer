@@ -90,6 +90,61 @@ TEST(d6_every_anchor_has_solid_below){
     }
 }
 
+TEST(d6_floor_content_on_row_18){
+    // Grounding guard (the R4 regression): floor-bound content — spawn, enemy, shrine, pullable
+    // block — must sit on the CONTENT row (18) so a 16px sprite's bottom rests on the row-20 floor.
+    // Row 19 sinks it; row 20 collides with the floor. (Ledge content like braziers/doors/cage/exit
+    // legitimately lives on the higher ledge content row 12, grounded on the row-13 ledge surface;
+    // those are covered by d6_no_content_on_gap_or_floor_row + d6_content_is_grounded below.)
+    constexpr int ROW = 18;
+    for(int r = 0; r < D6_N; ++r){
+        const LevelData& L = *D6_ROOMS[r];
+        CHECK_EQ(L.spawn_ty, ROW);
+        for(int i = 0; i < L.enemy_count; ++i)   CHECK_EQ((int)L.enemies[i].ty, ROW);
+        for(int i = 0; i < L.pickup_count; ++i)  CHECK_EQ((int)L.pickups[i].ty, ROW);
+        for(int i = 0; i < L.block_count; ++i)   CHECK_EQ((int)L.blocks[i].ty, ROW);
+    }
+}
+
+TEST(d6_floor_content_is_grounded){
+    // The shrine (regression #1) is positioned at a FIXED tile offset and its 16px body's feet land
+    // at row ty+2 (no floor auto-scan) — so a shrine on row 19 has its feet at row 21 (the border)
+    // and renders BELOW the floor. Assert each floor-bound content entity (spawn, enemy, shrine,
+    // block) has a SOLID floor exactly two tiles below (row 18 -> solid row 20). This is the precise
+    // grounding invariant R4 broke. (Braziers/doors/cage/exit auto-snap to floor_row_below() or are
+    // static overlap targets, so they ground from the ledge surface regardless of content row.)
+    auto grounded = [](const LevelData& L, int tx, int ty){
+        return ty + 2 < L.h && (int)L.tiles[(ty + 2) * L.w + tx] == (int)TileKind::Solid;
+    };
+    for(int r = 0; r < D6_N; ++r){
+        const LevelData& L = *D6_ROOMS[r];
+        CHECK(grounded(L, L.spawn_tx, L.spawn_ty));
+        for(int i = 0; i < L.enemy_count; ++i)  CHECK(grounded(L, L.enemies[i].tx, L.enemies[i].ty));
+        for(int i = 0; i < L.pickup_count; ++i) CHECK(grounded(L, L.pickups[i].tx, L.pickups[i].ty));
+        for(int i = 0; i < L.block_count; ++i)  CHECK(grounded(L, L.blocks[i].tx,  L.blocks[i].ty));
+    }
+}
+
+TEST(d6_no_content_on_gap_or_floor_row){
+    // Stronger anti-regression: NO content entity may be authored on the gap row (19) or the floor
+    // row (20) in any room — those rows sink/clip the sprite. This catches the lava-on-content and
+    // shrine-on-row-19 regressions for ALL entity kinds including ledge content.
+    for(int r = 0; r < D6_N; ++r){
+        const LevelData& L = *D6_ROOMS[r];
+        auto bad = [](int ty){ return ty == 19 || ty == 20; };
+        CHECK(!bad(L.spawn_ty));
+        if(L.has_cage) CHECK(!bad(L.cage_ty));
+        if(L.has_exit) CHECK(!bad(L.exit_ty));
+        for(int i = 0; i < L.enemy_count; ++i)     CHECK(!bad((int)L.enemies[i].ty));
+        for(int i = 0; i < L.pickup_count; ++i)    CHECK(!bad((int)L.pickups[i].ty));
+        for(int i = 0; i < L.block_count; ++i)     CHECK(!bad((int)L.blocks[i].ty));
+        for(int i = 0; i < L.brazier_count; ++i)   CHECK(!bad((int)L.braziers[i].ty));
+        for(int i = 0; i < L.door_count; ++i)      CHECK(!bad((int)L.doors[i].ty));
+        for(int i = 0; i < L.entrance_count; ++i)  CHECK(!bad((int)L.entrances[i].ty));
+        for(int i = 0; i < L.room_door_count; ++i) CHECK(!bad((int)L.room_doors[i].ty));
+    }
+}
+
 TEST(d6_has_pullable_block){
     // >=1 pullable block (the grapple pull-block puzzle).
     int pull = 0;
