@@ -33,3 +33,76 @@ TEST(v2_save_migrates_latches_zero){
     CHECK(w2.spronk_freed(1)); CHECK(w2.has(Ability::Fire));
     CHECK_EQ((int)w2.latches, 0);
 }
+
+// --- Heart container tests ---
+
+TEST(heart_container_collected_initially_false){
+    World w;
+    for(int id = 0; id < 8; ++id)
+        CHECK(!w.heart_container_collected(id));
+}
+
+TEST(heart_container_collect_sets_flag){
+    World w;
+    w.collect_heart_container(2);
+    CHECK(w.heart_container_collected(2));
+    CHECK(!w.heart_container_collected(0));
+    CHECK(!w.heart_container_collected(1));
+    CHECK(!w.heart_container_collected(3));
+}
+
+TEST(heart_container_count_increments){
+    World w;
+    CHECK_EQ(w.heart_container_count(), 0);
+    w.collect_heart_container(0);
+    CHECK_EQ(w.heart_container_count(), 1);
+    w.collect_heart_container(7);
+    CHECK_EQ(w.heart_container_count(), 2);
+}
+
+TEST(max_health_for_grows_by_25_per_container){
+    World w;
+    CHECK_EQ(max_health_for(w), 100);
+    w.collect_heart_container(0);
+    CHECK_EQ(max_health_for(w), 125);
+    w.collect_heart_container(1);
+    CHECK_EQ(max_health_for(w), 150);
+    w.collect_heart_container(2);
+    CHECK_EQ(max_health_for(w), 175);
+}
+
+TEST(heart_container_persists_save_load){
+    World w;
+    w.collect_heart_container(0);
+    w.collect_heart_container(5);
+    SaveData s = make_save(w);
+    CHECK_EQ((int)s.version, 3);
+    CHECK_EQ((int)sizeof(SaveData), 16);
+    World w2;
+    CHECK(load_save(s, w2) == true);
+    CHECK(w2.heart_container_collected(0));
+    CHECK(w2.heart_container_collected(5));
+    CHECK(!w2.heart_container_collected(1));
+    CHECK_EQ(w2.heart_container_count(), 2);
+    CHECK_EQ(max_health_for(w2), 150);
+}
+
+TEST(heart_container_no_collision_with_dungeon_latches){
+    World w;
+    // Setting a low dungeon latch (id 0..23) must not affect heart containers
+    for(int i = 0; i < 24; ++i) w.set_latch(i);
+    CHECK_EQ(w.heart_container_count(), 0);
+    for(int id = 0; id < 8; ++id)
+        CHECK(!w.heart_container_collected(id));
+
+    // Collecting heart container must not affect low latches
+    World w2;
+    w2.collect_heart_container(0);
+    for(int i = 0; i < 24; ++i)
+        CHECK(!w2.latched(i));
+}
+
+TEST(save_version_and_size_unchanged){
+    CHECK_EQ((int)SAVE_VERSION, 3);
+    CHECK_EQ((int)sizeof(SaveData), 16);
+}

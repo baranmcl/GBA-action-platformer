@@ -44,7 +44,7 @@ ABILITY_ENUM = {
     'featherleap': 'Featherleap', 'fire': 'Fire', 'ice': 'Ice', 'glide': 'Glide',
     'dash': 'Dash', 'grapple': 'Grapple', 'stone': 'Stone', 'light': 'Light',
 }
-CONTENT = set('@CEoG12345678VIWXFBPK=?*ND')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door
+CONTENT = set('@CEoG12345678VIWXFBPK=?*NDH')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door; 'H' heart container
 
 
 class LevelError(Exception):
@@ -76,6 +76,7 @@ def compile_level(txt_path, json_path):
     j_brazier_groups = meta.get('brazier_groups', [])
     j_entrances = meta.get('entrances', [])
     j_room_doors = meta.get('room_doors', [])
+    j_heart_containers = meta.get('heart_containers', [])
 
     tiles = []
     spawns, cages, exits = [], [], []
@@ -87,9 +88,10 @@ def compile_level(txt_path, json_path):
     plates = []         # (tx,ty,target_tx,target_ty)
     buttons = []        # (tx,ty,target_tx,target_ty)
     braziers = []       # (tx,ty,group)
-    entrances = []      # (id, tx, ty, facing)
-    room_doors = []     # (tx, ty, target_room, target_entrance)
-    e_idx = g_idx = f_idx = pl_idx = b_idx = br_idx = n_idx = rd_idx = 0
+    entrances = []       # (id, tx, ty, facing)
+    room_doors = []      # (tx, ty, target_room, target_entrance)
+    heart_containers = [] # (tx, ty, id)
+    e_idx = g_idx = f_idx = pl_idx = b_idx = br_idx = n_idx = rd_idx = hc_idx = 0
 
     for y, r in enumerate(rows):
         for x, c in enumerate(r):
@@ -168,6 +170,11 @@ def compile_level(txt_path, json_path):
                 t = j_room_doors[rd_idx]
                 room_doors.append((x, y, t['target_room'], t['target_entrance']))
                 rd_idx += 1
+            elif c == 'H':
+                je = j_heart_containers[hc_idx] if hc_idx < len(j_heart_containers) else {}
+                hid = je.get('id', hc_idx)  # default: scan-order index
+                heart_containers.append((x, y, hid))
+                hc_idx += 1
             elif c in '12345678':
                 doors.append((x, y, int(c)))
 
@@ -194,6 +201,7 @@ def compile_level(txt_path, json_path):
         'blocks': blocks, 'plates': plates, 'buttons': buttons,
         'braziers': braziers, 'brazier_groups': brazier_groups,
         'entrances': entrances, 'room_doors': room_doors,
+        'heart_containers': heart_containers,
     }
 
 
@@ -244,6 +252,9 @@ def emit_header(level, name):
     line, rdcount = emit_array('logic::RoomDoorSpawn', 'ROOM_DOORS',
                                [f'{{{tx},{ty},{tr},{te}}}' for (tx, ty, tr, te) in level['room_doors']],
                                '{0,0,0,0}'); L.append(line)
+    line, hccount = emit_array('logic::HeartContainerSpawn', 'HEART_CONTAINERS',
+                               [f'{{{tx},{ty},{hid}}}' for (tx, ty, hid) in level['heart_containers']],
+                               '{0,0,0}'); L.append(line)
 
     sx, sy = level['spawn']
     cx, cy = level['cage'] if level['cage'] else (0, 0)
@@ -257,7 +268,8 @@ def emit_header(level, name):
         f'{name}_PICKUPS, {pcount}, {name}_BLOCKS, {bcount}, {name}_PLATES, {plcount}, '
         f'{name}_BUTTONS, {btcount}, {name}_BRAZIERS, {brcount}, '
         f'{name}_BRAZIER_GROUPS, {bgcount}, '
-        f'{name}_ENTRANCES, {encount}, {name}_ROOM_DOORS, {rdcount} }};'
+        f'{name}_ENTRANCES, {encount}, {name}_ROOM_DOORS, {rdcount}, '
+        f'{name}_HEART_CONTAINERS, {hccount} }};'
     )
     L.append('')
     return '\n'.join(L)

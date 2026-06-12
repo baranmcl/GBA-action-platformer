@@ -18,7 +18,26 @@ struct World {
     void grant(Ability a){ abilities |= (uint16_t)(1u << (int)a); }
     bool latched(int i) const { return (latches >> i) & 1u; }
     void set_latch(int i){ latches |= (uint32_t)(1u << i); }
+
+    // Heart containers: bits [24..31] of latches reserved for permanent HP upgrades (id 0..7).
+    // Bits [0..23] are for dungeon shortcuts (brazier gates, etc.) and must never overlap.
+    static constexpr int HEART_CONTAINER_LATCH_BASE = 24;
+    bool heart_container_collected(int id) const { return latched(HEART_CONTAINER_LATCH_BASE + id); }
+    void collect_heart_container(int id){ set_latch(HEART_CONTAINER_LATCH_BASE + id); }
+    int heart_container_count() const {
+        int n = 0;
+        for(int id = 0; id < 8; ++id)
+            if(heart_container_collected(id)) ++n;
+        return n;
+    }
 };
+
+// Derived max-health formula — single source of truth shared by engine + tests.
+static constexpr int BASE_MAX_HEALTH    = 100;
+static constexpr int HEART_CONTAINER_BONUS = 25;
+inline int max_health_for(const World& w){
+    return BASE_MAX_HEALTH + HEART_CONTAINER_BONUS * w.heart_container_count();
+}
 
 // v3 SaveData layout (16 bytes, naturally aligned, no padding):
 //   [0..3]   magic           uint32_t  'SPRK'
