@@ -115,13 +115,14 @@ def gen_bolt():
     write(im, "bolt", {"type": "sprite"})
 
 def gen_tiles():
-    """Background tileset: 25 tiles of 8x8 in a horizontal strip. Index order:
+    """Background tileset: 26 tiles of 8x8 in a horizontal strip. Index order:
     0 blank, 1 ground, 2 one-way, 3 gate(closed wall), 4 cage, 5 door-open, 6 door-locked,
     7 vine, 8 ice-gate, 9 water-gate(waterfall, M4), 10 fire-wall-gate(M4), 11-12 reserved, 13 lava,
     14 brazier-unlit, 15 brazier-lit, 16 water(M4), 17 plate, 18 button, 19 ice-platform(M4),
-    20 updraft(M5), 21 wind-left(M5), 22 wind-right(M5), 23 cracked-wall(M6), 24 spikes(M6).
+    20 updraft(M5), 21 wind-left(M5), 22 wind-right(M5), 23 cracked-wall(M6), 24 spikes(M6),
+    25 grapple-anchor(M7).
     (block + shrine are SPRITES, not bg tiles.)"""
-    im = new_img(8 * 25, 8)
+    im = new_img(8 * 26, 8)
     # tile 0: blank -> all index 0 (transparent, shows backdrop). nothing to draw.
     # tile 1: ground (brown with grass top, dark bottom)
     ox = 8 * 1
@@ -238,6 +239,21 @@ def gen_tiles():
     for bx in (0, 3, 6):                     # three triangle spikes
         px(im, ox + bx + 1, 5, 12); rect(im, ox + bx + 1, 4, ox + bx + 1, 5, 12)
         px(im, ox + bx, 5, 13); px(im, ox + bx + 1, 1, 15)   # red flank + bright tip
+    # tile 25: grapple anchor (M7) — green ring with crosshair (distinct from any flame tile)
+    ox = 8 * 25
+    # outer ring (dark green outline), inner ring (bright green), crosshair (white)
+    for cx in range(1, 7):                   # top/bottom ring edges
+        px(im, ox + cx, 1, 5); px(im, ox + cx, 6, 5)
+    for cy in range(1, 7):                   # left/right ring edges
+        px(im, ox + 1, cy, 5); px(im, ox + 6, cy, 5)
+    for cx in range(2, 6):                   # inner fill (bright green)
+        for cy in range(2, 6):
+            px(im, ox + cx, cy, 4)
+    # crosshair in white through the centre
+    for cx in range(0, 8):
+        px(im, ox + cx, 3, 9); px(im, ox + cx, 4, 9)
+    for cy in range(0, 8):
+        px(im, ox + 3, cy, 9); px(im, ox + 4, cy, 9)
     write(im, "tiles", {"type": "regular_bg_tiles", "bpp_mode": "bpp_4"})
 
 def gen_ember_sprites():
