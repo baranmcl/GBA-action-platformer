@@ -346,3 +346,55 @@ TEST(d6_pull_block_onto_plate_solvable){
     // column -> solid -> the block cannot be pushed forward; only a pull resolves the puzzle.
     CHECK_EQ(gt.tx, blk.tx + 1);
 }
+
+// ----------------------------------------------------------------------------
+// R8: the D6 player carries the FULL kit (Featherleap double-jump, Glide, Dash, Fire, Ice).
+// Puzzles must resist ALL of them, not just Dash. These two invariants encode the geometry that
+// makes the Ice freeze and the pull-block UNSKIPPABLE by jumping/double-jumping/gliding/dashing.
+// ----------------------------------------------------------------------------
+
+TEST(d6_water_corridor_has_ceiling){
+    // Issue A: an OPEN water gap is glide/featherleap-crossable (~12-14 tiles of air reach), so
+    // widening it never helps. The fix is a TUNNEL: a solid ceiling caps the water span to a
+    // ~4-tall corridor (rows 16..19 open, floor=water on row 20), giving the player ~0 tiles of
+    // headroom -> they cannot get airborne to jump/featherleap/glide, so the ONLY way across is to
+    // freeze the water into an IcePlatform floor and walk. Assert, for EVERY water column on row 20:
+    //   * the player corridor (rows 16,17,18,19 = the 4 tiles a standing player occupies) is passable
+    //   * the tile directly above the player's head row (row 15, capping row 16) is SOLID
+    // i.e. <=1 tile of jump clearance across the whole span.
+    const LevelData& L = DUNGEON6_ROOM2_DATA;
+    constexpr int FLOOR = 20, HEAD = 16, CEIL = 15;
+    int capped = 0, water_cols = 0;
+    for(int x = 0; x < L.w; ++x){
+        if((int)L.tiles[FLOOR*L.w + x] != (int)TileKind::Water) continue;
+        ++water_cols;
+        // 4-tall corridor open (so the player fits AFTER freezing) ...
+        for(int y = HEAD; y < FLOOR; ++y) CHECK(!d6_solid(L, x, y));
+        // ... but capped immediately above the head row -> no room to jump/glide.
+        CHECK(d6_solid(L, x, CEIL));
+        if(d6_solid(L, x, CEIL)) ++capped;
+    }
+    CHECK(water_cols >= 6);
+    CHECK_EQ(capped, water_cols);   // the ENTIRE water span is ceilinged (no open arc-over column)
+}
+
+TEST(d6_room1_gate_is_full_barrier){
+    // Issue B: the Gap gate must be a FULL-HEIGHT barrier so the pull-block-onto-plate cannot be
+    // skipped by jumping/double-jumping/gliding/dashing over it. The engine's fill_column makes a
+    // closed gate solid rows 1..h-3 at runtime, but we ALSO author a static ceiling above the gate
+    // column so the barrier is verifiable in the level data: from row 1 down to the row above the
+    // 4-tall passage (row 15), the gate column is solid -> nothing to jump over.
+    const LevelData& L = DUNGEON6_ROOM1_DATA;
+    CHECK_EQ(L.gate_count, 1);
+    const GateSpawn& gt = L.gates[0];
+    // The gate is a 2-wide column (tx, tx+1). Both columns must be statically capped solid from the
+    // top border down to row 15 (the cap above the player's head when standing on the floor),
+    // leaving only the <=4-tall runtime-gated passage (rows 16..18) -> no jump/glide bypass.
+    for(int dx = 0; dx <= 1; ++dx)
+        for(int y = 1; y <= 15; ++y)
+            CHECK(d6_solid(L, gt.tx + dx, y));
+    // And the gate sits on the floor content row (its passage grounds on the row-19 platform / row-20
+    // floor), so opening it yields a real walkable opening rather than a floating gap.
+    CHECK_EQ(gt.ty, 18);
+    CHECK(d6_solid(L, gt.tx, 19));
+}
