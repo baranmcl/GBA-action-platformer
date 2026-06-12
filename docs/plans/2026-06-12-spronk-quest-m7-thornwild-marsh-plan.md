@@ -686,7 +686,7 @@ git commit -m "feat(game): grapple pulls a pullable block one tile toward the pl
 
 ## Phase 4 — Content: Thornwild Marsh multi-room + hub Door 6 + manual QA
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** 🚧 IN PROGRESS — Task 4.1 (3-room dungeon, `07485be`) + Task 4.2 (hub Door 6, `c768627`) SHIPPED + wiring-reviewed; 190/190 host tests; ROM builds clean. Task 4.3 (interactive emulator QA) handed to the user. QA reachability via a TEMP uncommitted `src/main.cpp` scaffold (grants carried kit + frees D1–D5 spronks so Door 6 is reachable + solvable); REVERT before the final commit.
 
 **BEFORE starting this phase:** read `docs/pitfalls/implementation-pitfalls.md`; re-read the room-to-room authoring (the d6 rooms in `tools/levels/`, `include/game/levels/dungeons.h`, and the **room/camera constraint**: every room ≥30×20, standard ~22-tall floor).
 
