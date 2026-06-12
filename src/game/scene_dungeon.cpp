@@ -56,7 +56,7 @@ namespace
 
     struct EnemyInst { logic::Enemy e; bn::optional<bn::sprite_ptr> sprite; };
     struct GateInst  { logic::GateSpawn spawn; logic::Body body; bool open = false; };
-    struct BlockInst { logic::PushableBlock blk; bn::optional<bn::sprite_ptr> sprite; };
+    struct BlockInst { logic::PushableBlock blk; bn::optional<bn::sprite_ptr> sprite; bool pullable = false; };
     struct BrazierInst { int tx, ty, group; logic::Body body; bool lit = false; int draw_ty = 0; };
 
     // First STANDABLE collision row at/below start_ty in this column (the floor the content rests on).
@@ -146,7 +146,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     // Vine VFX: 4 dot sprites (bolt reused as placeholder) drawn along player->anchor line.
     // Positioned in level-px space (same world->screen transform as other sprites).
     // Visible only while player.grapple.active().
-    static constexpr int VINE_SEGS = 4;
+    constexpr int VINE_SEGS = 4;
     bn::vector<bn::sprite_ptr, VINE_SEGS> vine_segs;
     for(int i = 0; i < VINE_SEGS; ++i){
         vine_segs.push_back(bn::sprite_items::bolt.create_sprite(0, 0));
@@ -230,7 +230,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     bn::vector<BlockInst, 8> blocks;
     for(int i = 0; i < level.block_count && i < 8; ++i){
         const logic::BlockSpawn& b = level.blocks[i];
-        blocks.push_back(BlockInst{ logic::PushableBlock{ b.tx, b.ty }, {} });
+        blocks.push_back(BlockInst{ logic::PushableBlock{ b.tx, b.ty }, {}, b.pullable });
         BlockInst& bi = blocks.back();
         engine::set_collision_tile(b.tx, b.ty, 1);       // block is solid; bg stays blank, sprite shows it
         bi.sprite = bn::sprite_items::block.create_sprite(0, 0);
@@ -295,6 +295,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     engine::set_fade(16);
     int fade_in_t = 16;
     int push_cd = 0;
+    int grapple_pull_cd = 0;
 
     while(true)
     {
@@ -314,8 +315,40 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         // Read spell intent + cycle FIRST so the selection is current for the grapple/cast branch:
         engine::SpellIntent si = engine::read_spell_intent();
         if(si.cycle) spell.cycle(world);
-        // R fires the SELECTED tool: Grapple -> the player's grapple pull (free); Fire/Ice -> cast.
-        in.grapple_fire = si.cast && spell.selected == logic::SpellId::Grapple;
+        // R fires the SELECTED tool: Grapple -> pull a nearby pullable block one tile toward the
+        // player (if one is in range/arc), else latch the player to an anchor; Fire/Ice -> cast.
+        bool want_grapple = si.cast && spell.selected == logic::SpellId::Grapple;
+        in.grapple_fire = false;
+        if(want_grapple){
+            // Find a pullable block within grapple range in the facing/up arc (same arc rule as
+            // nearest_grapple_anchor: exclude only if strictly BEHIND the facing direction).
+            BlockInst* target = nullptr;
+            int ptx = px2t(player.body.pos.x + player.body.half_w);   // player centre tile x
+            int pty = px2t(player.body.pos.y + player.body.half_h);   // player centre tile y
+            for(BlockInst& bi : blocks){
+                if(!bi.pullable) continue;
+                int dxt = bi.blk.tx - ptx, dyt = bi.blk.ty - pty;
+                int adx = dxt < 0 ? -dxt : dxt, ady = dyt < 0 ? -dyt : dyt;
+                if(adx > logic::GrappleState::RANGE || ady > logic::GrappleState::RANGE) continue;
+                int sx = (dxt > 0) - (dxt < 0);           // horizontal sign relative to player
+                if(sx == -player.facing && dxt != 0) continue;  // exclude strictly-behind blocks
+                target = &bi; break;                       // first in-range pullable block wins
+            }
+            if(target && grapple_pull_cd == 0){
+                // Pull direction: toward the player — if player centre is left of block centre, pull left.
+                int pcx = player.body.pos.x.to_int() + player.body.half_w.to_int();
+                int bcx = target->blk.tx * 8 + 4;         // block centre x (px)
+                int pull_dir = (pcx < bcx) ? -1 : 1;
+                int oldx = target->blk.tx;
+                if(target->blk.pull(pull_dir, lvl.map)){
+                    engine::set_collision_tile(oldx, target->blk.ty, 0);
+                    engine::set_collision_tile(target->blk.tx, target->blk.ty, 1);
+                    grapple_pull_cd = 8;
+                }
+            } else if(!target){
+                in.grapple_fire = true;                    // no pullable block -> player anchor-grapple
+            }
+        }
         bool cast_spell = si.cast && (spell.selected == logic::SpellId::Fire ||
                                       spell.selected == logic::SpellId::Ice);
         player.update(in, lvl.map);
@@ -398,6 +431,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
 
         // ---- pushable blocks: push detection, gravity, sprite ----
         if(push_cd > 0) --push_cd;
+        if(grapple_pull_cd > 0) --grapple_pull_cd;
         for(BlockInst& bi : blocks){
             // push when grounded, holding a dir, and the tile in front of the player == this block
             if(push_cd == 0 && player.body.on_ground && (in.left || in.right)){
