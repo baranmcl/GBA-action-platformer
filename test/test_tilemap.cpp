@@ -34,8 +34,8 @@ TEST(spikes_kind){
   uint8_t c[]={0,(uint8_t)TileKind::Spikes}; Tilemap m{2,1,c};
   CHECK(m.is_spikes(1,0)); CHECK(!m.is_solid(1,0)); CHECK(!m.is_spikes(0,0)); }  // damaging but non-solid
 TEST(grapple_point_tile_nonsolid){
-    uint8_t cells[] = { (uint8_t)TileKind::GrapplePoint };
-    Tilemap m{ 1, 1, cells };
+    uint8_t gc[] = { (uint8_t)TileKind::GrapplePoint };
+    Tilemap m{ 1, 1, gc };
     CHECK(m.at(0,0) == TileKind::GrapplePoint);
     CHECK(m.is_grapple_point(0,0));
     CHECK(!m.is_solid(0,0));     // anchors are non-solid (you pass through / latch to them)
