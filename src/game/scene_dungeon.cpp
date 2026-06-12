@@ -143,6 +143,18 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     engine::SpellPool spells(lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::Hud hud;
 
+    // Vine VFX: 4 dot sprites (bolt reused as placeholder) drawn along player->anchor line.
+    // Positioned in level-px space (same world->screen transform as other sprites).
+    // Visible only while player.grapple.active().
+    static constexpr int VINE_SEGS = 4;
+    bn::vector<bn::sprite_ptr, VINE_SEGS> vine_segs;
+    for(int i = 0; i < VINE_SEGS; ++i){
+        vine_segs.push_back(bn::sprite_items::bolt.create_sprite(0, 0));
+        vine_segs.back().set_camera(cam);
+        vine_segs.back().set_visible(false);
+        vine_segs.back().set_scale(0.5);
+    }
+
     // Spell HUD icon — screen-fixed top-RIGHT, clear of the top-left bars. Shows the SELECTED
     // spell's art (fire/ice); swap the image only when the selection changes (set_item, no recreate).
     bn::sprite_ptr spell_icon = bn::sprite_items::fire_proj.create_sprite(104, -68);
@@ -298,6 +310,14 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         player.abilities.featherleap = world.has(logic::Ability::Featherleap);
         player.abilities.glide       = world.has(logic::Ability::Glide);
         player.abilities.dash        = world.has(logic::Ability::Dash);
+        player.abilities.grapple     = world.has(logic::Ability::Grapple);
+        // Read spell intent + cycle FIRST so the selection is current for the grapple/cast branch:
+        engine::SpellIntent si = engine::read_spell_intent();
+        if(si.cycle) spell.cycle(world);
+        // R fires the SELECTED tool: Grapple -> the player's grapple pull (free); Fire/Ice -> cast.
+        in.grapple_fire = si.cast && spell.selected == logic::SpellId::Grapple;
+        bool cast_spell = si.cast && (spell.selected == logic::SpellId::Fire ||
+                                      spell.selected == logic::SpellId::Ice);
         player.update(in, lvl.map);
         avatar.sync(player);
 
@@ -305,9 +325,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                                player.body.pos.y + player.body.half_h };
         bolts.update(in.fire_pressed, muzzle, player.facing, lvl.map);
 
-        engine::SpellIntent si = engine::read_spell_intent();
-        if(si.cycle) spell.cycle(world);
-        spells.update_and_cast(si.cast, spell, magic, muzzle, player.facing, lvl.map);
+        spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);
 
         // ---- spell resolution (ORDER: gates -> braziers -> enemies -> freeze/melt -> despawn-on-solid) ----
         for(GateInst& gi : gates){
@@ -479,6 +497,23 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         // standing on the platform, which matters for the gated vertical climb (no head-bump cheese).
         if(level.has_exit && spronk_ok && player.body.on_ground && logic::aabb_overlap(player.body, exit)){
             return RoomOutcome{ RoomOutcome::ExitDungeon };
+        }
+
+        // ---- vine VFX: draw dot segments along player->anchor while grapple active ----
+        if(player.grapple.active()){
+            int px_ = player.body.pos.x.to_int() + player.body.half_w.to_int();
+            int py_ = player.body.pos.y.to_int() + player.body.half_h.to_int();
+            int ax_ = player.grapple.anchor_tx * 8 + 4;
+            int ay_ = player.grapple.anchor_ty * 8 + 4;
+            for(int i = 0; i < VINE_SEGS; ++i){
+                int t = i + 1;  // t in 1..VINE_SEGS (skip the player pos itself)
+                int sx_ = px_ + (ax_ - px_) * t / (VINE_SEGS + 1);
+                int sy_ = py_ + (ay_ - py_) * t / (VINE_SEGS + 1);
+                vine_segs[i].set_position(sx_ - hw, sy_ - hh);
+                vine_segs[i].set_visible(true);
+            }
+        } else {
+            for(int i = 0; i < VINE_SEGS; ++i) vine_segs[i].set_visible(false);
         }
 
         hud.update(health, magic);
