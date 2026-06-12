@@ -9,14 +9,15 @@ TEST(hub_border_solid){
     for(int y=0;y<L.h;++y){ CHECK_EQ(tile(L,0,y),1); CHECK_EQ(tile(L,L.w-1,y),1); }
 }
 TEST(hub_has_doors){
-    CHECK_EQ(HUB_DATA.door_count, 5);             // M6: door 5 added (D1-D5 built)
-    // door 1 must exist (always enterable); door 5 (D5) must exist after M6
-    bool has_d1 = false, has_d5 = false;
+    CHECK_EQ(HUB_DATA.door_count, 6);             // M7: door 6 added (D1-D6 built)
+    // door 1 must exist (always enterable); door 5 (D5) and door 6 (D6) must exist after M7
+    bool has_d1 = false, has_d5 = false, has_d6 = false;
     for(int i=0;i<HUB_DATA.door_count;++i){
         if(HUB_DATA.doors[i].dungeon == 1) has_d1 = true;
         if(HUB_DATA.doors[i].dungeon == 5) has_d5 = true;
+        if(HUB_DATA.doors[i].dungeon == 6) has_d6 = true;
     }
-    CHECK(has_d1); CHECK(has_d5);
+    CHECK(has_d1); CHECK(has_d5); CHECK(has_d6);
 }
 TEST(hub_gap_gate_wall){
     CHECK_EQ(HUB_DATA.gate_count, 15);            // full-height gap-gate wall
