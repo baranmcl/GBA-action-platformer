@@ -11,8 +11,8 @@ TEST(block_blocked_by_edge){ PushableBlock b{0,1}; CHECK(b.push(-1, mk())==false
 TEST(block_falls_into_gap){ PushableBlock b{1,0}; b.apply_gravity_step(mk()); CHECK_EQ(b.ty,1); // falls to row1 (row2 solid stops it)
   b.apply_gravity_step(mk()); CHECK_EQ(b.ty,1); }
 TEST(block_pull_slides_one_tile_toward_dir){
-    uint8_t cells[5*3]; for(int i=0;i<15;++i) cells[i]=(uint8_t)logic::TileKind::Empty;
-    logic::Tilemap m{ 5,3, cells };
+    uint8_t pull_cells[5*3]; for(int i=0;i<15;++i) pull_cells[i]=(uint8_t)logic::TileKind::Empty;
+    logic::Tilemap m{ 5,3, pull_cells };
     logic::PushableBlock blk{ 3, 1 };
     CHECK(blk.pull(-1, m));     // pull left toward the player
     CHECK_EQ(blk.tx, 2);
@@ -20,9 +20,9 @@ TEST(block_pull_slides_one_tile_toward_dir){
     CHECK_EQ(blk.tx, 1);
 }
 TEST(block_pull_blocked_by_wall){
-    uint8_t cells[3*3]; for(int i=0;i<9;++i) cells[i]=(uint8_t)logic::TileKind::Empty;
-    cells[1*3 + 0] = (uint8_t)logic::TileKind::Solid;   // wall at (0,1)
-    logic::Tilemap m{ 3,3, cells };
+    uint8_t wall_cells[3*3]; for(int i=0;i<9;++i) wall_cells[i]=(uint8_t)logic::TileKind::Empty;
+    wall_cells[1*3 + 0] = (uint8_t)logic::TileKind::Solid;   // wall at (0,1)
+    logic::Tilemap m{ 3,3, wall_cells };
     logic::PushableBlock blk{ 1, 1 };
     CHECK(!blk.pull(-1, m));    // wall to the left -> no move
     CHECK_EQ(blk.tx, 1);
