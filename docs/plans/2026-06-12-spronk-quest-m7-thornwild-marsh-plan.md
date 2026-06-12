@@ -61,13 +61,13 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** 1/4 phases shipped (Phase 1 grapple logic done, 179/179 host tests green). Phase 2 next.
+**Overall:** 2/4 phases shipped (grapple logic + compiler symbols done; 179/179 host + 33 Python tests green). Phase 3 next.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 1 — Pure logic (anchors, spell-cycle, grapple, pull-block) | ✅ Shipped | `23c8bb8`/`c5b9925`, `a31c719`/`da9c46a`, `412d171`, `3f0aeaf`/`c57a413`, `bc2e073`/`7384735`, `ace02a4`/`a8e0117` | Tasks 1.1–1.6; each spec+quality reviewed; 179/179 |
-| 2 — Level compiler (anchor + pullable symbols) | 🚧 In progress | — | claimed 2026-06-12, branch `feat/m7-thornwild-marsh`; host-testable (Python) |
-| 3 — Engine/scene wiring (anchor art, vine VFX, R-branch, block-pull) | ⬜ Not started | — | needs ROM toolchain |
+| 1 — Pure logic (anchors, spell-cycle, grapple, pull-block) | ✅ Shipped | `…a8e0117` (Tasks 1.1–1.6) | each spec+quality reviewed; 179/179 |
+| 2 — Level compiler (anchor + pullable symbols) | ✅ Shipped | `3853e9d`, `34f23fb` | spec+quality reviewed; 33 Python tests |
+| 3 — Engine/scene wiring (anchor art, vine VFX, R-branch, block-pull) | 🚧 In progress | — | claimed 2026-06-12, branch `feat/m7-thornwild-marsh`; needs ROM toolchain |
 | 4 — Content: Thornwild Marsh multi-room + hub Door 6 + manual QA | ⬜ Not started | — | needs ROM + emulator |
 
 ### Deviations
@@ -538,7 +538,7 @@ git commit -m "feat(logic): PushableBlock::pull + BlockSpawn.pullable flag"
 
 ## Phase 2 — Level compiler: anchor + pullable-block symbols
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `3853e9d`, `34f23fb` on 2026-06-12 (spec + code-quality reviewed; 33 Python compiler tests + 179/179 host tests green)
 
 **BEFORE starting this phase:** invoke `superpowers:test-driven-development`; read `docs/pitfalls/implementation-pitfalls.md`. Compiler tests run via `cd tools && python -m unittest test_build_level.py` (or the whole `bash tools/host_test.sh`).
 
