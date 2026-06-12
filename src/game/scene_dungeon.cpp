@@ -56,7 +56,15 @@ namespace
     struct EnemyInst { logic::Enemy e; bn::optional<bn::sprite_ptr> sprite; };
     struct GateInst  { logic::GateSpawn spawn; logic::Body body; bool open = false; };
     struct BlockInst { logic::PushableBlock blk; bn::optional<bn::sprite_ptr> sprite; };
-    struct BrazierInst { int tx, ty, group; logic::Body body; bool lit = false; };
+    struct BrazierInst { int tx, ty, group; logic::Body body; bool lit = false; int draw_ty = 0; };
+
+    // First solid collision row at/below start_ty in this column (the floor the content rests on).
+    // Falls back to start_ty+1 if none found within the map.
+    int floor_row_below(const logic::Tilemap& map, int tx, int start_ty){
+        for(int y = start_ty + 1; y < map.h; ++y)
+            if(map.is_solid(tx, y)) return y;
+        return start_ty + 1;
+    }
     struct ShrineInst { logic::AbilityPickup pk; logic::Body body; bn::optional<bn::sprite_ptr> sprite; };
     // src_tx/ty: plate or button tile to test; group: brazier group (Braziers kind)
     struct TriggerInst { logic::Trigger trig; int src_tx, src_ty, group; bool applied = false; };
@@ -214,17 +222,22 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         bi.sprite->set_camera(cam);
     }
 
-    // ---- room-doors (bg tile 5 open-door; 2-tall arch: floor tile + air tile above) ----
+    // ---- room-doors (bg tile 5 open-door; 2-wide x 4-tall archway grounded on the floor,
+    //      matching the hub's archway). Floor-scanned so a row-18-authored door reaches the
+    //      floor (row 20) instead of floating. Collision unchanged (door stays walkable). ----
     for(int i = 0; i < level.room_door_count && i < 8; ++i){
         const logic::RoomDoorSpawn& rd = level.room_doors[i];
-        engine::set_level_tile(lvl.view, rd.tx, rd.ty,     5);
-        engine::set_level_tile(lvl.view, rd.tx, rd.ty - 1, 5);
+        int fr = floor_row_below(lvl.map, rd.tx, rd.ty);
+        for(int dy = 0; dy < 4; ++dy) for(int dx = 0; dx < 2; ++dx)
+            engine::set_level_tile(lvl.view, rd.tx + dx, fr - 1 - dy, 5);
     }
     // ---- exit marker (bg tile 6 door-locked = distinct closed door = dungeon goal;
-    //      room-doors use tile 5 open-door so the player can tell them apart) ----
+    //      same 2-wide x 4-tall grounded archway. room-doors use tile 5 so they're distinct.
+    //      Exit collision body untouched. ----
     if(level.has_exit){
-        engine::set_level_tile(lvl.view, level.exit_tx, level.exit_ty,     6);
-        engine::set_level_tile(lvl.view, level.exit_tx, level.exit_ty - 1, 6);
+        int fr = floor_row_below(lvl.map, level.exit_tx, level.exit_ty);
+        for(int dy = 0; dy < 4; ++dy) for(int dx = 0; dx < 2; ++dx)
+            engine::set_level_tile(lvl.view, level.exit_tx + dx, fr - 1 - dy, 6);
     }
 
     // ---- braziers (bg tile 14 unlit; Body for fire-hit) ----
@@ -232,9 +245,10 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     for(int i = 0; i < level.brazier_count && i < 16; ++i){
         const logic::BrazierSpawn& b = level.braziers[i];
         // Tall hit-body (rows 14..19) so a horizontal Fire shot at the player's chest height
-        // still hits a brazier sitting on the floor.
-        braziers.push_back(BrazierInst{ b.tx, b.ty, b.group, tile_body(b.tx, 14, 6, 24), false });
-        engine::set_level_tile(lvl.view, b.tx, b.ty, 14);
+        // still hits a brazier sitting on the floor. Visual grounded on the floor (fr-1).
+        int draw_ty = floor_row_below(lvl.map, b.tx, b.ty) - 1;
+        braziers.push_back(BrazierInst{ b.tx, b.ty, b.group, tile_body(b.tx, 14, 6, 24), false, draw_ty });
+        engine::set_level_tile(lvl.view, b.tx, draw_ty, 14);
     }
 
     // ---- plates (tile 17) / buttons (tile 18) + triggers ----
@@ -311,7 +325,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         for(BrazierInst& bi : braziers){
             if(!bi.lit && spells.consume_hit(bi.body, logic::SpellId::Fire)){  // only Fire lights braziers
                 bi.lit = true;
-                engine::set_level_tile(lvl.view, bi.tx, bi.ty, 15);
+                engine::set_level_tile(lvl.view, bi.tx, bi.draw_ty, 15);
             }
         }
 
