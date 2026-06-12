@@ -16,6 +16,7 @@
 #include "bn_sprite_items_fire_proj.h"
 #include "bn_sprite_items_ice_proj.h"
 #include "bn_sprite_items_bolt.h"
+#include "bn_sprite_items_grapple_icon.h"
 
 #include "logic/tilemap.h"
 #include "logic/player.h"
@@ -163,7 +164,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         if(spell.selected != last_icon){
             if(spell.selected == logic::SpellId::Ice)         spell_icon.set_item(bn::sprite_items::ice_proj);
             else if(spell.selected == logic::SpellId::Fire)   spell_icon.set_item(bn::sprite_items::fire_proj);
-            else if(spell.selected == logic::SpellId::Grapple) spell_icon.set_item(bn::sprite_items::bolt); // placeholder grapple icon (cyan bolt, distinct from fire/ice)
+            else if(spell.selected == logic::SpellId::Grapple) spell_icon.set_item(bn::sprite_items::grapple_icon); // green hook icon (distinct from cyan Ice)
             last_icon = spell.selected;
         }
         spell_icon.set_visible(spell.selected != logic::SpellId::None);
