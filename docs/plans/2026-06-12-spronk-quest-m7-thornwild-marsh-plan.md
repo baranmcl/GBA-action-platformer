@@ -61,17 +61,23 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** 3/4 phases shipped (grapple logic + compiler + engine wiring done; 179/179 host + 33 Python tests green; ROM builds clean). Phase 4 (content + hub door + emulator QA) next.
+**Overall:** 4/4 phases shipped + an extensive QA-driven polish pass. 229/229 host tests green, purity clean, ROM builds clean, final full-branch review = READY TO MERGE, QA scaffold reverted. Branch `feat/m7-thornwild-marsh` (42 commits) merging to `main`.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure logic (anchors, spell-cycle, grapple, pull-block) | ✅ Shipped | `…a8e0117` (Tasks 1.1–1.6) | each spec+quality reviewed; 179/179 |
 | 2 — Level compiler (anchor + pullable symbols) | ✅ Shipped | `3853e9d`, `34f23fb` | spec+quality reviewed; 33 Python tests |
 | 3 — Engine/scene wiring (anchor art, vine VFX, R-branch, block-pull) | ✅ Shipped | `0851fb6`, `e16b7c0`, `fe58d36`, `45112fb` | Tasks 3.1–3.3; spec+quality reviewed; ROM builds clean |
-| 4 — Content: Thornwild Marsh multi-room + hub Door 6 + manual QA | 🚧 In progress | — | claimed 2026-06-12, branch `feat/m7-thornwild-marsh`; needs ROM + emulator |
+| 4 — Content: Thornwild Marsh multi-room + hub Door 6 + manual QA | ✅ Shipped | `07485be`, `c768627` + QA fixes R1–R8 (`f6daf32`, `6107b09`, `2c10abb`, `d317719`) | 6 emulator QA rounds; all 5 core issues pass |
 
 ### Deviations
-- _(none yet)_
+QA-driven scope added beyond the written plan (all user-requested during emulator QA, each TDD'd + reviewed):
+- **Grapple feel/landing fixes (R1–R8):** distinct green hook HUD icon (was cyan, too like Ice); grapple fires even with no target (miss-vine); always lands the player ON the anchor's ledge via a **ledge-climb boost** in `GrappleState::post` when the pull stalls near the anchor (`grapple.h`); content re-authored so anchors/braziers/spronk sit on the floor content row.
+- **Dungeon-6 content hardened:** two-way doors with co-located return entrances (spawn beside the door you exited); floor-level braziers (hit-zone fix); pull-block→pressure-plate puzzle with a stopper wall so the block can't be stranded; **Ice-required water tunnel** (a low ceiling defeats Glide/Featherleap/Dash bypass — `d6_water_corridor_has_ceiling`); grounded spronk.
+- **Heart container (new system):** permanent +25 max-HP one-time pickup behind room 1's brazier wall; persisted via `latches` bits [24..31] (no SaveData format change); `max_health_for()` single source of truth; HUD scales. Commits `900680c`, `ac8c836`. Gives room 1 a payoff (chosen by the user over making it mandatory).
+- **Spell/tool selection persists across room transitions** (`run_dungeon` threads one `SpellState`) — `e5a361e`.
+- **Dash:** verified left/right symmetric (regression-tested); double-tap window widened 12→20 frames for easier triggering — `49abf5e`, `7c00044`.
+- **Hub ability parity (new):** glide/dash/grapple + Fire/Ice casting now work in the hub (`scene_hub.cpp` mirrors the dungeon's player-facing control; anchors + platforms added to `hub.txt`) — `1868ff4`. Deliberately duplicated from `scene_dungeon` (DRY follow-up tracked in agent memory).
 
 ### Discoveries
 - **Placeholder art (track for a Phase 4 / future polish pass):** the grapple HUD icon reuses `bn::sprite_items::bolt` (cyan) instead of a dedicated vine/hook glyph (`scene_dungeon.cpp` `refresh_spell_icon`); the vine VFX during a pull is 4 small `bolt`-sprite dots lerped player→anchor, not a real rope (`scene_dungeon.cpp` vine block). Both are functional + clearly commented as placeholders. The anchor bg tile (index 25) IS real new art (green ring + crosshair via `make_placeholder_art.py`). Minor: the `gates.h` tile-map comment phrases "GrapplePoint kind 10" ambiguously (GrapplePoint is also a GateType); reword to "TileKind::GrapplePoint (=10)" during art polish.
@@ -686,7 +692,7 @@ git commit -m "feat(game): grapple pulls a pullable block one tile toward the pl
 
 ## Phase 4 — Content: Thornwild Marsh multi-room + hub Door 6 + manual QA
 
-**Execution Status:** 🚧 IN PROGRESS — Task 4.1 (3-room dungeon, `07485be`) + Task 4.2 (hub Door 6, `c768627`) SHIPPED + wiring-reviewed; 190/190 host tests; ROM builds clean. Task 4.3 (interactive emulator QA) handed to the user. QA reachability via a TEMP uncommitted `src/main.cpp` scaffold (grants carried kit + frees D1–D5 spronks so Door 6 is reachable + solvable); REVERT before the final commit.
+**Execution Status:** ✅ SHIPPED on 2026-06-12 — Task 4.1 (3-room Thornwild Marsh, `07485be`) + Task 4.2 (hub Door 6, `c768627`) + Task 4.3 (6 rounds of interactive emulator QA, all passed). Followed by an extensive QA-driven polish pass (R1–R8 grapple/content fixes, heart-container reward, hub ability parity, dash tuning — see the top-of-plan **Deviations**). The TEMP `src/main.cpp` QA scaffold has been REVERTED. Final state: 229/229 host tests, purity clean, ROM builds clean, full-branch review = READY TO MERGE.
 
 **BEFORE starting this phase:** read `docs/pitfalls/implementation-pitfalls.md`; re-read the room-to-room authoring (the d6 rooms in `tools/levels/`, `include/game/levels/dungeons.h`, and the **room/camera constraint**: every room ≥30×20, standard ~22-tall floor).
 
