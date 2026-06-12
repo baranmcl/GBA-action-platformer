@@ -48,31 +48,43 @@ struct GrappleState {
 
     // End the pull when the body's CENTRE TILE reaches the anchor tile (tile-level arrival — robust
     // even when a floor prevents exact vertical alignment), or when blocked (the body didn't move).
-    // On arrival: snap the player standing on the first solid tile at/below the anchor column and
-    // zero velocity so no residual pull carries them past (e.g. into a lava pit).
-    // On wall-stop (!moved): zero velocity and end (kill residual; no position snap).
+    // On arrival or ledge-climbing boost (stalled within 1 tile horizontally and 3 tiles vertically
+    // of the anchor): snap the player onto the first solid at/below the anchor column and zero
+    // velocity so no residual pull carries them past (e.g. into a lava pit).
+    // On wall-stop far from the anchor (!moved and NOT near): zero velocity and end, no snap.
     void post(Body& body, const Tilemap& map, bool moved){
         int ctx = Tilemap::px_to_tile(body.pos.x + body.half_w);
         int cty = Tilemap::px_to_tile(body.pos.y + body.half_h);
-        if(ctx == anchor_tx && cty == anchor_ty){
-            // Arrived at anchor tile: snap onto the platform directly below.
-            int fy = anchor_ty;
-            for(; fy < map.h; ++fy){
-                if(map.is_solid(anchor_tx, fy)) break;
-            }
-            if(fy < map.h){
-                body.pos.x = Fixed::from_int(anchor_tx*8 + 4) - body.half_w;
-                body.pos.y = Fixed::from_int(fy*8) - body.half_h - body.half_h;
-            }
-            body.vel = Vec2{ Fixed::from_int(0), Fixed::from_int(0) };
+        bool arrived = (ctx == anchor_tx && cty == anchor_ty);
+        // Ledge-climbing boost: the pull stalled (blocked) but the player is right next to the
+        // anchor (within 1 tile horizontally, 3 tiles vertically) — the ledge edge blocked the last
+        // step, so finish the climb by depositing them on the ledge.
+        int adx = ctx < anchor_tx ? anchor_tx - ctx : ctx - anchor_tx;
+        int ady = cty < anchor_ty ? anchor_ty - cty : cty - anchor_ty;
+        bool near_anchor = (adx <= 1) && (ady <= 3);
+        if(arrived || (!moved && near_anchor)){
+            snap_to_ledge(body, map);    // deposit on the ledge + zero velocity
             pulling = false;
         } else if(!moved){
-            // Blocked before arrival: kill residual velocity so no slide/fling.
+            // Genuinely blocked far away: kill residual velocity, no teleport.
             body.vel = Vec2{ Fixed::from_int(0), Fixed::from_int(0) };
             pulling = false;
         }
     }
 private:
+    // Snap the player standing on the first solid tile at/below the anchor column, centred on that
+    // column. Zero velocity. If no solid is found below the anchor, just zero velocity (no snap).
+    void snap_to_ledge(Body& body, const Tilemap& map){
+        int fy = anchor_ty;
+        for(; fy < map.h; ++fy){
+            if(map.is_solid(anchor_tx, fy)) break;
+        }
+        if(fy < map.h){
+            body.pos.x = Fixed::from_int(anchor_tx*8 + 4) - body.half_w;
+            body.pos.y = Fixed::from_int(fy*8) - body.half_h - body.half_h;
+        }
+        body.vel = Vec2{ Fixed::from_int(0), Fixed::from_int(0) };
+    }
     static Fixed clamp_axis(Fixed d){
         if(d > GRAPPLE_VX) return GRAPPLE_VX;
         if(d < -GRAPPLE_VX) return -GRAPPLE_VX;     // Fixed has unary operator-

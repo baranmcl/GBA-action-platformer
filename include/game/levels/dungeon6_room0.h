@@ -12,6 +12,6 @@ inline constexpr logic::ButtonSpawn DUNGEON6_ROOM0_BUTTONS[] = { {0,0,0,0} };
 inline constexpr logic::BrazierSpawn DUNGEON6_ROOM0_BRAZIERS[] = { {0,0,0} };
 inline constexpr logic::BrazierGroupSpawn DUNGEON6_ROOM0_BRAZIER_GROUPS[] = { {0,0,0,-1} };
 inline constexpr logic::EntranceSpawn DUNGEON6_ROOM0_ENTRANCES[] = { {1,19,12,-1} };
-inline constexpr logic::RoomDoorSpawn DUNGEON6_ROOM0_ROOM_DOORS[] = { {16,12,1,0}, {22,12,2,0} };
+inline constexpr logic::RoomDoorSpawn DUNGEON6_ROOM0_ROOM_DOORS[] = { {16,12,1,0}, {21,12,2,0} };
 inline constexpr logic::LevelData DUNGEON6_ROOM0_DATA = { DUNGEON6_ROOM0_TILES, 32, 22, 3, 18, false, 0, 0, false, 0, 0, DUNGEON6_ROOM0_ENEMIES, 1, DUNGEON6_ROOM0_GATES, 0, DUNGEON6_ROOM0_DOORS, 0, DUNGEON6_ROOM0_PICKUPS, 1, DUNGEON6_ROOM0_BLOCKS, 0, DUNGEON6_ROOM0_PLATES, 0, DUNGEON6_ROOM0_BUTTONS, 0, DUNGEON6_ROOM0_BRAZIERS, 0, DUNGEON6_ROOM0_BRAZIER_GROUPS, 0, DUNGEON6_ROOM0_ENTRANCES, 1, DUNGEON6_ROOM0_ROOM_DOORS, 2 };
 

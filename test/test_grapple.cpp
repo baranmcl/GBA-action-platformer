@@ -90,10 +90,12 @@ TEST(grapple_ends_on_arrival){
     CHECK(!g.active());                        // reached the anchor tile -> ended
 }
 TEST(grapple_ends_when_blocked){
+    // body_at_tile(5,4): pos=(40,32), centre=(48,48) -> centre tile (6,6).
+    // Anchor (8,4): adx = |6-8| = 2 > 1, so near_anchor = false -> plain stop path (no boost).
     Tilemap m = make_map(); GrappleState g;
-    Body b = body_at_tile(5,4);
+    Body b = body_at_tile(5,4);              // centre tile (6,6) -- adx=2 from anchor, NOT near
     g.latch(true, b, 1, m, true);
-    g.post(b, m, /*moved*/false);   // collision stopped the body before arrival
+    g.post(b, m, /*moved*/false);            // blocked far from anchor -> just stop, no boost
     CHECK(!g.active());
 }
 
@@ -116,6 +118,27 @@ TEST(grapple_arrival_snaps_onto_platform_and_zeros_velocity){
     // centred on anchor column 8: pos.x = 8*8+4-8 = 60
     CHECK_EQ(b.pos.x.raw, Fixed::from_int(8*8 + 4 - 8).raw);
 }
+TEST(grapple_ledge_boost_when_stalled_below_anchor){
+    // anchor (8,4) with a ledge surface solid at (8,5) directly below it.
+    uint8_t c[12*9]; for(int i=0;i<12*9;++i) c[i]=(uint8_t)TileKind::Empty;
+    c[4*12 + 8] = (uint8_t)TileKind::GrapplePoint;   // anchor (8,4)
+    c[5*12 + 8] = (uint8_t)TileKind::Solid;          // ledge surface (8,5)
+    Tilemap m{ 12, 9, c };
+    GrappleState g;
+    Body b{}; b.half_w = Fixed::from_int(8); b.half_h = Fixed::from_int(16);
+    // place the body so its CENTRE tile is (8,6): just below the ledge, in the anchor column, near the anchor.
+    // centre tile (8,6) -> centre px (68,52) -> pos = (60,36)
+    b.pos = { Fixed::from_int(60), Fixed::from_int(36) };
+    b.vel = { Fixed::from_int(0), Fixed::from_int(-5) };  // was rising, now blocked by the ledge
+    g.latch(true, b, 1, m, true);                         // latch onto anchor (8,4) (directly above, in range)
+    g.post(b, m, /*moved*/false);                         // stalled at the ledge -> BOOST
+    CHECK(!g.active());
+    // boosted onto the ledge: feet on top of (8,5) -> pos.y = 5*8 - 32 = 8; centred on col 8 -> pos.x = 8*8+4-8 = 60
+    CHECK_EQ(b.pos.y.raw, Fixed::from_int(5*8 - 32).raw);
+    CHECK_EQ(b.pos.x.raw, Fixed::from_int(8*8 + 4 - 8).raw);
+    CHECK_EQ(b.vel.x.raw, 0); CHECK_EQ(b.vel.y.raw, 0);
+}
+
 TEST(grapple_works_mid_air){
     // anchor (8,4); no floor under the player's start -> player is airborne when firing.
     Tilemap m = make_map();                          // all-empty 12x9 (OOB solid), anchor (8,4)
