@@ -27,3 +27,20 @@ TEST(cycle_rotates_owned_spells){ SpellState s; World w;
 TEST(refresh_prefers_an_owned_spell){ SpellState s; World w;
   w.grant(Ability::Ice); s.refresh(w);
   CHECK(s.selected==SpellId::Ice); }              // owns Ice but not Fire
+TEST(spell_cycle_includes_grapple){
+    World w; w.grant(Ability::Fire); w.grant(Ability::Ice); w.grant(Ability::Grapple);
+    SpellState s; s.refresh(w);
+    CHECK(s.owns(w, SpellId::Grapple));
+    // L cycles Fire -> Ice -> Grapple -> Fire among owned
+    s.selected = SpellId::Fire;
+    s.cycle(w); CHECK(s.selected == SpellId::Ice);
+    s.cycle(w); CHECK(s.selected == SpellId::Grapple);
+    s.cycle(w); CHECK(s.selected == SpellId::Fire);
+}
+TEST(grapple_not_owned_without_ability){
+    World w; w.grant(Ability::Fire);
+    SpellState s;
+    CHECK(!s.owns(w, SpellId::Grapple));
+    s.selected = SpellId::Fire; s.cycle(w);   // only Fire owned -> stays Fire
+    CHECK(s.selected == SpellId::Fire);
+}

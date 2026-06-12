@@ -5,7 +5,7 @@ namespace logic {
 // the dash velocity while active(). One air-dash per airtime: the charge refreshes while grounded
 // (so ground dashes are repeatable) and is spent when a dash starts.
 struct DashState {
-    static constexpr int WINDOW = 12;     // frames to complete a double-tap (feel-tunable)
+    static constexpr int WINDOW = 20;     // frames (~0.33s) to complete a double-tap (feel-tunable; widened from 12 — the ~0.2s window was too tight to trigger reliably)
     static constexpr int DASH_FRAMES = 7; // dash duration (~5 tiles at DASH_VX) (feel-tunable)
     int dash_frames = 0, dash_dir = 0;
     bool charged = false;             // one dash per airtime; refreshed while grounded

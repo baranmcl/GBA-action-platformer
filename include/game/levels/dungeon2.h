@@ -6,12 +6,13 @@ inline constexpr logic::EntitySpawn DUNGEON2_ENEMIES[] = { {13,18,11,16,0}, {35,
 inline constexpr logic::GateSpawn DUNGEON2_GATES[] = { {40,18,logic::GateType::Vine}, {47,18,logic::GateType::Ice} };
 inline constexpr logic::DoorSpawn DUNGEON2_DOORS[] = { {0,0,0} };
 inline constexpr logic::AbilityPickup DUNGEON2_PICKUPS[] = { {36,18,logic::Ability::Fire} };
-inline constexpr logic::BlockSpawn DUNGEON2_BLOCKS[] = { {18,19} };
+inline constexpr logic::BlockSpawn DUNGEON2_BLOCKS[] = { {18,19,false} };
 inline constexpr logic::PlateSpawn DUNGEON2_PLATES[] = { {21,19,24,0} };
 inline constexpr logic::ButtonSpawn DUNGEON2_BUTTONS[] = { {28,19,31,0} };
 inline constexpr logic::BrazierSpawn DUNGEON2_BRAZIERS[] = { {51,19,0}, {53,19,0}, {55,19,0} };
 inline constexpr logic::BrazierGroupSpawn DUNGEON2_BRAZIER_GROUPS[] = { {3,57,0,-1} };
 inline constexpr logic::EntranceSpawn DUNGEON2_ENTRANCES[] = { {0,0,0,1} };
 inline constexpr logic::RoomDoorSpawn DUNGEON2_ROOM_DOORS[] = { {0,0,0,0} };
-inline constexpr logic::LevelData DUNGEON2_DATA = { DUNGEON2_TILES, 64, 22, 3, 16, true, 60, 18, true, 61, 16, DUNGEON2_ENEMIES, 4, DUNGEON2_GATES, 2, DUNGEON2_DOORS, 0, DUNGEON2_PICKUPS, 1, DUNGEON2_BLOCKS, 1, DUNGEON2_PLATES, 1, DUNGEON2_BUTTONS, 1, DUNGEON2_BRAZIERS, 3, DUNGEON2_BRAZIER_GROUPS, 1, DUNGEON2_ENTRANCES, 0, DUNGEON2_ROOM_DOORS, 0 };
+inline constexpr logic::HeartContainerSpawn DUNGEON2_HEART_CONTAINERS[] = { {0,0,0} };
+inline constexpr logic::LevelData DUNGEON2_DATA = { DUNGEON2_TILES, 64, 22, 3, 16, true, 60, 18, true, 61, 16, DUNGEON2_ENEMIES, 4, DUNGEON2_GATES, 2, DUNGEON2_DOORS, 0, DUNGEON2_PICKUPS, 1, DUNGEON2_BLOCKS, 1, DUNGEON2_PLATES, 1, DUNGEON2_BUTTONS, 1, DUNGEON2_BRAZIERS, 3, DUNGEON2_BRAZIER_GROUPS, 1, DUNGEON2_ENTRANCES, 0, DUNGEON2_ROOM_DOORS, 0, DUNGEON2_HEART_CONTAINERS, 0 };
 

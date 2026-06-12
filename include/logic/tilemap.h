@@ -6,8 +6,10 @@ namespace logic {
 // solid). IcePlatform counts as solid for collision but is distinct so Fire melts ONLY it, not walls.
 // Updraft/WindLeft/WindRight (6-8) are NON-solid M5 wind forces (player passes through + is pushed).
 // Spikes=9 is a NON-solid damaging hazard (M6): you pass through but take damage, unless dash i-frames skip it.
+// GrapplePoint=10 is a NON-solid latch anchor for the M7 Vine Grapple: the player passes through it
+// freely; the grapple scans the tilemap for it and pulls the player toward it when triggered.
 enum class TileKind : uint8_t { Empty=0, Solid=1, OneWay=2, Lava=3, Water=4, IcePlatform=5,
-                                Updraft=6, WindLeft=7, WindRight=8, Spikes=9 };
+                                Updraft=6, WindLeft=7, WindRight=8, Spikes=9, GrapplePoint=10 };
 struct Tilemap {
     int w, h;
     const uint8_t* cells; // row-major, length w*h
@@ -21,6 +23,7 @@ struct Tilemap {
     bool is_lava(int tx,int ty) const { return at(tx,ty)==TileKind::Lava; }
     bool is_water(int tx,int ty) const { return at(tx,ty)==TileKind::Water; }
     bool is_spikes(int tx,int ty) const { return at(tx,ty)==TileKind::Spikes; }
+    bool is_grapple_point(int tx,int ty) const { return at(tx,ty)==TileKind::GrapplePoint; }
     static int px_to_tile(Fixed px){ return px.to_int() / TILE; }
 };
 }

@@ -9,14 +9,15 @@ TEST(hub_border_solid){
     for(int y=0;y<L.h;++y){ CHECK_EQ(tile(L,0,y),1); CHECK_EQ(tile(L,L.w-1,y),1); }
 }
 TEST(hub_has_doors){
-    CHECK_EQ(HUB_DATA.door_count, 5);             // M6: door 5 added (D1-D5 built)
-    // door 1 must exist (always enterable); door 5 (D5) must exist after M6
-    bool has_d1 = false, has_d5 = false;
+    CHECK_EQ(HUB_DATA.door_count, 6);             // M7: door 6 added (D1-D6 built)
+    // door 1 must exist (always enterable); door 5 (D5) and door 6 (D6) must exist after M7
+    bool has_d1 = false, has_d5 = false, has_d6 = false;
     for(int i=0;i<HUB_DATA.door_count;++i){
         if(HUB_DATA.doors[i].dungeon == 1) has_d1 = true;
         if(HUB_DATA.doors[i].dungeon == 5) has_d5 = true;
+        if(HUB_DATA.doors[i].dungeon == 6) has_d6 = true;
     }
-    CHECK(has_d1); CHECK(has_d5);
+    CHECK(has_d1); CHECK(has_d5); CHECK(has_d6);
 }
 TEST(hub_gap_gate_wall){
     CHECK_EQ(HUB_DATA.gate_count, 15);            // full-height gap-gate wall
@@ -25,4 +26,44 @@ TEST(hub_gap_gate_wall){
 TEST(hub_spawn_on_empty){
     const LevelData& L = HUB_DATA;
     CHECK_EQ(tile(L, L.spawn_tx, L.spawn_ty), 0);
+}
+TEST(hub_has_grapple_anchors){
+    // M7 ability parity: the hub gained grapple anchors so Grapple is demonstrable in the plaza.
+    const LevelData& L = HUB_DATA;
+    int anchors = 0;
+    for(int i = 0; i < L.w*L.h; ++i)
+        if(L.tiles[i] == (uint8_t)TileKind::GrapplePoint) ++anchors;
+    CHECK(anchors >= 2);
+}
+TEST(hub_every_anchor_has_solid_below){
+    // Grapple-landing rule (mirrors d6_every_anchor_has_solid_below): on arrival the engine scans
+    // DOWN the anchor column for the first solid tile and snaps the player to STAND on top of it. So
+    // every authored anchor MUST have a Solid tile directly below it (the ledge to land on).
+    const LevelData& L = HUB_DATA;
+    for(int y = 0; y < L.h; ++y)
+    for(int x = 0; x < L.w; ++x){
+        if(L.tiles[y*L.w + x] != (uint8_t)TileKind::GrapplePoint) continue;
+        CHECK(y + 1 < L.h);                                              // anchor not on the bottom row
+        CHECK_EQ((int)L.tiles[(y+1)*L.w + x], (int)TileKind::Solid);     // solid ledge directly below
+    }
+}
+TEST(hub_anchor_has_clear_air_above){
+    // Each anchor needs >=4 clear (non-solid) tiles above so the player can grapple UP to it.
+    const LevelData& L = HUB_DATA;
+    for(int y = 0; y < L.h; ++y)
+    for(int x = 0; x < L.w; ++x){
+        if(L.tiles[y*L.w + x] != (uint8_t)TileKind::GrapplePoint) continue;
+        CHECK(y - 4 >= 0);
+        for(int k = 1; k <= 4; ++k)
+            CHECK_EQ((int)L.tiles[(y-k)*L.w + x], (int)TileKind::Empty);
+    }
+}
+TEST(hub_doors_and_spawn_intact){
+    // Verticality additions must NOT disturb the door layout or the single spawn.
+    const LevelData& L = HUB_DATA;
+    CHECK_EQ(L.door_count, 6);
+    CHECK_EQ(tile(L, L.spawn_tx, L.spawn_ty), 0);   // exactly-one '@' is enforced by the level compiler
+    // No anchor or platform overwrote a door tile (doors sit on row 15).
+    for(int i = 0; i < L.door_count; ++i)
+        CHECK_EQ(tile(L, L.doors[i].tx, L.doors[i].ty), 0);
 }

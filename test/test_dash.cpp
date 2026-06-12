@@ -38,3 +38,20 @@ TEST(dash_recharges_on_ground){
   for(int i=0;i<DashState::DASH_FRAMES;++i) d.tick(false,false,true,true);   // land (on_ground) -> recharge
   d.tick(false,true,true,true); d.tick(false,false,true,true); d.tick(false,true,true,true);     // dash again
   CHECK(d.active()); }
+TEST(dash_left_on_double_tap_left){
+  DashState d;
+  // grounded once to charge
+  d.tick(false,false,true,true);
+  // double-tap LEFT: press, release, press
+  d.tick(true,false,true,true);   // press left
+  d.tick(false,false,true,true);  // release
+  d.tick(true,false,true,true);   // press left again -> should dash
+  CHECK(d.active()); CHECK_EQ(d.dir(),-1); }
+TEST(forgiving_window_allows_slower_double_tap){
+  // A 15-frame gap between taps used to MISS the old 12-frame window; the widened WINDOW (20) catches it.
+  DashState d; d.tick(false,false,true,true);    // grounded -> charged
+  d.tick(false,true,true,true);                  // press right (arm, timer=WINDOW)
+  for(int i=0;i<15;++i) d.tick(false,false,true,true); // release for 15 frames (>12, <20)
+  d.tick(false,true,true,true);                  // press right again -> dash (still within the 20-frame window)
+  CHECK(d.active()); CHECK_EQ(d.dir(),1);
+  static_assert(DashState::WINDOW >= 16, "window must stay forgiving enough for this gap"); }

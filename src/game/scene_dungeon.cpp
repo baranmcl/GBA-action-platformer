@@ -15,8 +15,12 @@
 #include "bn_sprite_items_shrine.h"
 #include "bn_sprite_items_fire_proj.h"
 #include "bn_sprite_items_ice_proj.h"
+#include "bn_sprite_items_bolt.h"
+#include "bn_sprite_items_grapple_icon.h"
+#include "bn_sprite_items_heart_container.h"
 
 #include "logic/tilemap.h"
+#include "logic/world_state.h"   // max_health_for, collect/has heart container
 #include "logic/player.h"
 #include "logic/dungeon1.h"      // try_free_spronk
 #include "logic/enemy.h"
@@ -55,7 +59,7 @@ namespace
 
     struct EnemyInst { logic::Enemy e; bn::optional<bn::sprite_ptr> sprite; };
     struct GateInst  { logic::GateSpawn spawn; logic::Body body; bool open = false; };
-    struct BlockInst { logic::PushableBlock blk; bn::optional<bn::sprite_ptr> sprite; };
+    struct BlockInst { logic::PushableBlock blk; bn::optional<bn::sprite_ptr> sprite; bool pullable = false; };
     struct BrazierInst { int tx, ty, group; logic::Body body; bool lit = false; int draw_ty = 0; };
 
     // First STANDABLE collision row at/below start_ty in this column (the floor the content rests on).
@@ -67,6 +71,7 @@ namespace
         return start_ty + 1;
     }
     struct ShrineInst { logic::AbilityPickup pk; logic::Body body; bn::optional<bn::sprite_ptr> sprite; };
+    struct HeartInst  { logic::HeartContainerSpawn hc; logic::Body body; bn::optional<bn::sprite_ptr> sprite; bool collected = false; };
     // src_tx/ty: plate or button tile to test; group: brazier group (Braziers kind)
     struct TriggerInst { logic::Trigger trig; int src_tx, src_ty, group; bool applied = false; };
 
@@ -98,7 +103,7 @@ namespace
     }
 }
 
-static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, logic::World& world, logic::PlayerState& ps)
+static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, logic::World& world, logic::PlayerState& ps, logic::SpellState& spell)
 {
     const int d = world.current_dungeon;
     bn::bg_palettes::set_transparent_color(bn::color(8, 8, 24));
@@ -135,12 +140,22 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     logic::Meter& magic  = ps.magic;
     int invuln = 0;
 
-    logic::SpellState spell; spell.refresh(world);
-
     engine::Avatar avatar(player, lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::BoltPool bolts(lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::SpellPool spells(lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::Hud hud;
+
+    // Vine VFX: 4 dot sprites (bolt reused as placeholder) drawn along player->anchor line.
+    // Positioned in level-px space (same world->screen transform as other sprites).
+    // Visible only while player.grapple.active().
+    constexpr int VINE_SEGS = 4;
+    bn::vector<bn::sprite_ptr, VINE_SEGS> vine_segs;
+    for(int i = 0; i < VINE_SEGS; ++i){
+        vine_segs.push_back(bn::sprite_items::bolt.create_sprite(0, 0));
+        vine_segs.back().set_camera(cam);
+        vine_segs.back().set_visible(false);
+        vine_segs.back().set_scale(0.5);
+    }
 
     // Spell HUD icon — screen-fixed top-RIGHT, clear of the top-left bars. Shows the SELECTED
     // spell's art (fire/ice); swap the image only when the selection changes (set_item, no recreate).
@@ -148,8 +163,9 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     logic::SpellId last_icon = logic::SpellId::None;
     auto refresh_spell_icon = [&]{
         if(spell.selected != last_icon){
-            if(spell.selected == logic::SpellId::Ice) spell_icon.set_item(bn::sprite_items::ice_proj);
-            else if(spell.selected == logic::SpellId::Fire) spell_icon.set_item(bn::sprite_items::fire_proj);
+            if(spell.selected == logic::SpellId::Ice)         spell_icon.set_item(bn::sprite_items::ice_proj);
+            else if(spell.selected == logic::SpellId::Fire)   spell_icon.set_item(bn::sprite_items::fire_proj);
+            else if(spell.selected == logic::SpellId::Grapple) spell_icon.set_item(bn::sprite_items::grapple_icon); // green hook icon (distinct from cyan Ice)
             last_icon = spell.selected;
         }
         spell_icon.set_visible(spell.selected != logic::SpellId::None);
@@ -212,11 +228,26 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         si.sprite->set_visible(!world.has(p.ability));   // already taken on a continued game
     }
 
+    // ---- heart containers (permanent max-HP upgrade pickup) ----
+    // Spawn only if NOT already collected (persisted in latches bits [24..31]); a collected
+    // one stays hidden forever. Body matches the tile-sized shrine pickup; sprite grounded on
+    // the content row exactly like the shrine (centre at tile-centre + 8).
+    bn::vector<HeartInst, 4> hearts;
+    for(int i = 0; i < level.heart_container_count && i < 4; ++i){
+        const logic::HeartContainerSpawn& hc = level.heart_containers[i];
+        if(world.heart_container_collected(hc.id)) continue;  // already taken -> never show it
+        hearts.push_back(HeartInst{ hc, tile_body(hc.tx, hc.ty, 6, 8), {}, false });
+        HeartInst& hi = hearts.back();
+        hi.sprite = bn::sprite_items::heart_container.create_sprite(0, 0);
+        hi.sprite->set_camera(cam);
+        hi.sprite->set_position(wx(hc.tx * 8 + 8), wy(hc.ty * 8 + 8));
+    }
+
     // ---- pushable blocks (solid collision cell + 8x8 sprite) ----
     bn::vector<BlockInst, 8> blocks;
     for(int i = 0; i < level.block_count && i < 8; ++i){
         const logic::BlockSpawn& b = level.blocks[i];
-        blocks.push_back(BlockInst{ logic::PushableBlock{ b.tx, b.ty }, {} });
+        blocks.push_back(BlockInst{ logic::PushableBlock{ b.tx, b.ty }, {}, b.pullable });
         BlockInst& bi = blocks.back();
         engine::set_collision_tile(b.tx, b.ty, 1);       // block is solid; bg stays blank, sprite shows it
         bi.sprite = bn::sprite_items::block.create_sprite(0, 0);
@@ -281,6 +312,9 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     engine::set_fade(16);
     int fade_in_t = 16;
     int push_cd = 0;
+    int grapple_pull_cd = 0;
+    int miss_vine_t   = 0;  // counts down from 10; >0 => miss-vine animation active
+    int miss_vine_dir = 1;  // facing direction when the miss was fired
 
     while(true)
     {
@@ -296,16 +330,88 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         player.abilities.featherleap = world.has(logic::Ability::Featherleap);
         player.abilities.glide       = world.has(logic::Ability::Glide);
         player.abilities.dash        = world.has(logic::Ability::Dash);
+        player.abilities.grapple     = world.has(logic::Ability::Grapple);
+        // Read spell intent + cycle FIRST so the selection is current for the grapple/cast branch:
+        engine::SpellIntent si = engine::read_spell_intent();
+        if(si.cycle) spell.cycle(world);
+        // R fires the SELECTED tool: Grapple -> pull a nearby pullable block one tile toward the
+        // player (if one is in range/arc), else latch the player to an anchor; Fire/Ice -> cast.
+        bool want_grapple = si.cast && spell.selected == logic::SpellId::Grapple;
+        in.grapple_fire = false;
+        if(want_grapple){
+            // Find a pullable block within grapple range in the facing/up arc.
+            BlockInst* target = nullptr;
+            int ptx = px2t(player.body.pos.x + player.body.half_w);   // player centre tile x
+            int pty = px2t(player.body.pos.y + player.body.half_h);   // player centre tile y
+            for(BlockInst& bi : blocks){
+                if(!bi.pullable) continue;
+                int dxt = bi.blk.tx - ptx, dyt = bi.blk.ty - pty;
+                int adx = dxt < 0 ? -dxt : dxt, ady = dyt < 0 ? -dyt : dyt;
+                if(adx > logic::GrappleState::RANGE || ady > logic::GrappleState::RANGE) continue;
+                int sx = (dxt > 0) - (dxt < 0);           // horizontal sign relative to player
+                if(sx == -player.facing && dxt != 0) continue;  // exclude strictly-behind blocks (arc rule matches nearest_grapple_anchor)
+                // first in-range pullable block by spawn order (rooms have at most one pull-block puzzle, so nearest-tiebreak is unnecessary)
+                target = &bi; break;
+            }
+            if(target && grapple_pull_cd == 0){
+                // Pull direction in tile space (same idiom as the scan): block right of player -> pull it left, toward the player.
+                int target_dxt = target->blk.tx - ptx;    // block tile minus player centre tile
+                int pull_dir = (target_dxt > 0) ? -1 : 1;
+                int oldx = target->blk.tx;
+                if(target->blk.pull(pull_dir, lvl.map)){
+                    engine::set_collision_tile(oldx, target->blk.ty, 0);
+                    engine::set_collision_tile(target->blk.tx, target->blk.ty, 1);
+                    grapple_pull_cd = 8;
+                }
+            } else if(!target){
+                // No pullable block — try pulling a nearby non-immune enemy one tile toward the player.
+                EnemyInst* etarget = nullptr;
+                int ebest_dist = 999;
+                for(EnemyInst& ei : enemies){
+                    if(!ei.e.alive || ei.e.fire_immune) continue; // immune enemies resist the vine
+                    int etx = px2t(ei.e.body.pos.x + ei.e.body.half_w);
+                    int ety = px2t(ei.e.body.pos.y + ei.e.body.half_h);
+                    int dxt = etx - ptx, dyt = ety - pty;
+                    int adx = dxt < 0 ? -dxt : dxt, ady = dyt < 0 ? -dyt : dyt;
+                    if(adx > logic::GrappleState::RANGE || ady > logic::GrappleState::RANGE) continue;
+                    int sx = (dxt > 0) - (dxt < 0);
+                    if(sx == -player.facing && dxt != 0) continue; // arc rule: exclude strictly-behind
+                    int dist = adx + ady; // Manhattan distance (nearest)
+                    if(dist < ebest_dist){ ebest_dist = dist; etarget = &ei; }
+                }
+                if(etarget && grapple_pull_cd == 0){
+                    int etx = px2t(etarget->e.body.pos.x + etarget->e.body.half_w);
+                    int ety = px2t(etarget->e.body.pos.y + etarget->e.body.half_h);
+                    int edxt = etx - ptx; // enemy col minus player col
+                    int edir = (edxt > 0) ? -1 : 1; // nudge enemy toward player (one tile = 8 px)
+                    int dest_tx = etx + edir;
+                    // Guard: only nudge if the destination tile is non-solid and within map bounds.
+                    if(dest_tx >= 0 && dest_tx < lvl.map.w && !lvl.map.is_solid(dest_tx, ety)){
+                        etarget->e.body.pos.x = etarget->e.body.pos.x + logic::Fixed::from_int(8 * edir);
+                    }
+                    grapple_pull_cd = 8; // consumed by enemy pull — don't fire anchor grapple
+                } else if(!etarget){
+                    in.grapple_fire = true; // no block, no enemy -> player anchor-grapple
+                }
+            }
+        }
+        bool cast_spell = si.cast && (spell.selected == logic::SpellId::Fire ||
+                                      spell.selected == logic::SpellId::Ice);
+        // Capture the "tried to anchor-grapple" flag BEFORE player.update consumes it.
+        bool tried_anchor = want_grapple && in.grapple_fire;
         player.update(in, lvl.map);
         avatar.sync(player);
+        // Miss detection: player tried an anchor-grapple but nothing latched (no grapple point in range).
+        if(tried_anchor && !player.grapple.active()){
+            miss_vine_t   = 10;
+            miss_vine_dir = player.facing;
+        }
 
         logic::Vec2 muzzle = { player.body.pos.x + player.body.half_w,
                                player.body.pos.y + player.body.half_h };
         bolts.update(in.fire_pressed, muzzle, player.facing, lvl.map);
 
-        engine::SpellIntent si = engine::read_spell_intent();
-        if(si.cycle) spell.cycle(world);
-        spells.update_and_cast(si.cast, spell, magic, muzzle, player.facing, lvl.map);
+        spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);
 
         // ---- spell resolution (ORDER: gates -> braziers -> enemies -> freeze/melt -> despawn-on-solid) ----
         for(GateInst& gi : gates){
@@ -378,6 +484,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
 
         // ---- pushable blocks: push detection, gravity, sprite ----
         if(push_cd > 0) --push_cd;
+        if(grapple_pull_cd > 0) --grapple_pull_cd;   // ticks here; checked in the input phase above
         for(BlockInst& bi : blocks){
             // push when grounded, holding a dir, and the tile in front of the player == this block
             if(push_cd == 0 && player.body.on_ground && (in.left || in.right)){
@@ -461,6 +568,19 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                 if(si2.sprite) si2.sprite->set_visible(false);
             }
         }
+        // ---- heart containers: collect on overlap -> grow max HP + refill to full, persist. ----
+        for(HeartInst& hi : hearts){
+            if(hi.collected) continue;
+            if(logic::aabb_overlap(player.body, hi.body)){
+                world.collect_heart_container(hi.hc.id);
+                health.max = logic::max_health_for(world);   // grow the cap (+25 per container)
+                health.cur = health.max;                     // and refill to full — the payoff moment
+                engine::write_world(world);                  // persist immediately (same path as latches)
+                hi.collected = true;
+                if(hi.sprite) hi.sprite->set_visible(false);
+            }
+        }
+
         refresh_spell_icon();   // reflect cycle (L) and shrine pickups in the HUD icon
 
         // ---- spronk rescue (marks the dungeon cleared; abilities now come from F pickups) ----
@@ -479,6 +599,50 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             return RoomOutcome{ RoomOutcome::ExitDungeon };
         }
 
+        // ---- vine VFX: draw dot segments along player->anchor while grapple active ----
+        if(miss_vine_t > 0) --miss_vine_t;
+        if(player.grapple.active()){
+            // Latched: draw dots from player to anchor (unchanged).
+            int px_ = player.body.pos.x.to_int() + player.body.half_w.to_int();
+            int py_ = player.body.pos.y.to_int() + player.body.half_h.to_int();
+            int ax_ = player.grapple.anchor_tx * 8 + 4;
+            int ay_ = player.grapple.anchor_ty * 8 + 4;
+            for(int i = 0; i < VINE_SEGS; ++i){
+                int t = i + 1;  // t in 1..VINE_SEGS (skip the player pos itself)
+                int sx_ = px_ + (ax_ - px_) * t / (VINE_SEGS + 1);
+                int sy_ = py_ + (ay_ - py_) * t / (VINE_SEGS + 1);
+                vine_segs[i].set_position(sx_ - hw, sy_ - hh);
+                vine_segs[i].set_visible(true);
+            }
+        } else if(miss_vine_t > 0){
+            // Miss: shoot vine out and retract. Duration 10 frames; peaks at frame 5.
+            // reach in tiles: extend 0->RANGE over first half, retract RANGE->0 over second half.
+            // miss_vine_t counts down from 10 to 1; elapsed = 10 - miss_vine_t (0=just fired).
+            int elapsed = 10 - miss_vine_t;           // 0..9 as the timer runs from 10 down to 1
+            int half = 5;
+            // phase: 0..half-1 = extending, half..9 = retracting
+            int reach_tiles;
+            if(elapsed < half){
+                reach_tiles = (logic::GrappleState::RANGE * (elapsed + 1)) / half; // 0->RANGE
+            } else {
+                reach_tiles = (logic::GrappleState::RANGE * (10 - elapsed)) / half; // RANGE->0
+            }
+            if(reach_tiles < 1) reach_tiles = 1; // always at least one segment visible while active
+            int px_ = player.body.pos.x.to_int() + player.body.half_w.to_int();
+            int py_ = player.body.pos.y.to_int() + player.body.half_h.to_int();
+            int reach_px = reach_tiles * 8;
+            for(int i = 0; i < VINE_SEGS; ++i){
+                // Space VINE_SEGS dots evenly from player to reach point.
+                int t = i + 1;
+                int sx_ = px_ + (miss_vine_dir * reach_px * t) / (VINE_SEGS + 1);
+                int sy_ = py_;  // horizontal shot (stays at player centre height)
+                vine_segs[i].set_position(sx_ - hw, sy_ - hh);
+                vine_segs[i].set_visible(true);
+            }
+        } else {
+            for(int i = 0; i < VINE_SEGS; ++i) vine_segs[i].set_visible(false);
+        }
+
         hud.update(health, magic);
         int cx = player.body.pos.x.to_int() + player.body.half_w.to_int();
         int cy = player.body.pos.y.to_int() + player.body.half_h.to_int();
@@ -492,8 +656,13 @@ DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world
 {
     int cur_room = dungeon.start_room;
     int cur_entrance = 0;
+    // Sync the max-HP cap to the collected heart containers (PlayerState defaults to 100/100, but a
+    // continued game may have upgrades). Only raise the CAP here; the pickup itself refills to full.
+    ps.health.max = logic::max_health_for(world);
+    if(ps.health.cur > ps.health.max) ps.health.cur = ps.health.max;
+    logic::SpellState spell; spell.refresh(world);  // selected spell persists across room transitions
     while(true){
-        RoomOutcome out = play_room(*dungeon.rooms[cur_room], cur_entrance, world, ps);
+        RoomOutcome out = play_room(*dungeon.rooms[cur_room], cur_entrance, world, ps, spell);
         engine::fade_out(16);   // one fade-out per room exit; next play_room fades in
         switch(out.kind){
             case RoomOutcome::ExitDungeon: return DungeonResult::Cleared;

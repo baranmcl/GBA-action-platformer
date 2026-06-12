@@ -17,6 +17,9 @@ test/run_tests.exe
 .DS_Store
 Thumbs.db
 
+# Private journal (agent-local)
+.private-journal/
+
 # Python bytecode
 __pycache__/
 *.pyc

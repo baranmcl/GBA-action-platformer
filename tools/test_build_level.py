@@ -141,7 +141,7 @@ class TestBuildLevel(unittest.TestCase):
             "braziers": [{"group": 0}],
             "brazier_groups": [{"total": 1, "target": [5, 5]}],
         })
-        self.assertEqual(lvl['blocks'], [(2, 1)])
+        self.assertEqual(lvl['blocks'], [(2, 1, False)])
         self.assertEqual(lvl['plates'], [(3, 1, 6, 1)])
         self.assertEqual(lvl['buttons'], [(4, 1, 6, 2)])
         self.assertEqual(lvl['braziers'], [(5, 1, 0)])
@@ -213,6 +213,64 @@ class TestBuildLevel(unittest.TestCase):
         self.assertIn("{0,2,1,1}", hdr)
         # Room-door: {tx, ty, target_room, target_entrance} -> {3,1,1,0}
         self.assertIn("{3,1,1,0}", hdr)
+
+    # --- M7 symbols ---
+    def test_grapple_anchor_tile(self):
+        txt = "#####\n#@g.#\n#####\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['tiles'][lvl['w']*1 + 2], 10)  # 'g' at (2,1) -> GrapplePoint=10 (non-solid)
+
+    def test_pullable_block_symbol(self):
+        txt = "######\n#@.P.#\n######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['blocks'], [(3, 1, True)])     # 'P' -> pullable block (tx,ty,pullable)
+
+    def test_plain_block_not_pullable(self):
+        txt = "######\n#@.B.#\n######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['blocks'], [(3, 1, False)])    # 'B' -> normal push block
+
+    def test_emit_block_pullable_field(self):
+        txt = "######\n#@.P.#\n######\n"
+        lvl = compile_str(txt, {})
+        hdr = build_level.emit_header(lvl, "TESTB")
+        self.assertIn("{3,1,true}", hdr)                    # BlockSpawn emits the pullable bool
+
+    # --- Heart container symbol ---
+    def test_heart_container_symbol(self):
+        txt = "######\n#@.H.#\n######\n"
+        lvl = compile_str(txt, {"heart_containers": [{"id": 3}]})
+        self.assertEqual(lvl['heart_containers'], [(3, 1, 3)])  # (tx, ty, id)
+
+    def test_heart_container_default_id(self):
+        # When no JSON metadata for heart_containers, id defaults to scan-order index
+        txt = "######\n#@.H.#\n######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['heart_containers'], [(3, 1, 0)])  # id = 0 (first in order)
+
+    def test_heart_container_multiple_defaults(self):
+        # Two H's, no JSON: ids are 0 and 1 by scan order
+        txt = "########\n#@.H.H.#\n########\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['heart_containers'], [(3, 1, 0), (5, 1, 1)])
+
+    def test_heart_container_emit_header(self):
+        txt = "######\n#@.H.#\n######\n"
+        lvl = compile_str(txt, {"heart_containers": [{"id": 3}]})
+        hdr = build_level.emit_header(lvl, "TESTHC")
+        self.assertIn("TESTHC_HEART_CONTAINERS", hdr)
+        self.assertIn("{3,1,3}", hdr)                       # HeartContainerSpawn {tx,ty,id}
+        # Array reference and count (1) must appear in the LevelData initialiser
+        self.assertIn("TESTHC_HEART_CONTAINERS, 1", hdr)
+
+    def test_heart_container_absent_level_still_compiles(self):
+        # Level without any H: heart_containers dummy array + count 0 emitted
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4]}]})
+        hdr = build_level.emit_header(lvl, "TESTHC2")
+        self.assertIn("TESTHC2_HEART_CONTAINERS", hdr)
+        # Count must be 0 in the LevelData initialiser
+        self.assertIn("TESTHC2_HEART_CONTAINERS, 0", hdr)
+        self.assertEqual(lvl['heart_containers'], [])
 
 
 if __name__ == '__main__':

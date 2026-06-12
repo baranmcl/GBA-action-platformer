@@ -12,6 +12,8 @@ struct PushableBlock {
         if(map.is_solid(nx, ty)) return false;   // wall/edge (OOB is solid)
         tx = nx; return true;
     }
+    // Pull one tile in `dir` (+1/-1; the caller passes the direction toward the grappling player) if the destination is non-solid.
+    bool pull(int dir, const Tilemap& map){ return push(dir, map); }   // same slide, named for intent
     // Fall one tile if the tile below is non-solid; returns moved.
     bool apply_gravity_step(const Tilemap& map){
         if(map.is_solid(tx, ty+1)) return false;

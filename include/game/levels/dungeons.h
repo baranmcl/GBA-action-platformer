@@ -5,8 +5,9 @@
 #include "game/levels/dungeon3.h"
 #include "game/levels/dungeon4.h"
 #include "game/levels/dungeon5.h"
-#include "game/levels/d6_room0.h"
-#include "game/levels/d6_room1.h"
+#include "game/levels/dungeon6_room0.h"
+#include "game/levels/dungeon6_room1.h"
+#include "game/levels/dungeon6_room2.h"
 
 inline constexpr const logic::LevelData* DUNGEON1_ROOMS[] = { &DUNGEON1_DATA };
 inline constexpr logic::DungeonData DUNGEON1_DUNGEON{ DUNGEON1_ROOMS, 1, 0 };
@@ -18,7 +19,10 @@ inline constexpr const logic::LevelData* DUNGEON4_ROOMS[] = { &DUNGEON4_DATA };
 inline constexpr logic::DungeonData DUNGEON4_DUNGEON{ DUNGEON4_ROOMS, 1, 0 };
 inline constexpr const logic::LevelData* DUNGEON5_ROOMS[] = { &DUNGEON5_DATA };
 inline constexpr logic::DungeonData DUNGEON5_DUNGEON{ DUNGEON5_ROOMS, 1, 0 };
-// DUNGEON6 is a reference/example room-graph dungeon (entrances + room-doors + a latching brazier
-// puzzle across two rooms) not yet wired to a hub door. Kept as a worked example, not dead code.
-inline constexpr const logic::LevelData* DUNGEON6_ROOMS[] = { &D6_ROOM0_DATA, &D6_ROOM1_DATA };
-inline constexpr logic::DungeonData DUNGEON6_DUNGEON{ DUNGEON6_ROOMS, 2, 0 };
+// DUNGEON6 — Thornwild Marsh (M7): a branching multi-room grapple dungeon. Room 0 (entry) holds the
+// Grapple shrine + a first grapple beat and branches to Branch A (room 1: pull-block puzzle + a
+// brazier-group that latches open a shortcut door back to room 0) and Branch B (room 2: grapple-gated,
+// holds the spronk + exit). Not yet reachable from the hub (Door 6 wired in M7 Task 4.2).
+inline constexpr const logic::LevelData* DUNGEON6_ROOMS[] = {
+    &DUNGEON6_ROOM0_DATA, &DUNGEON6_ROOM1_DATA, &DUNGEON6_ROOM2_DATA };
+inline constexpr logic::DungeonData DUNGEON6_DUNGEON{ DUNGEON6_ROOMS, 3, 0 };

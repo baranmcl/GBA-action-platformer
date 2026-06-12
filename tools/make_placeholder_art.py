@@ -115,13 +115,14 @@ def gen_bolt():
     write(im, "bolt", {"type": "sprite"})
 
 def gen_tiles():
-    """Background tileset: 25 tiles of 8x8 in a horizontal strip. Index order:
+    """Background tileset: 26 tiles of 8x8 in a horizontal strip. Index order:
     0 blank, 1 ground, 2 one-way, 3 gate(closed wall), 4 cage, 5 door-open, 6 door-locked,
     7 vine, 8 ice-gate, 9 water-gate(waterfall, M4), 10 fire-wall-gate(M4), 11-12 reserved, 13 lava,
     14 brazier-unlit, 15 brazier-lit, 16 water(M4), 17 plate, 18 button, 19 ice-platform(M4),
-    20 updraft(M5), 21 wind-left(M5), 22 wind-right(M5), 23 cracked-wall(M6), 24 spikes(M6).
+    20 updraft(M5), 21 wind-left(M5), 22 wind-right(M5), 23 cracked-wall(M6), 24 spikes(M6),
+    25 grapple-anchor(M7).
     (block + shrine are SPRITES, not bg tiles.)"""
-    im = new_img(8 * 25, 8)
+    im = new_img(8 * 26, 8)
     # tile 0: blank -> all index 0 (transparent, shows backdrop). nothing to draw.
     # tile 1: ground (brown with grass top, dark bottom)
     ox = 8 * 1
@@ -238,6 +239,21 @@ def gen_tiles():
     for bx in (0, 3, 6):                     # three triangle spikes
         px(im, ox + bx + 1, 5, 12); rect(im, ox + bx + 1, 4, ox + bx + 1, 5, 12)
         px(im, ox + bx, 5, 13); px(im, ox + bx + 1, 1, 15)   # red flank + bright tip
+    # tile 25: grapple anchor (M7) — green ring with crosshair (distinct from any flame tile)
+    ox = 8 * 25
+    # outer ring (dark green outline), inner ring (bright green), crosshair (white)
+    for cx in range(1, 7):                   # top/bottom ring edges
+        px(im, ox + cx, 1, 5); px(im, ox + cx, 6, 5)
+    for cy in range(1, 7):                   # left/right ring edges
+        px(im, ox + 1, cy, 5); px(im, ox + 6, cy, 5)
+    for cx in range(2, 6):                   # inner fill (bright green)
+        for cy in range(2, 6):
+            px(im, ox + cx, cy, 4)
+    # crosshair in white through the centre
+    for cx in range(0, 8):
+        px(im, ox + cx, 3, 9); px(im, ox + cx, 4, 9)
+    for cy in range(0, 8):
+        px(im, ox + 3, cy, 9); px(im, ox + 4, cy, 9)
     write(im, "tiles", {"type": "regular_bg_tiles", "bpp_mode": "bpp_4"})
 
 def gen_ember_sprites():
@@ -292,6 +308,58 @@ def gen_hud():
         rect(im, 0, 0, 6, 6, idx)
         write(im, name, {"type": "sprite"})
 
+def gen_heart_container():
+    """Heart-container pickup 16x16 — a red heart on the transparent backdrop (palette idx 0).
+    Permanent max-HP upgrade. Red body (pal 13) with a rose-light highlight (pal 7) and a
+    near-black outline (pal 1), so it reads as a classic heart distinct from every gate/flame tile."""
+    im = new_img(16, 16)
+    # Classic heart silhouette: two top lobes (rows 3-5) + a downward V to the tip (row 12).
+    # Filled red body, drawn as a per-row span table (x0,x1 inclusive) over the 16x16 field.
+    spans = {
+        3:  [(3, 6), (9, 12)],     # two lobe tops
+        4:  [(2, 7), (8, 13)],
+        5:  [(2, 13)],             # lobes merge
+        6:  [(2, 13)],
+        7:  [(3, 12)],
+        8:  [(4, 11)],
+        9:  [(5, 10)],
+        10: [(6, 9)],
+        11: [(7, 8)],
+        12: [(7, 8)],              # tip
+    }
+    for y, segs in spans.items():
+        for x0, x1 in segs:
+            rect(im, x0, y, x1, y, 13)        # red body
+    # Rose-light highlight glint on the upper-left lobe.
+    rect(im, 3, 4, 4, 5, 7)
+    px(im, 4, 3, 7)
+    # Near-black outline along the bottom V edges (gives the heart depth).
+    px(im, 6, 11, 1); px(im, 9, 11, 1)
+    px(im, 6, 12, 1); px(im, 9, 12, 1)
+    px(im, 7, 13, 1); px(im, 8, 13, 1)
+    write(im, "heart_container", {"type": "sprite"})
+
+def gen_grapple_icon():
+    """Grapple HUD icon 8x8 — a green hook glyph, clearly distinct from the cyan Ice orb.
+    Uses bright green (pal 4) + dark green (pal 5) + near-black outline (pal 1).
+    The Ice icon is cyan; this is GREEN so the player can always tell them apart."""
+    im = new_img(8, 8)
+    # Hook shape: a J-curve made of green pixels
+    # Vertical shaft on the right (x=5), top half
+    for y in range(1, 5):
+        px(im, 5, y, 4)          # bright green shaft
+    # Curved hook at the bottom: goes left then curves up
+    rect(im, 2, 5, 5, 5, 4)     # horizontal base of hook
+    px(im, 2, 4, 4)              # inner curve up-left
+    # Hook tip pointing upward-left
+    px(im, 2, 3, 4)
+    # Dark green outline/shadow to give depth
+    px(im, 6, 1, 5); px(im, 6, 2, 5); px(im, 6, 3, 5); px(im, 6, 4, 5)
+    px(im, 1, 5, 5); px(im, 2, 6, 5); px(im, 3, 6, 5); px(im, 4, 6, 5); px(im, 5, 6, 5)
+    # Highlight pixel (white) at shaft top
+    px(im, 5, 1, 15)
+    write(im, "grapple_icon", {"type": "sprite"})
+
 if __name__ == "__main__":
     gen_laurel()
     gen_enemy()
@@ -301,4 +369,6 @@ if __name__ == "__main__":
     gen_bg_palette()
     gen_hud()
     gen_ember_sprites()
+    gen_grapple_icon()
+    gen_heart_container()
     print("placeholder sprites + bg tiles + hud + ember art generated.")
