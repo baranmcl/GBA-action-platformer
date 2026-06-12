@@ -1,3 +1,4 @@
 { "tileset":"tiles",
-  "enemies":[{"patrol":[3,7]}],
-  "entrances":[{"id":0,"facing":1}] }
+  "enemies":[{"patrol":[5,10]}],
+  "entrances":[{"id":0,"facing":1}],
+  "room_doors":[{"target_room":0,"target_entrance":2}] }

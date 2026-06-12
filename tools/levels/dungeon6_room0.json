@@ -1,5 +1,5 @@
 { "tileset":"tiles",
   "pickups":[{"ability":"grapple"}],
-  "enemies":[{"patrol":[3,7]}],
-  "entrances":[{"id":1,"facing":-1}],
+  "enemies":[{"patrol":[5,11]}],
+  "entrances":[{"id":1,"facing":1},{"id":2,"facing":-1}],
   "room_doors":[{"target_room":1,"target_entrance":0},{"target_room":2,"target_entrance":0}] }

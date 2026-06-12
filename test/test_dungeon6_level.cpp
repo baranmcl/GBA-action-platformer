@@ -210,3 +210,139 @@ TEST(d6_bolt_enemy_per_room){
     for(int r = 0; r < D6_N; ++r)
         CHECK(D6_ROOMS[r]->enemy_count >= 1);
 }
+
+// ----------------------------------------------------------------------------
+// M7 re-author (Thornwild Marsh playtest fixes). The five issues fixed below:
+//   1. Brazier wouldn't light  -> braziers now on the floor content row (solid below).
+//   2. Pull-block purpose unclear -> one block + one plate (target = the gate) + one gate.
+//   3. Freeze unnecessary       -> Room 2 water gap >=6 wide, unbridged (Ice required).
+//   4. Spronk sank in platform   -> cage + exit on the floor content row (grounded).
+//   5. One-way doors             -> every door is paired with a co-located return entrance.
+// ----------------------------------------------------------------------------
+
+static bool d6_solid(const LevelData& L, int tx, int ty){
+    if(tx < 0 || ty < 0 || tx >= L.w || ty >= L.h) return true; // OOB is solid
+    return (int)L.tiles[ty*L.w + tx] == (int)TileKind::Solid;
+}
+
+TEST(d6_brazier_on_floor_row){
+    // Issue #1: every brazier sits where its hardcoded fire-hit zone (rows 14..19) is valid AND
+    // has a solid tile directly below it (so it grounds and lights). A brazier on a ledge (the old
+    // bug) fails this. The single D6 brazier is in Room 1 on row 18, solid (row 19) directly below.
+    int braziers = 0;
+    for(int r = 0; r < D6_N; ++r){
+        const LevelData& L = *D6_ROOMS[r];
+        for(int i = 0; i < L.brazier_count; ++i){
+            ++braziers;
+            int bx = L.braziers[i].tx, by = L.braziers[i].ty;
+            CHECK_EQ(by, 18);                         // floor content row (was a ledge before -> the bug)
+            CHECK(d6_solid(L, bx, 20));               // solid floor below -> grounds; hit-zone rows 14..19 valid
+        }
+    }
+    CHECK(braziers >= 1);
+}
+
+TEST(d6_cage_and_exit_on_floor_row){
+    // Issue #4: the spronk cage 'C' and the exit 'E' are SPRITES; on a ledge they sink. They must
+    // be on the floor content row (18) with a solid floor below so they ground. (Floor-scanned in
+    // the engine, but we assert solid-below to guarantee a real floor exists.)
+    int cages = 0, exits = 0;
+    for(int r = 0; r < D6_N; ++r){
+        const LevelData& L = *D6_ROOMS[r];
+        if(L.has_cage){ ++cages; CHECK_EQ(L.cage_ty, 18); CHECK(d6_solid(L, L.cage_tx, 20)); }
+        if(L.has_exit){ ++exits; CHECK_EQ(L.exit_ty, 18); CHECK(d6_solid(L, L.exit_tx, 20)); }
+    }
+    CHECK_EQ(cages, 1);
+    CHECK_EQ(exits, 1);
+}
+
+// Read the generated per-room arrays directly so the door/entrance wiring is machine-checked.
+#include "game/levels/dungeon6_room0.h"
+#include "game/levels/dungeon6_room1.h"
+#include "game/levels/dungeon6_room2.h"
+
+static bool d6_has_entrance(const LevelData& L, int id){
+    for(int i = 0; i < L.entrance_count; ++i) if(L.entrances[i].id == id) return true;
+    return false;
+}
+static bool d6_has_room_door(const LevelData& L, int target_room, int target_entrance){
+    for(int i = 0; i < L.room_door_count; ++i)
+        if(L.room_doors[i].target_room == target_room &&
+           L.room_doors[i].target_entrance == target_entrance) return true;
+    return false;
+}
+
+TEST(d6_doors_are_two_way){
+    // Issue #5: every connection is a PAIR (door + co-located return entrance, cross-referenced),
+    // so the player can always walk back to where they came from.
+    // Room 0 hubs out to Room 1 and Room 2:
+    CHECK(d6_has_room_door(DUNGEON6_ROOM0_DATA, 1, 0));
+    CHECK(d6_has_room_door(DUNGEON6_ROOM0_DATA, 2, 0));
+    // Room 1 returns to Room 0 entrance 1; its own arrival entrance (id0) exists:
+    CHECK(d6_has_room_door(DUNGEON6_ROOM1_DATA, 0, 1));
+    CHECK(d6_has_entrance(DUNGEON6_ROOM1_DATA, 0));
+    // Room 2 returns to Room 0 entrance 2; its own arrival entrance (id0) exists:
+    CHECK(d6_has_room_door(DUNGEON6_ROOM2_DATA, 0, 2));
+    CHECK(d6_has_entrance(DUNGEON6_ROOM2_DATA, 0));
+    // Room 0 offers the two distinct return entrances the children target:
+    CHECK(d6_has_entrance(DUNGEON6_ROOM0_DATA, 1));
+    CHECK(d6_has_entrance(DUNGEON6_ROOM0_DATA, 2));
+    // Each room-door is co-located with a return entrance (adjacent, within 2 tiles, same row) so
+    // arriving places the player ON/BESIDE the door back. Check every door has a nearby entrance.
+    for(int r = 0; r < D6_N; ++r){
+        const LevelData& L = *D6_ROOMS[r];
+        for(int i = 0; i < L.room_door_count; ++i){
+            const RoomDoorSpawn& d = L.room_doors[i];
+            bool near = false;
+            for(int e = 0; e < L.entrance_count; ++e){
+                const EntranceSpawn& n = L.entrances[e];
+                int dx = n.tx - d.tx; if(dx < 0) dx = -dx;
+                if(n.ty == d.ty && dx >= 1 && dx <= 2) near = true; // adjacent, not on the same tile
+            }
+            CHECK(near);
+        }
+    }
+}
+
+TEST(d6_water_gap_requires_ice){
+    // Issue #3: Room 2 has a contiguous water run on the floor row (20) of width >=6 with NO solid
+    // tile bridging it, so it cannot be walked or (being that wide) jumped/dashed -- the player MUST
+    // freeze it with Ice to cross to the spronk. Assert the longest unbridged water run >= 6.
+    const LevelData& L = DUNGEON6_ROOM2_DATA;
+    constexpr int ROW = 20;
+    int best = 0, run = 0;
+    for(int x = 0; x < L.w; ++x){
+        if((int)L.tiles[ROW*L.w + x] == (int)TileKind::Water){ ++run; if(run > best) best = run; }
+        else run = 0;
+    }
+    CHECK(best >= 6);
+    // And no solid floor inside that run (the run itself is the gap -- already implied, but assert
+    // the floor row has the water contiguous, not solid-water-solid stepping stones).
+    int water = 0; for(int x = 0; x < L.w; ++x) if((int)L.tiles[ROW*L.w + x] == (int)TileKind::Water) ++water;
+    CHECK_EQ(water, best);   // all water on the row belongs to the single contiguous run
+}
+
+TEST(d6_pull_block_onto_plate_solvable){
+    // Issue #2: Room 1 has EXACTLY one pullable block, one plate, and one gate; the plate's target
+    // is the gate column; and the geometry makes a PULL the solution and a push fail.
+    const LevelData& L = DUNGEON6_ROOM1_DATA;
+    int pull = 0; for(int i = 0; i < L.block_count; ++i) if(L.blocks[i].pullable) ++pull;
+    CHECK_EQ(pull, 1);
+    CHECK_EQ(L.plate_count, 1);
+    CHECK_EQ(L.gate_count, 1);
+    const BlockSpawn& blk = L.blocks[0];
+    const PlateSpawn& pl  = L.plates[0];
+    const GateSpawn&  gt  = L.gates[0];
+    // Plate targets the gate's column (lighting/holding the plate opens the gate).
+    CHECK_EQ(pl.target_tx, gt.tx);
+    // Block rests on the SAME row as the plate, one tile away, and PULLABLE toward the plate.
+    CHECK_EQ(blk.ty, pl.ty);
+    CHECK_EQ(blk.tx, pl.tx + 1);              // block is right of the plate -> pulled LEFT onto it
+    // The plate tile is non-solid (so the block can sit on it) and has solid directly below (so the
+    // block does not fall off the plate row).
+    CHECK(!d6_solid(L, pl.tx, pl.ty));
+    CHECK(d6_solid(L, pl.tx, pl.ty + 1));
+    // PUSH must FAIL: the tile to the block's right (away from the player) is the closed gate
+    // column -> solid -> the block cannot be pushed forward; only a pull resolves the puzzle.
+    CHECK_EQ(gt.tx, blk.tx + 1);
+}
