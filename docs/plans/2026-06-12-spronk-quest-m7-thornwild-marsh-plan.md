@@ -607,20 +607,17 @@ The Butano layer — the only `bn::` phase. Not host-testable; verified by ROM c
 
 ### Task 3.1: grapple-anchor bg tile + kind→bg map + HUD grapple icon
 
+**Execution Status:** ✅ SHIPPED 2026-06-12, commit `0851fb6`.
+
 **Files:** Modify `src/engine/level_view.cpp` (kind→bg), the tileset art (`graphics/tiles.bmp` is 25 tiles 0-24; a `GrapplePoint` anchor needs a tile — reuse an existing readable tile OR extend the tileset), `src/game/scene_dungeon.cpp` (HUD icon for selected Grapple). 
 
-- [ ] **Step 1: Anchor bg tile (MANDATORY mapping).** In `src/engine/level_view.cpp` the kind→bg map (`tile_index = (kind==3)?13 : ... (kind==9)?24 : kind`) maps collision TileKind → bg tile index. The chain ends in `: kind`, so a `GrapplePoint` (kind 10) with NO explicit entry would render as **bg tile index 10 = FireWall flame art** (per the `gates.h` tile-map comment) — wrong and confusing. You MUST add an entry. **Map kind 10 → bg index 25** (a new vine-anchor tile): add `(kind == 10) ? 25 :` to the chain. Then add tile index 25 to the art: extend `graphics/tiles.bmp` from 25 to 26 tiles (it is 25 tiles wide × 1 tall at 8px; add one 8px column) with a recognizable vine-anchor glyph — use `tools/make_placeholder_art.py` if present, else hand-draw the 8×8 cell — and update `graphics/tiles.json`/the tiles regen if it pins a tile count. **Fallback if extending the tileset is blocked in this milestone:** map kind 10 → bg index 3 (the existing closed-gate/wall tile) as a TEMPORARY placeholder anchor visual and record it under Discoveries as a polish follow-up — do NOT block the mechanic on final art (the M6 design used placeholder art the same way). Update the `gates.h` tile-map comment to document index 25 = grapple anchor.
+- [x] **Step 1: Anchor bg tile (MANDATORY mapping).** Added `(kind == 10) ? 25 :` to the kind→bg chain in `level_view.cpp`. Extended `graphics/tiles.bmp` from 25 to 26 tiles (200→208 px) via `tools/make_placeholder_art.py` — tile 25 is a green ring with white crosshair (distinct from all flame art). Updated `gates.h` tile-map comment to document index 25 = grapple-anchor.
 
-- [ ] **Step 2: HUD grapple icon.** The scene shows a spell HUD icon (`spell_icon`, `refresh_spell_icon` ~120-130) for Fire/Ice. Extend it so `SpellId::Grapple` shows a grapple/vine icon (a sprite item — reuse or add art). When `spell.selected==Grapple`, `set_item` the grapple icon.
+- [x] **Step 2: HUD grapple icon.** Extended `refresh_spell_icon` lambda to handle `SpellId::Grapple` by showing `bn::sprite_items::bolt` (cyan bolt sprite — distinct from fire's orange and ice's cyan-white). Added `#include "bn_sprite_items_bolt.h"` to `scene_dungeon.cpp`. (Placeholder — a dedicated vine/hook sprite is a polish follow-up for Phase 4 QA.)
 
-- [ ] **Step 3: Build** `bash tools/build_rom.sh` — clean. Manually confirm later (Phase 4) the anchor + HUD icon read correctly.
+- [x] **Step 3: Build** `bash tools/build_rom.sh` — clean (`ROM fixed!`). Host tests: 179/179 green.
 
-- [ ] **Step 4: Commit**
-
-```bash
-git add src/engine/level_view.cpp src/game/scene_dungeon.cpp graphics/
-git commit -m "feat(engine): grapple-anchor bg tile (kind 10) + HUD grapple icon"
-```
+- [x] **Step 4: Commit** — `0851fb6`
 
 > Art is the soft part here. If extending the tileset is heavy, reuse a readable existing tile for the anchor in this milestone and note it as a polish follow-up — do NOT block the mechanic on final art (the M6 design used placeholder art the same way).
 
