@@ -61,20 +61,20 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** 2/4 phases shipped (grapple logic + compiler symbols done; 179/179 host + 33 Python tests green). Phase 3 next.
+**Overall:** 3/4 phases shipped (grapple logic + compiler + engine wiring done; 179/179 host + 33 Python tests green; ROM builds clean). Phase 4 (content + hub door + emulator QA) next.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure logic (anchors, spell-cycle, grapple, pull-block) | ✅ Shipped | `…a8e0117` (Tasks 1.1–1.6) | each spec+quality reviewed; 179/179 |
 | 2 — Level compiler (anchor + pullable symbols) | ✅ Shipped | `3853e9d`, `34f23fb` | spec+quality reviewed; 33 Python tests |
-| 3 — Engine/scene wiring (anchor art, vine VFX, R-branch, block-pull) | 🚧 In progress | — | claimed 2026-06-12, branch `feat/m7-thornwild-marsh`; needs ROM toolchain |
-| 4 — Content: Thornwild Marsh multi-room + hub Door 6 + manual QA | ⬜ Not started | — | needs ROM + emulator |
+| 3 — Engine/scene wiring (anchor art, vine VFX, R-branch, block-pull) | ✅ Shipped | `0851fb6`, `e16b7c0`, `fe58d36`, `45112fb` | Tasks 3.1–3.3; spec+quality reviewed; ROM builds clean |
+| 4 — Content: Thornwild Marsh multi-room + hub Door 6 + manual QA | 🚧 In progress | — | claimed 2026-06-12, branch `feat/m7-thornwild-marsh`; needs ROM + emulator |
 
 ### Deviations
 - _(none yet)_
 
 ### Discoveries
-- _(none yet)_
+- **Placeholder art (track for a Phase 4 / future polish pass):** the grapple HUD icon reuses `bn::sprite_items::bolt` (cyan) instead of a dedicated vine/hook glyph (`scene_dungeon.cpp` `refresh_spell_icon`); the vine VFX during a pull is 4 small `bolt`-sprite dots lerped player→anchor, not a real rope (`scene_dungeon.cpp` vine block). Both are functional + clearly commented as placeholders. The anchor bg tile (index 25) IS real new art (green ring + crosshair via `make_placeholder_art.py`). Minor: the `gates.h` tile-map comment phrases "GrapplePoint kind 10" ambiguously (GrapplePoint is also a GateType); reword to "TileKind::GrapplePoint (=10)" during art polish.
 
 ---
 
@@ -599,7 +599,7 @@ git commit -m "feat(tools): compile 'g' grapple-anchor tile + 'P' pullable block
 
 ## Phase 3 — Engine/scene wiring (anchor art, vine VFX, R-branch, block-pull)
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `0851fb6`, `e16b7c0`, `fe58d36`, `45112fb` on 2026-06-12 (Tasks 3.1–3.3; spec + code-quality reviewed; ROM builds clean; 179/179 host tests). HUD icon + vine VFX are placeholders — see Discoveries.
 
 The Butano layer — the only `bn::` phase. Not host-testable; verified by ROM compile + Phase 4 manual QA. Do NOT pull `bn::` into the logic layer to "test" the scene.
 
