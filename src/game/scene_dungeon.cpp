@@ -100,7 +100,7 @@ namespace
     }
 }
 
-static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, logic::World& world, logic::PlayerState& ps)
+static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, logic::World& world, logic::PlayerState& ps, logic::SpellState& spell)
 {
     const int d = world.current_dungeon;
     bn::bg_palettes::set_transparent_color(bn::color(8, 8, 24));
@@ -136,8 +136,6 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     logic::Meter& health = ps.health;   // persist across hub <-> dungeon (no reset on entry)
     logic::Meter& magic  = ps.magic;
     int invuln = 0;
-
-    logic::SpellState spell; spell.refresh(world);
 
     engine::Avatar avatar(player, lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::BoltPool bolts(lvl.view.map_px_w, lvl.view.map_px_h, cam);
@@ -627,8 +625,9 @@ DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world
 {
     int cur_room = dungeon.start_room;
     int cur_entrance = 0;
+    logic::SpellState spell; spell.refresh(world);  // selected spell persists across room transitions
     while(true){
-        RoomOutcome out = play_room(*dungeon.rooms[cur_room], cur_entrance, world, ps);
+        RoomOutcome out = play_room(*dungeon.rooms[cur_room], cur_entrance, world, ps, spell);
         engine::fade_out(16);   // one fade-out per room exit; next play_room fades in
         switch(out.kind){
             case RoomOutcome::ExitDungeon: return DungeonResult::Cleared;
