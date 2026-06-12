@@ -3,6 +3,7 @@
 #include "logic/tilemap.h"
 #include "logic/physics.h"   // Body
 #include "logic/fixed.h"
+#include "logic/player.h"
 using namespace logic;
 
 // Shared 12x9 all-Empty map with two GrapplePoint anchors on mid-row 4:
@@ -96,8 +97,6 @@ TEST(grapple_ends_when_blocked){
     CHECK(!g.active());
 }
 
-#include "logic/player.h"
-
 TEST(player_update_pulls_toward_anchor){
     // 14x12 map: solid border + a floor at row 9; one anchor to the right at the player's height.
     uint8_t cells[14*12];
@@ -120,7 +119,7 @@ TEST(player_update_pulls_toward_anchor){
     p.update(fire, m);                                                    // latch + first pull step
     CHECK(p.body.pos.x > x0);                                             // moved right toward (9,7)
     InputFrame hold{};
-    for(int i=0;i<40 && p.grapple.active(); ++i) p.update(hold, m);       // run pull to completion
+    for(int i=0;i<40 && p.grapple.active(); ++i) p.update(hold, m);       // generous cap; loop exits early via active() guard once the pull ends
     CHECK(!p.grapple.active());                                           // ended (centre tile reached anchor, or wall)
     CHECK(p.body.pos.x > x0);
 }

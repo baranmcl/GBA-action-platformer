@@ -65,7 +65,7 @@ void Player::update(const InputFrame& in, const Tilemap& map){
     if(grapple.active()){
         body.vel = grapple.pull_velocity(body);
     }
-    Vec2 grapple_prev = body.pos;
+    Vec2 grapple_prev = body.pos;  // snapshot before move_and_collide so post() can detect a wall-stop
     move_and_collide(body, map);
     if(grapple.active()){
         bool moved = body.pos.x.raw != grapple_prev.x.raw || body.pos.y.raw != grapple_prev.y.raw;
