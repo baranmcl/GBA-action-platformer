@@ -58,11 +58,12 @@ namespace
     struct BlockInst { logic::PushableBlock blk; bn::optional<bn::sprite_ptr> sprite; };
     struct BrazierInst { int tx, ty, group; logic::Body body; bool lit = false; int draw_ty = 0; };
 
-    // First solid collision row at/below start_ty in this column (the floor the content rests on).
+    // First STANDABLE collision row at/below start_ty in this column (the floor the content rests on).
+    // Standable = solid OR one-way platform (D4's exit rests on a one-way platform, not a solid floor).
     // Falls back to start_ty+1 if none found within the map.
     int floor_row_below(const logic::Tilemap& map, int tx, int start_ty){
         for(int y = start_ty + 1; y < map.h; ++y)
-            if(map.is_solid(tx, y)) return y;
+            if(map.is_solid(tx, y) || map.is_oneway(tx, y)) return y;   // standable: solid or one-way platform
         return start_ty + 1;
     }
     struct ShrineInst { logic::AbilityPickup pk; logic::Body body; bn::optional<bn::sprite_ptr> sprite; };
