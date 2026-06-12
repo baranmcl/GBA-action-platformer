@@ -1,0 +1,3 @@
+{ "tileset":"tiles",
+  "enemies":[{"patrol":[3,7]}],
+  "entrances":[{"id":0,"facing":1}] }
