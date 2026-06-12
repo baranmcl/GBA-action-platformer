@@ -220,10 +220,11 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         engine::set_level_tile(lvl.view, rd.tx, rd.ty,     5);
         engine::set_level_tile(lvl.view, rd.tx, rd.ty - 1, 5);
     }
-    // ---- exit marker (bg tile 5 open-door; 2-tall arch so the tester can see where to go) ----
+    // ---- exit marker (bg tile 6 door-locked = distinct closed door = dungeon goal;
+    //      room-doors use tile 5 open-door so the player can tell them apart) ----
     if(level.has_exit){
-        engine::set_level_tile(lvl.view, level.exit_tx, level.exit_ty,     5);
-        engine::set_level_tile(lvl.view, level.exit_tx, level.exit_ty - 1, 5);
+        engine::set_level_tile(lvl.view, level.exit_tx, level.exit_ty,     6);
+        engine::set_level_tile(lvl.view, level.exit_tx, level.exit_ty - 1, 6);
     }
 
     // ---- braziers (bg tile 14 unlit; Body for fire-hit) ----
