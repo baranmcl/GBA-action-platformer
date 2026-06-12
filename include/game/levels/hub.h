@@ -13,5 +13,6 @@ inline constexpr logic::BrazierSpawn HUB_BRAZIERS[] = { {0,0,0} };
 inline constexpr logic::BrazierGroupSpawn HUB_BRAZIER_GROUPS[] = { {0,0,0,-1} };
 inline constexpr logic::EntranceSpawn HUB_ENTRANCES[] = { {0,0,0,1} };
 inline constexpr logic::RoomDoorSpawn HUB_ROOM_DOORS[] = { {0,0,0,0} };
-inline constexpr logic::LevelData HUB_DATA = { HUB_TILES, 48, 20, 10, 12, false, 0, 0, false, 0, 0, HUB_ENEMIES, 0, HUB_GATES, 15, HUB_DOORS, 6, HUB_PICKUPS, 0, HUB_BLOCKS, 0, HUB_PLATES, 0, HUB_BUTTONS, 0, HUB_BRAZIERS, 0, HUB_BRAZIER_GROUPS, 0, HUB_ENTRANCES, 0, HUB_ROOM_DOORS, 0 };
+inline constexpr logic::HeartContainerSpawn HUB_HEART_CONTAINERS[] = { {0,0,0} };
+inline constexpr logic::LevelData HUB_DATA = { HUB_TILES, 48, 20, 10, 12, false, 0, 0, false, 0, 0, HUB_ENEMIES, 0, HUB_GATES, 15, HUB_DOORS, 6, HUB_PICKUPS, 0, HUB_BLOCKS, 0, HUB_PLATES, 0, HUB_BUTTONS, 0, HUB_BRAZIERS, 0, HUB_BRAZIER_GROUPS, 0, HUB_ENTRANCES, 0, HUB_ROOM_DOORS, 0, HUB_HEART_CONTAINERS, 0 };
 
