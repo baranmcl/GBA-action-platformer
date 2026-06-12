@@ -141,7 +141,7 @@ class TestBuildLevel(unittest.TestCase):
             "braziers": [{"group": 0}],
             "brazier_groups": [{"total": 1, "target": [5, 5]}],
         })
-        self.assertEqual(lvl['blocks'], [(2, 1)])
+        self.assertEqual(lvl['blocks'], [(2, 1, False)])
         self.assertEqual(lvl['plates'], [(3, 1, 6, 1)])
         self.assertEqual(lvl['buttons'], [(4, 1, 6, 2)])
         self.assertEqual(lvl['braziers'], [(5, 1, 0)])
@@ -213,6 +213,28 @@ class TestBuildLevel(unittest.TestCase):
         self.assertIn("{0,2,1,1}", hdr)
         # Room-door: {tx, ty, target_room, target_entrance} -> {3,1,1,0}
         self.assertIn("{3,1,1,0}", hdr)
+
+    # --- M7 symbols ---
+    def test_grapple_anchor_tile(self):
+        txt = "#####\n#@g.#\n#####\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['tiles'][lvl['w']*1 + 2], 10)  # 'g' at (2,1) -> GrapplePoint=10 (non-solid)
+
+    def test_pullable_block_symbol(self):
+        txt = "######\n#@.P.#\n######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['blocks'], [(3, 1, True)])     # 'P' -> pullable block (tx,ty,pullable)
+
+    def test_plain_block_not_pullable(self):
+        txt = "######\n#@.B.#\n######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['blocks'], [(3, 1, False)])    # 'B' -> normal push block
+
+    def test_emit_block_pullable_field(self):
+        txt = "######\n#@.P.#\n######\n"
+        lvl = compile_str(txt, {})
+        hdr = build_level.emit_header(lvl, "TESTB")
+        self.assertIn("{3,1,true}", hdr)                    # BlockSpawn emits the pullable bool
 
 
 if __name__ == '__main__':
