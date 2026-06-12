@@ -38,3 +38,12 @@ TEST(dash_recharges_on_ground){
   for(int i=0;i<DashState::DASH_FRAMES;++i) d.tick(false,false,true,true);   // land (on_ground) -> recharge
   d.tick(false,true,true,true); d.tick(false,false,true,true); d.tick(false,true,true,true);     // dash again
   CHECK(d.active()); }
+TEST(dash_left_on_double_tap_left){
+  DashState d;
+  // grounded once to charge
+  d.tick(false,false,true,true);
+  // double-tap LEFT: press, release, press
+  d.tick(true,false,true,true);   // press left
+  d.tick(false,false,true,true);  // release
+  d.tick(true,false,true,true);   // press left again -> should dash
+  CHECK(d.active()); CHECK_EQ(d.dir(),-1); }

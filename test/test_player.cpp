@@ -111,3 +111,14 @@ TEST(no_dash_without_ability_in_player){
   p.update(R,m); p.update(none,m); p.update(R,m);                   // double-tap without owning dash
   CHECK(!p.dash.active());
   CHECK(p.body.vel.x <= Fixed::from_int(2)); }                      // capped at RUN_MAX, no blink
+TEST(dash_left_blinks_leftward){
+  static uint8_t c[20*3]; for(int i=0;i<20*3;++i) c[i]=0; for(int x=0;x<20;++x) c[2*20+x]=1;
+  Tilemap m{20,3,c};
+  Player p; p.body.half_w=Fixed::from_int(3); p.body.half_h=Fixed::from_int(3);
+  p.body.pos={Fixed::from_int(80),Fixed::from_int(8)}; p.abilities.dash=true;
+  InputFrame settle{}; for(int i=0;i<30;++i) p.update(settle,m);   // settle to floor -> charges dash
+  InputFrame Lf{}; Lf.left=true; InputFrame none{};
+  p.update(Lf,m); p.update(none,m); p.update(Lf,m);                // double-tap left -> dash
+  CHECK(p.dash.active());
+  CHECK(p.body.vel.x < Fixed::from_int(-2));  // exceeds run cap leftward (DASH_VX override)
+  CHECK(p.body.vel.y == Fixed::from_int(0));} // vy zeroed during blink
