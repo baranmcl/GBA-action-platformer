@@ -12,6 +12,7 @@ Grid symbols (collision tile in parens):
   V=vine gate  I=ice gate  W=water gate  X=fire-wall gate  K=cracked-wall gate(Dash)
   F=ability shrine  B=pushable block  ==pressure plate
   ?=hidden button  *=brazier
+  N=entrance (JSON: {"id":N,"facing":±1}; id defaults to scan-order index, facing to +1)  D=room-door
   (all content symbols except ~ set collision tile 0; positions recorded as entities)
 
 JSON sidecar (Nth metadata entry -> Nth matching symbol in row-major scan order):
@@ -22,7 +23,9 @@ JSON sidecar (Nth metadata entry -> Nth matching symbol in row-major scan order)
     "plates":[{"target":[tx,ty]}...],                       # '='
     "buttons":[{"target":[tx,ty]}...],                      # '?'
     "braziers":[{"group":0}...],                            # '*' (default group 0)
-    "brazier_groups":[{"total":3,"target":[tx,ty]}...] }    # indexed by group id
+    "brazier_groups":[{"total":3,"target":[tx,ty],"latch_id":-1}...],  # indexed by group id
+    "entrances":[{"id":0,"facing":1}...],                   # 'N' (defaults: id by order, facing +1)
+    "room_doors":[{"target_room":0,"target_entrance":0}...] }  # 'D' (must have target metadata)
 """
 import json
 import os
@@ -40,7 +43,7 @@ ABILITY_ENUM = {
     'featherleap': 'Featherleap', 'fire': 'Fire', 'ice': 'Ice', 'glide': 'Glide',
     'dash': 'Dash', 'grapple': 'Grapple', 'stone': 'Stone', 'light': 'Light',
 }
-CONTENT = set('@CEoG12345678VIWXFBK=?*')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash)
+CONTENT = set('@CEoG12345678VIWXFBK=?*ND')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'N' entrance, 'D' room-door
 
 
 class LevelError(Exception):
@@ -70,6 +73,8 @@ def compile_level(txt_path, json_path):
     j_buttons = meta.get('buttons', [])
     j_braziers = meta.get('braziers', [])
     j_brazier_groups = meta.get('brazier_groups', [])
+    j_entrances = meta.get('entrances', [])
+    j_room_doors = meta.get('room_doors', [])
 
     tiles = []
     spawns, cages, exits = [], [], []
@@ -81,7 +86,9 @@ def compile_level(txt_path, json_path):
     plates = []         # (tx,ty,target_tx,target_ty)
     buttons = []        # (tx,ty,target_tx,target_ty)
     braziers = []       # (tx,ty,group)
-    e_idx = g_idx = f_idx = pl_idx = b_idx = br_idx = 0
+    entrances = []      # (id, tx, ty, facing)
+    room_doors = []     # (tx, ty, target_room, target_entrance)
+    e_idx = g_idx = f_idx = pl_idx = b_idx = br_idx = n_idx = rd_idx = 0
 
     for y, r in enumerate(rows):
         for x, c in enumerate(r):
@@ -146,13 +153,26 @@ def compile_level(txt_path, json_path):
                 grp = (j_braziers[br_idx].get('group', 0) if br_idx < len(j_braziers) else 0)
                 braziers.append((x, y, grp))
                 br_idx += 1
+            elif c == 'N':
+                je = j_entrances[n_idx] if n_idx < len(j_entrances) else {}
+                eid = je.get('id', n_idx)
+                facing = je.get('facing', 1)
+                entrances.append((eid, x, y, facing))
+                n_idx += 1
+            elif c == 'D':
+                if rd_idx >= len(j_room_doors):
+                    raise LevelError(f"room-door 'D' at ({x},{y}) but JSON has no 'room_doors' entry #{rd_idx}")
+                t = j_room_doors[rd_idx]
+                room_doors.append((x, y, t['target_room'], t['target_entrance']))
+                rd_idx += 1
             elif c in '12345678':
                 doors.append((x, y, int(c)))
 
     if len(spawns) != 1:
         raise LevelError(f"need exactly one '@' spawn, found {len(spawns)}")
 
-    brazier_groups = [(g['total'], g['target'][0], g['target'][1]) for g in j_brazier_groups]
+    brazier_groups = [(g['total'], g['target'][0], g['target'][1], g.get('latch_id', -1))
+                      for g in j_brazier_groups]
 
     # Solid-border invariant (collision engine treats OOB as solid).
     def tile_at(x, y):
@@ -170,6 +190,7 @@ def compile_level(txt_path, json_path):
         'enemies': enemies, 'gates': gates, 'doors': doors, 'pickups': pickups,
         'blocks': blocks, 'plates': plates, 'buttons': buttons,
         'braziers': braziers, 'brazier_groups': brazier_groups,
+        'entrances': entrances, 'room_doors': room_doors,
     }
 
 
@@ -211,8 +232,14 @@ def emit_header(level, name):
                                [f'{{{tx},{ty},{g}}}' for (tx, ty, g) in level['braziers']],
                                '{0,0,0}'); L.append(line)
     line, bgcount = emit_array('logic::BrazierGroupSpawn', 'BRAZIER_GROUPS',
-                               [f'{{{tot},{ttx},{tty}}}' for (tot, ttx, tty) in level['brazier_groups']],
-                               '{0,0,0}'); L.append(line)
+                               [f'{{{tot},{ttx},{tty},{lat}}}' for (tot, ttx, tty, lat) in level['brazier_groups']],
+                               '{0,0,0,-1}'); L.append(line)
+    line, encount = emit_array('logic::EntranceSpawn', 'ENTRANCES',
+                               [f'{{{eid},{tx},{ty},{fac}}}' for (eid, tx, ty, fac) in level['entrances']],
+                               '{0,0,0,1}'); L.append(line)
+    line, rdcount = emit_array('logic::RoomDoorSpawn', 'ROOM_DOORS',
+                               [f'{{{tx},{ty},{tr},{te}}}' for (tx, ty, tr, te) in level['room_doors']],
+                               '{0,0,0,0}'); L.append(line)
 
     sx, sy = level['spawn']
     cx, cy = level['cage'] if level['cage'] else (0, 0)
@@ -225,7 +252,8 @@ def emit_header(level, name):
         f'{name}_ENEMIES, {ecount}, {name}_GATES, {gcount}, {name}_DOORS, {dcount}, '
         f'{name}_PICKUPS, {pcount}, {name}_BLOCKS, {bcount}, {name}_PLATES, {plcount}, '
         f'{name}_BUTTONS, {btcount}, {name}_BRAZIERS, {brcount}, '
-        f'{name}_BRAZIER_GROUPS, {bgcount} }};'
+        f'{name}_BRAZIER_GROUPS, {bgcount}, '
+        f'{name}_ENTRANCES, {encount}, {name}_ROOM_DOORS, {rdcount} }};'
     )
     L.append('')
     return '\n'.join(L)

@@ -1,0 +1,4 @@
+{ "tileset":"tiles",
+  "entrances":[{"id":1,"facing":-1}],
+  "pickups":[{"ability":"fire"}],
+  "room_doors":[{"target_room":1,"target_entrance":0}] }

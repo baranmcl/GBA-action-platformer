@@ -28,6 +28,7 @@
 #include "logic/pushable_block.h"
 #include "logic/puzzle.h"
 #include "logic/gates.h"
+#include "logic/room_graph.h"   // find_entrance, room_door_at
 #include "engine/input.h"
 #include "engine/spell_input.h"
 #include "engine/level_loader.h"  // load_level, set_collision_tile
@@ -37,6 +38,7 @@
 #include "engine/spell_pool.h"
 #include "engine/hud.h"
 #include "engine/fade.h"
+#include "engine/save.h"        // write_world (persist latches)
 
 namespace game
 {
@@ -45,13 +47,36 @@ namespace
     logic::Fixed fx(int v){ return logic::Fixed::from_int(v); }
     int px2t(logic::Fixed p){ return logic::Tilemap::px_to_tile(p); }
 
+    struct RoomOutcome {
+        enum Kind { ExitDungeon, Quit, Restart, GoToRoom } kind;
+        int target_room = 0;
+        int target_entrance = 0;
+    };
+
     struct EnemyInst { logic::Enemy e; bn::optional<bn::sprite_ptr> sprite; };
     struct GateInst  { logic::GateSpawn spawn; logic::Body body; bool open = false; };
     struct BlockInst { logic::PushableBlock blk; bn::optional<bn::sprite_ptr> sprite; };
-    struct BrazierInst { int tx, ty, group; logic::Body body; bool lit = false; };
+    struct BrazierInst { int tx, ty, group; logic::Body body; bool lit = false; int draw_ty = 0; };
+
+    // First STANDABLE collision row at/below start_ty in this column (the floor the content rests on).
+    // Standable = solid OR one-way platform (D4's exit rests on a one-way platform, not a solid floor).
+    // Falls back to start_ty+1 if none found within the map.
+    int floor_row_below(const logic::Tilemap& map, int tx, int start_ty){
+        for(int y = start_ty + 1; y < map.h; ++y)
+            if(map.is_solid(tx, y) || map.is_oneway(tx, y)) return y;   // standable: solid or one-way platform
+        return start_ty + 1;
+    }
     struct ShrineInst { logic::AbilityPickup pk; logic::Body body; bn::optional<bn::sprite_ptr> sprite; };
     // src_tx/ty: plate or button tile to test; group: brazier group (Braziers kind)
     struct TriggerInst { logic::Trigger trig; int src_tx, src_ty, group; bool applied = false; };
+
+    // Persist a progress latch to SRAM on first trigger; no-op if already set or unlatched (-1).
+    void persist_latch(logic::World& world, int latch_id){
+        if(latch_id >= 0 && !world.latched(latch_id)){
+            world.set_latch(latch_id);
+            engine::write_world(world);
+        }
+    }
 
     logic::Body tile_body(int tx, int ty, int hw, int hh){
         logic::Body b{}; b.half_w = fx(hw); b.half_h = fx(hh);
@@ -73,7 +98,7 @@ namespace
     }
 }
 
-DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, logic::PlayerState& ps)
+static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, logic::World& world, logic::PlayerState& ps)
 {
     const int d = world.current_dungeon;
     bn::bg_palettes::set_transparent_color(bn::color(8, 8, 24));
@@ -98,11 +123,13 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
         cam.set_position(camx, camy);
     };
 
-    const logic::Vec2 spawn_pos { fx(level.spawn_tx * 8), fx(level.spawn_ty * 8) };
+    logic::EntranceSpawn ent = logic::find_entrance(level, entrance_id);
+    const logic::Vec2 spawn_pos { fx(ent.tx * 8), fx(ent.ty * 8) };
 
     logic::Player player;
     player.body.half_w = fx(8); player.body.half_h = fx(16);
     player.body.pos = spawn_pos;
+    player.facing = ent.facing;   // face inward at the entrance
 
     logic::Meter& health = ps.health;   // persist across hub <-> dungeon (no reset on entry)
     logic::Meter& magic  = ps.magic;
@@ -167,7 +194,9 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
         GateInst& gi = gates.back();
         const logic::GateInfo& info = logic::gate_info(g.type);
         bool passable = info.is_geometry && logic::can_pass(g.type, world.abilities);
-        if(passable){ gi.open = true; }                              // geometry gate already owned -> open
+        // latched_open: a shortcut opened on a prior visit, persisted in SRAM — re-open it on room load.
+        bool latched_open = (g.latch_id >= 0) && world.latched(g.latch_id);
+        if(passable || latched_open){ gi.open = true; }              // geometry gate owned OR latch set -> open
         else { fill_column(lvl.view, g.tx, level.h, info.bg_tile); } // closed -> full-height vine/ice wall
     }
 
@@ -194,14 +223,33 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
         bi.sprite->set_camera(cam);
     }
 
+    // ---- room-doors (bg tile 5 open-door; 2-wide x 4-tall archway grounded on the floor,
+    //      matching the hub's archway). Floor-scanned so a row-18-authored door reaches the
+    //      floor (row 20) instead of floating. Collision unchanged (door stays walkable). ----
+    for(int i = 0; i < level.room_door_count && i < 8; ++i){
+        const logic::RoomDoorSpawn& rd = level.room_doors[i];
+        int fr = floor_row_below(lvl.map, rd.tx, rd.ty);
+        for(int dy = 0; dy < 4; ++dy) for(int dx = 0; dx < 2; ++dx)
+            engine::set_level_tile(lvl.view, rd.tx + dx, fr - 1 - dy, 5);
+    }
+    // ---- exit marker (bg tile 6 door-locked = distinct closed door = dungeon goal;
+    //      same 2-wide x 4-tall grounded archway. room-doors use tile 5 so they're distinct.
+    //      Exit collision body untouched. ----
+    if(level.has_exit){
+        int fr = floor_row_below(lvl.map, level.exit_tx, level.exit_ty);
+        for(int dy = 0; dy < 4; ++dy) for(int dx = 0; dx < 2; ++dx)
+            engine::set_level_tile(lvl.view, level.exit_tx + dx, fr - 1 - dy, 6);
+    }
+
     // ---- braziers (bg tile 14 unlit; Body for fire-hit) ----
     bn::vector<BrazierInst, 16> braziers;
     for(int i = 0; i < level.brazier_count && i < 16; ++i){
         const logic::BrazierSpawn& b = level.braziers[i];
         // Tall hit-body (rows 14..19) so a horizontal Fire shot at the player's chest height
-        // still hits a brazier sitting on the floor.
-        braziers.push_back(BrazierInst{ b.tx, b.ty, b.group, tile_body(b.tx, 14, 6, 24), false });
-        engine::set_level_tile(lvl.view, b.tx, b.ty, 14);
+        // still hits a brazier sitting on the floor. Visual grounded on the floor (fr-1).
+        int draw_ty = floor_row_below(lvl.map, b.tx, b.ty) - 1;
+        braziers.push_back(BrazierInst{ b.tx, b.ty, b.group, tile_body(b.tx, 14, 6, 24), false, draw_ty });
+        engine::set_level_tile(lvl.view, b.tx, draw_ty, 14);
     }
 
     // ---- plates (tile 17) / buttons (tile 18) + triggers ----
@@ -221,7 +269,9 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
     for(int g = 0; g < level.brazier_group_count && g < 16; ++g){
         const logic::BrazierGroupSpawn& bg = level.brazier_groups[g];
         logic::Trigger t = logic::Trigger::braziers(bg.total); t.target_tx = bg.target_tx; t.target_ty = bg.target_ty;
-        triggers.push_back(TriggerInst{ t, 0, 0, g, false });
+        bool latched_open = (bg.latch_id >= 0) && world.latched(bg.latch_id);
+        triggers.push_back(TriggerInst{ t, 0, 0, g, latched_open });
+        if(latched_open) open_column(lvl.view, bg.target_tx, level.h);
     }
 
     // Centre camera on the player before fading in (avoids a snap on frame 0).
@@ -232,11 +282,15 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
     int fade_in_t = 16;
     int push_cd = 0;
 
-    DungeonResult result = DungeonResult::Quit;
     while(true)
     {
-        if(bn::keypad::select_pressed()) { result = DungeonResult::Quit; break; }
-        if(bn::keypad::start_pressed())  { result = DungeonResult::Restart; break; }  // anti-soft-lock level reset
+        if(bn::keypad::select_pressed()) { return RoomOutcome{ RoomOutcome::Quit }; }
+        if(bn::keypad::start_pressed())  { return RoomOutcome{ RoomOutcome::Restart }; }  // anti-soft-lock level reset
+        if(bn::keypad::up_pressed()){
+            if(const logic::RoomDoorSpawn* dr = logic::room_door_at(level, player.body)){
+                return RoomOutcome{ RoomOutcome::GoToRoom, dr->target_room, dr->target_entrance };
+            }
+        }
 
         logic::InputFrame in = engine::read_input();
         player.abilities.featherleap = world.has(logic::Ability::Featherleap);
@@ -259,18 +313,20 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
             if(!gi.open && clears != logic::SpellId::None && spells.consume_hit(gi.body, clears)){
                 gi.open = true;
                 open_column(lvl.view, gi.spawn.tx, level.h);
+                persist_latch(world, gi.spawn.latch_id);
             }
             // M6: cracked walls aren't spell-cleared (gate_cleared_by==None); a dashing body smashes them on contact.
             if(!gi.open && gi.spawn.type == logic::GateType::CrackedWall
                && player.dash.active() && logic::aabb_overlap(player.body, gi.body)){
                 gi.open = true;
                 open_column(lvl.view, gi.spawn.tx, level.h);
+                persist_latch(world, gi.spawn.latch_id);
             }
         }
         for(BrazierInst& bi : braziers){
             if(!bi.lit && spells.consume_hit(bi.body, logic::SpellId::Fire)){  // only Fire lights braziers
                 bi.lit = true;
-                engine::set_level_tile(lvl.view, bi.tx, bi.ty, 15);
+                engine::set_level_tile(lvl.view, bi.tx, bi.draw_ty, 15);
             }
         }
 
@@ -371,7 +427,10 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
                 case logic::TriggerKind::Braziers: {
                     int n = 0; for(BrazierInst& bi : braziers) if(bi.group == ti.group && bi.lit) ++n;
                     ti.trig.lit = n;
-                    if(!ti.applied && ti.trig.active()){ ti.applied = true; open_column(lvl.view, ti.trig.target_tx, level.h); } // latch
+                    if(!ti.applied && ti.trig.active()){
+                        ti.applied = true; open_column(lvl.view, ti.trig.target_tx, level.h); // latch
+                        persist_latch(world, level.brazier_groups[ti.group].latch_id);
+                    }
                     break; }
             }
         }
@@ -417,7 +476,7 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
         // Must LAND on the exit (grounded), not bump it from underneath — clearing requires
         // standing on the platform, which matters for the gated vertical climb (no head-bump cheese).
         if(level.has_exit && spronk_ok && player.body.on_ground && logic::aabb_overlap(player.body, exit)){
-            result = DungeonResult::Cleared; break;
+            return RoomOutcome{ RoomOutcome::ExitDungeon };
         }
 
         hud.update(health, magic);
@@ -427,8 +486,27 @@ DungeonResult run_dungeon(const logic::LevelData& level, logic::World& world, lo
         if(fade_in_t > 0) engine::set_fade(--fade_in_t);
         bn::core::update();
     }
+}
 
-    engine::fade_out(16);
-    return result;
+DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world, logic::PlayerState& ps)
+{
+    int cur_room = dungeon.start_room;
+    int cur_entrance = 0;
+    while(true){
+        RoomOutcome out = play_room(*dungeon.rooms[cur_room], cur_entrance, world, ps);
+        engine::fade_out(16);   // one fade-out per room exit; next play_room fades in
+        switch(out.kind){
+            case RoomOutcome::ExitDungeon: return DungeonResult::Cleared;
+            case RoomOutcome::Quit:        return DungeonResult::Quit;
+            case RoomOutcome::Restart:
+                ps.health.cur = ps.health.max;   // anti-soft-lock: refill vitals, replay same room
+                ps.magic.cur  = ps.magic.max;
+                break;   // cur_room/cur_entrance unchanged -> replay same room
+            case RoomOutcome::GoToRoom:
+                cur_room = out.target_room;
+                cur_entrance = out.target_entrance;
+                break;
+        }
+    }
 }
 }

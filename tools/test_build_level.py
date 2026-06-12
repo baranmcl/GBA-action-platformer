@@ -145,7 +145,7 @@ class TestBuildLevel(unittest.TestCase):
         self.assertEqual(lvl['plates'], [(3, 1, 6, 1)])
         self.assertEqual(lvl['buttons'], [(4, 1, 6, 2)])
         self.assertEqual(lvl['braziers'], [(5, 1, 0)])
-        self.assertEqual(lvl['brazier_groups'], [(1, 5, 5)])
+        self.assertEqual(lvl['brazier_groups'], [(1, 5, 5, -1)])  # latch_id defaults to -1
 
     def test_fire_immune_enemy_flag(self):
         lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4], "fire_immune": True}]})
@@ -155,6 +155,64 @@ class TestBuildLevel(unittest.TestCase):
         txt = "#####\n#@=.#\n#####\n"
         with self.assertRaises(build_level.LevelError):
             compile_str(txt, {})  # plate with no target
+
+    # --- room-to-room symbols ---
+    def test_entrance_symbol(self):
+        txt = "######\n#@N..#\n######\n"
+        lvl = compile_str(txt, {"entrances": [{"id": 1, "facing": -1}]})
+        self.assertEqual(lvl['entrances'], [(1, 2, 1, -1)])  # (id, tx, ty, facing)
+
+    def test_entrance_defaults(self):
+        txt = "######\n#@N..#\n######\n"
+        lvl = compile_str(txt, {})  # no entrance metadata -> id by order, facing +1
+        self.assertEqual(lvl['entrances'], [(0, 2, 1, 1)])
+
+    def test_entrance_mixed_metadata(self):
+        # Two N's, JSON only for the first; the second falls back to scan-order
+        # index (1) + facing +1. Pins the documented primary-key default behavior.
+        txt = "######\n#@N.N#\n######\n"  # N at (2,1) and (4,1)
+        lvl = compile_str(txt, {"entrances": [{"id": 5, "facing": -1}]})
+        self.assertEqual(lvl['entrances'], [(5, 2, 1, -1), (1, 4, 1, 1)])
+
+    def test_room_door_symbol(self):
+        txt = "######\n#@.D.#\n######\n"
+        lvl = compile_str(txt, {"room_doors": [{"target_room": 2, "target_entrance": 1}]})
+        self.assertEqual(lvl['room_doors'], [(3, 1, 2, 1)])  # (tx, ty, target_room, target_entrance)
+
+    def test_room_door_requires_target(self):
+        txt = "######\n#@.D.#\n######\n"
+        with self.assertRaises(build_level.LevelError):
+            compile_str(txt, {})  # room-door with no target metadata
+
+    def test_brazier_group_latch_id(self):
+        txt = "########\n#@*....#\n########\n"
+        lvl = compile_str(txt, {
+            "braziers": [{"group": 0}],
+            "brazier_groups": [{"total": 1, "target": [5, 5], "latch_id": 4}],
+        })
+        self.assertEqual(lvl['brazier_groups'], [(1, 5, 5, 4)])
+
+    def test_brazier_group_latch_default(self):
+        txt = "########\n#@*....#\n########\n"
+        lvl = compile_str(txt, {
+            "braziers": [{"group": 0}],
+            "brazier_groups": [{"total": 1, "target": [5, 5]}],
+        })
+        self.assertEqual(lvl['brazier_groups'], [(1, 5, 5, -1)])  # default not-latched
+
+    def test_emit_header_has_room_fields(self):
+        txt = "######\n#@ND.#\n######\n"  # N at (2,1), D at (3,1)
+        lvl = compile_str(txt, {"entrances": [{"id": 0, "facing": 1}],
+                                "room_doors": [{"target_room": 1, "target_entrance": 0}]})
+        hdr = build_level.emit_header(lvl, "TESTRM")
+        self.assertIn("TESTRM_ENTRANCES", hdr)
+        self.assertIn("TESTRM_ROOM_DOORS", hdr)
+        # Pin the exact emitted C++ tuple content so a field-order swap in the
+        # entrance/room-door emit f-strings is caught.
+        # Entrance: {id, tx, ty, facing} -> {0,2,1,1}
+        self.assertIn("{0,2,1,1}", hdr)
+        # Room-door: {tx, ty, target_room, target_entrance} -> {3,1,1,0}
+        self.assertIn("{3,1,1,0}", hdr)
 
 
 if __name__ == '__main__':

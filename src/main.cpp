@@ -6,11 +6,7 @@
 #include "game/scene_title.h"
 #include "game/scene_hub.h"
 #include "game/scene_dungeon.h"
-#include "game/levels/dungeon1.h"
-#include "game/levels/dungeon2.h"
-#include "game/levels/dungeon3.h"
-#include "game/levels/dungeon4.h"
-#include "game/levels/dungeon5.h"
+#include "game/levels/dungeons.h"
 
 int main()
 {
@@ -27,24 +23,17 @@ int main()
     while(true)
     {
         game::HubResult hr = game::run_hub(world, ps); // returns when a door is entered
-        int n = hr.enter_dungeon;                     // 1..8; M3 supports 1 and 2 (others locked)
-        const logic::LevelData* lvl = nullptr;
-        if(n == 1) lvl = &DUNGEON1_DATA;
-        else if(n == 2) lvl = &DUNGEON2_DATA;
-        else if(n == 3) lvl = &DUNGEON3_DATA;
-        else if(n == 4) lvl = &DUNGEON4_DATA;
-        else if(n == 5) lvl = &DUNGEON5_DATA;
+        int n = hr.enter_dungeon;                     // 1..8; dungeons 1-5 built (M2-M6), 6-8 not yet
+        const logic::DungeonData* lvl = nullptr;
+        if(n == 1) lvl = &DUNGEON1_DUNGEON;
+        else if(n == 2) lvl = &DUNGEON2_DUNGEON;
+        else if(n == 3) lvl = &DUNGEON3_DUNGEON;
+        else if(n == 4) lvl = &DUNGEON4_DUNGEON;
+        else if(n == 5) lvl = &DUNGEON5_DUNGEON;
         else continue;                                // doors 6-8 not built
 
         world.current_dungeon = n;
-        game::DungeonResult dr;
-        do {
-            dr = game::run_dungeon(*lvl, world, ps);
-            if(dr == game::DungeonResult::Restart){    // START: level reset — re-run fresh + refill vitals
-                ps.health.cur = ps.health.max;         // (anti-soft-lock: e.g. stranded with no magic before a spell gate)
-                ps.magic.cur  = ps.magic.max;
-            }
-        } while(dr == game::DungeonResult::Restart);
+        game::DungeonResult dr = game::run_dungeon(*lvl, world, ps);
         world.current_dungeon = 0;                    // back in the hub before saving
         if(dr == game::DungeonResult::Cleared)
             engine::write_world(world);               // persist earned spronk/ability
