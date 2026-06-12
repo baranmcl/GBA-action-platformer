@@ -83,7 +83,7 @@ def compile_level(txt_path, json_path):
     gates = []          # (tx,ty,GateEnum)
     doors = []          # (tx,ty,dungeon)
     pickups = []        # (tx,ty,AbilityEnum)
-    blocks = []         # (tx,ty)
+    blocks = []         # (tx,ty,pullable)
     plates = []         # (tx,ty,target_tx,target_ty)
     buttons = []        # (tx,ty,target_tx,target_ty)
     braziers = []       # (tx,ty,group)
