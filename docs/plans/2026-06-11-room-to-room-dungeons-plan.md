@@ -61,7 +61,7 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** 5/6 phases shipped (162/162 host tests + 29 Python compiler tests green; ROM builds clean). Phase 6 in progress — automatable build done by subagent, interactive emulator QA handed to the user.
+**Overall:** ✅ 6/6 phases shipped. Feature complete, end-to-end QA-verified on mGBA (all playtests pass after 5 QA rounds), final full-branch review passed (merge-with-minor-fixes → both fixes applied). 162/162 host tests + 29 Python compiler tests green; ROM builds clean. Branch ready to merge to `main`.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
@@ -70,7 +70,7 @@ notes and commit messages.
 | 3 — Save format v3 (latches) | ✅ Shipped | `bbabbf9`, `6a51676` | spec+quality reviewed; see Deviations |
 | 4 — Level compiler authoring | ✅ Shipped | `103eb72`, `9427e10` | spec+quality reviewed |
 | 5 — Engine/game room loop | ✅ Shipped | `262575f`, `90989e8`, `47ed5bb`, `dac7a46`, `8c80062` | spec+quality reviewed; ROM builds clean; Restart deviation below |
-| 6 — Vertical slice + manual QA | 🚧 In progress | — | claimed 2026-06-11; ROM-build part automatable, 7-step emulator QA → user (mGBA at `C:/Program Files/mGBA/mGBA.exe`) |
+| 6 — Vertical slice + manual QA | ✅ Shipped | `7f37d11`, `c04e5ca`, `67c7092`, `372112c`, `6a0d9f0`, `604c74f`, `375a7da` | 5 QA rounds (door visibility, magic source, room scale, grounding/tall-doors/safe-spawn, one-way exit); final review fix `375a7da` |
 
 ### Deviations
 - **Task 5.3 (Restart handling moved into `run_dungeon`):** As designed in the plan, START (`DungeonResult::Restart`) is now consumed inside `run_dungeon` (refills vitals + re-enters the *current* room) rather than being returned to `main.cpp`'s old `do/while`. With multi-room dungeons, START resets the room you're stuck in, not the dungeon start. `DungeonResult::Restart` remains defined but is now internal-only (never returned). `main.cpp` simplified to a single `run_dungeon` call.
@@ -79,6 +79,7 @@ notes and commit messages.
 ### Discoveries
 - **QA round 2 found the test rooms were undersized (16 tall), re-authored in `c04e5ca`:** The brazier hit-body is hardcoded `tile_body(b.tx, 14, 6, 24)` (y rows 14–20), assuming the standard ~22-tall dungeon floor height. A 16-tall room puts the player (and Fire muzzle) above it, so braziers couldn't be lit; content also looked "floating." Re-authored both rooms to mirror `dungeon3.txt` exactly (32×22, content row 18, gap 19, floor 20, border 21). Verified hittable: grounded muzzle y[144,150] ⊂ hit-body y[112,160].
 - **ENGINE CONSTRAINT surfaced (camera clamp): rooms MUST be ≥ the 240×160 viewport** (≥30 tiles wide, ≥20 tiles tall). `set_clamped_cam` (scene_dungeon.cpp) computes `miny=lt+80, maxy=lb-80`; when `level.h*8 < 160` (or width < 240), the clamp inverts (`miny>maxy`) and falls back to centering, which over the fixed 64×128 big-map leaves the player poorly/un-framed (this was the "invisible player after door" QA symptom — NOT an engine bug, a too-small room). Future room authors must keep rooms ≥30×20. A follow-up could make the clamp degrade gracefully for small rooms, but it's out of scope here.
+- **Floor-aware rendering (round-4 + final-review fix):** room-doors and the dungeon exit render as 2-wide × 4-tall archways (hub-height) sitting on the floor; braziers render grounded — all via `floor_row_below`, which scans the collision map for the first STANDABLE tile (solid OR one-way platform). The one-way case was a final-review catch (`375a7da`): dungeon 4's exit rests on a one-way platform, so a solid-only scan drew its archway ~44 rows too low. Content is authored on the standard row 18 (sprites grounded); bg-tile content is grounded by the render, not the authored row.
 - **QA round 1 (Phase 6) found two gaps, both fixed:** (1) **Room-doors rendered invisible** — `play_room` parsed/triggered room-doors but never drew them. Fixed in `fae8dbc`: render each room-door (and the dungeon exit) as a 2-tall open-door tile (index 5) at build; inert for the 5 existing dungeons (0 room-doors) and verified cosmetically safe for their exits (all exit tiles + the tile above were blank). (2) **No magic source in the test dungeon** — Fire (cost 10) needs magic, which only comes from bolt-killing enemies (+25 each); the test dungeon had none. Fixed in `d96ff6a`: added 2 enemies to dungeon-6 room 1's entrance side. ROM rebuilt; re-QA pending.
 - **Pre-existing:** A level compiler already exists (`tools/build_level.py`, tested by `tools/test_build_level.py`). The spec listed "authoring tool" as out of scope; this plan extends the existing compiler with two new symbols (Phase 4). The larger Tiled/CSV importer remains out of scope.
 - **ROM toolchain env (this Windows machine):** devkitPro is installed at `C:/devkitPro`, but the shell's `DEVKITPRO` env points to the non-existent Linux path `/opt/devkitpro` and `arm-none-eabi-g++` is not on PATH. A plain `make` will fail. Build the ROM with the corrected env: `DEVKITPRO=/c/devkitPro DEVKITARM=/c/devkitPro/devkitARM PATH="/c/devkitPro/devkitARM/bin:/c/devkitPro/tools/bin:$PATH" make`. (`arm-none-eabi-g++.exe` confirmed at `C:/devkitPro/devkitARM/bin`; `make` at `C:/devkitPro/msys2/usr/bin/make`.) Phase 5/6 build steps must use this. A full end-to-end Butano build has not yet been run — the Phase 5.1 implementer performs the first one and captures any further fixups here.
@@ -989,7 +990,7 @@ git commit -m "feat(game): run_dungeon room loop with hard-cut fades; Restart re
 
 ## Phase 6 — Vertical slice + manual QA
 
-**Execution Status:** 🚧 IN PROGRESS — claimed 2026-06-11 (branch `feat/room-to-room-dungeons`). Build/author steps automatable; the 7-step interactive emulator QA (Step 6) is handed to the user (mGBA).
+**Execution Status:** ✅ SHIPPED at `7f37d11`, `c04e5ca`, `67c7092`, `372112c`, `6a0d9f0`, `604c74f`, `375a7da` on 2026-06-11/12. Dungeon 6 (2-room slice) authored, wired, and verified through 5 interactive mGBA QA rounds (all tests pass). `DUNGEON6_DUNGEON` ships as a defined-but-unreferenced reference example (commented in `dungeons.h`); not wired to a hub door (out of scope — hub only authors doors 1–5). Final full-branch review passed.
 
 A real 2-room test dungeon proving the whole path end-to-end: walk to a door, press UP, hard-cut to room 2 at the linked entrance; solve a latching brazier puzzle, leave and re-enter, confirm the shortcut stays open after a save/reload.
 
