@@ -320,8 +320,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         bool want_grapple = si.cast && spell.selected == logic::SpellId::Grapple;
         in.grapple_fire = false;
         if(want_grapple){
-            // Find a pullable block within grapple range in the facing/up arc (same arc rule as
-            // nearest_grapple_anchor: exclude only if strictly BEHIND the facing direction).
+            // Find a pullable block within grapple range in the facing/up arc.
             BlockInst* target = nullptr;
             int ptx = px2t(player.body.pos.x + player.body.half_w);   // player centre tile x
             int pty = px2t(player.body.pos.y + player.body.half_h);   // player centre tile y
@@ -331,14 +330,14 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                 int adx = dxt < 0 ? -dxt : dxt, ady = dyt < 0 ? -dyt : dyt;
                 if(adx > logic::GrappleState::RANGE || ady > logic::GrappleState::RANGE) continue;
                 int sx = (dxt > 0) - (dxt < 0);           // horizontal sign relative to player
-                if(sx == -player.facing && dxt != 0) continue;  // exclude strictly-behind blocks
-                target = &bi; break;                       // first in-range pullable block wins
+                if(sx == -player.facing && dxt != 0) continue;  // exclude strictly-behind blocks (arc rule matches nearest_grapple_anchor)
+                // first in-range pullable block by spawn order (rooms have at most one pull-block puzzle, so nearest-tiebreak is unnecessary)
+                target = &bi; break;
             }
             if(target && grapple_pull_cd == 0){
-                // Pull direction: toward the player — if player centre is left of block centre, pull left.
-                int pcx = player.body.pos.x.to_int() + player.body.half_w.to_int();
-                int bcx = target->blk.tx * 8 + 4;         // block centre x (px)
-                int pull_dir = (pcx < bcx) ? -1 : 1;
+                // Pull direction in tile space (same idiom as the scan): block right of player -> pull it left, toward the player.
+                int target_dxt = target->blk.tx - ptx;    // block tile minus player centre tile
+                int pull_dir = (target_dxt > 0) ? -1 : 1;
                 int oldx = target->blk.tx;
                 if(target->blk.pull(pull_dir, lvl.map)){
                     engine::set_collision_tile(oldx, target->blk.ty, 0);
@@ -431,7 +430,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
 
         // ---- pushable blocks: push detection, gravity, sprite ----
         if(push_cd > 0) --push_cd;
-        if(grapple_pull_cd > 0) --grapple_pull_cd;
+        if(grapple_pull_cd > 0) --grapple_pull_cd;   // ticks here; checked in the input phase above
         for(BlockInst& bi : blocks){
             // push when grounded, holding a dir, and the tile in front of the player == this block
             if(push_cd == 0 && player.body.on_ground && (in.left || in.right)){
