@@ -74,6 +74,22 @@ TEST(d6_has_grapple_anchor){
     CHECK(anchors >= 1);
 }
 
+TEST(d6_every_anchor_has_solid_below){
+    // R1 grapple-landing rule: on arrival the engine scans DOWN the anchor column for the
+    // first solid tile and snaps the player to STAND on top of it. So every authored anchor
+    // MUST have a Solid tile directly below it (the ledge the player lands on) — otherwise the
+    // player snaps to the distant floor (or out of bounds), which is the bug this dungeon fixes.
+    for(int r = 0; r < D6_N; ++r){
+        const LevelData& L = *D6_ROOMS[r];
+        for(int y = 0; y < L.h; ++y)
+        for(int x = 0; x < L.w; ++x){
+            if(L.tiles[y*L.w + x] != (uint8_t)TileKind::GrapplePoint) continue;
+            CHECK(y + 1 < L.h);                                   // anchor not on the bottom row
+            CHECK_EQ((int)L.tiles[(y+1)*L.w + x], (int)TileKind::Solid);  // solid ledge directly below
+        }
+    }
+}
+
 TEST(d6_has_pullable_block){
     // >=1 pullable block (the grapple pull-block puzzle).
     int pull = 0;
