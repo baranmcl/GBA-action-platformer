@@ -3,8 +3,8 @@
 #include "logic/dash.h"
 #include "logic/grapple.h"
 namespace logic {
-struct InputFrame { bool left=false, right=false, jump_pressed=false, fire_pressed=false, glide_held=false, grapple_fire=false; };
-struct Abilities { bool featherleap=false; bool glide=false; bool dash=false; bool grapple=false; };
+struct InputFrame { bool left=false, right=false, jump_pressed=false, fire_pressed=false, glide_held=false, grapple_fire=false, down=false; };
+struct Abilities { bool featherleap=false; bool glide=false; bool dash=false; bool grapple=false; bool stone=false; };
 struct Player {
     Body body;
     Abilities abilities;

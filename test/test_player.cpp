@@ -122,3 +122,12 @@ TEST(dash_left_blinks_leftward){
   CHECK(p.dash.active());
   CHECK(p.body.vel.x < Fixed::from_int(-2));  // exceeds run cap leftward (DASH_VX override)
   CHECK(p.body.vel.y == Fixed::from_int(0));} // vy zeroed during blink
+// --- Task 1.1: InputFrame.down + Abilities.stone default fields ---
+TEST(inputframe_down_defaults_false){
+    InputFrame in{};
+    CHECK(!in.down); // new field: defaults false -> no behavior change
+}
+TEST(abilities_stone_defaults_false){
+    Abilities ab{};
+    CHECK(!ab.stone); // new field: defaults false -> no behavior change
+}
