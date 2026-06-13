@@ -70,10 +70,17 @@ notes and commit messages.
 | 1 — Pure logic: StoneState + input/ability/data | ⬜ Not started | — | — |
 | 2 — Level compiler: cracked-floor/boulder/heavy-switch/loose-platform symbols | ✅ Shipped | 54a4554 (k gate), 612cac9 (heavy plate), a1925bd (boulder+loose-platform), 10ce2d3 (header regen) | — |
 | 3 — Engine/scene wiring (pound input, impact resolution, falling terrain last, VFX) | ✅ Shipped | e83c2f3, b24c8fa, e80de4e, aa4a8ce, 13b9fa6 (impact-row fix) | 261/261 host tests; ROM fixed; purity OK |
-| 4 — Content: Quaking Quarry 3 rooms + hub Door 7 + no-soft-lock invariants + QA | ⬜ Not started | — | — |
+| 4 — Content: Quaking Quarry 3 rooms + hub Door 7 + no-soft-lock invariants + QA | 🚧 4.1–4.3 shipped; 4.4 (emulator QA) pending | f67aff8 (4.1 rooms), cf27be0 (4.2 hub Door 7), 55dde58 (4.3 invariants) | 275/275 host tests; ROM fixed; purity OK. Tasks 4.1–4.3 complete; 4.4 manual QA not yet run. |
 
 ### Deviations
-- _(none yet)_
+- **Compiler latch for `k` (Task 4.1):** the `k` cracked-floor symbol gained an optional
+  `latch_id` via a JSON `cracked_floors` list (scan-order indexed) so Room 1's shortcut can
+  persist. Phases 1–2 were frozen, but this is a Phase-4-local compiler addition (the GateSpawn
+  already carried `latch_id`; the scene already calls `persist_latch` for CrackedFloor — only the
+  compiler emit was missing). All existing level headers regenerated with the defaulted `,-1`
+  gate latch_id (no behavior change), committed within f67aff8.
+- **Hub widened 48→52 (Task 4.2):** no room remained for a 7th 2-wide archway at the right border,
+  so the hub grew by 4 interior columns (gate wall / grapple anchors / platforms preserved).
 
 ### Discoveries
 - **Heavy plates have no `latch_id`** (Phase 3, `scene_dungeon.cpp` heavy-plate handler): a heavy switch's `open_column` holds only for the current visit — NOT persisted to SRAM. So the spec §4 "latched shortcut" must NOT be built from a heavy switch alone. **Resolution (Phase 4 content):** build the persistent latched shortcut from a **latched `CrackedFloor`** instead — the pound-smash handler already calls `persist_latch(world, latch_id)`, and a CrackedFloor whose latch is set spawns pre-broken (open) on re-entry. Heavy switches are for in-visit gates only. (Avoids reopening the frozen Phase 1-2 to add a plate `latch_id`.)
@@ -325,7 +332,7 @@ Resolve at the player's impact tile(s) on `player.stone.just_landed()`. Mirror t
 
 ## Phase 4 — Content: Quaking Quarry (3 rooms) + hub Door 7 + no-soft-lock invariants + QA
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** 🚧 Tasks 4.1–4.3 SHIPPED (f67aff8, cf27be0, 55dde58) on `feat/m8-quaking-quarry`; 275/275 host tests, ROM fixed, purity OK. Task 4.4 (emulator QA) PENDING.
 
 **BEFORE starting:** read the D6 room files (`tools/levels/dungeon6_room*.txt/.json`) + `include/game/levels/dungeons.h` (the `DUNGEON6_DUNGEON` room set) as the authoring template, and `test/test_dungeon6_level.cpp` for the invariant style. Honor the room/camera constraint (≥30×20, content row 18, two-way doors).
 
