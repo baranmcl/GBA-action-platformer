@@ -1,0 +1,7 @@
+{ "tileset":"tiles",
+  "enemies":[{"patrol":[8,12]}],
+  "entrances":[{"id":0,"facing":1}],
+  "room_doors":[{"target_room":0,"target_entrance":1}],
+  "cracked_floors":[{"latch_id":1}],
+  "loose_platforms":[{"len":2}],
+  "heart_containers":[{"id":1}] }

@@ -25,6 +25,8 @@ JSON sidecar (Nth metadata entry -> Nth matching symbol in row-major scan order)
     "braziers":[{"group":0}...],                            # '*' (default group 0)
     "brazier_groups":[{"total":3,"target":[tx,ty],"latch_id":-1}...],  # indexed by group id
     "entrances":[{"id":0,"facing":1}...],                   # 'N' (defaults: id by order, facing +1)
+    "cracked_floors":[{"latch_id":1}...],                   # 'k' (scan-order; latch_id default -1 = not latched)
+    "loose_platforms":[{"len":3}...],                       # ':' (scan-order; len default 1)
     "room_doors":[{"target_room":0,"target_entrance":0}...] }  # 'D' (must have target metadata)
 """
 import json
@@ -78,11 +80,12 @@ def compile_level(txt_path, json_path):
     j_room_doors = meta.get('room_doors', [])
     j_heart_containers = meta.get('heart_containers', [])
     j_loose_platforms = meta.get('loose_platforms', [])
+    j_cracked_floors = meta.get('cracked_floors', [])
 
     tiles = []
     spawns, cages, exits = [], [], []
     enemies = []        # (tx,ty,p0,p1,p2)
-    gates = []          # (tx,ty,GateEnum)
+    gates = []          # (tx,ty,GateEnum,latch_id)  latch_id=-1 = not latched
     doors = []          # (tx,ty,dungeon)
     pickups = []        # (tx,ty,AbilityEnum)
     blocks = []         # (tx,ty,pullable)
@@ -95,6 +98,7 @@ def compile_level(txt_path, json_path):
     boulders = []         # (tx, ty)
     loose_platforms = []  # (tx, ty, len)
     e_idx = g_idx = f_idx = pl_idx = b_idx = br_idx = n_idx = rd_idx = hc_idx = lp_idx = 0
+    cf_idx = 0  # scan-order index for cracked floors ('k'), maps into j_cracked_floors
 
     for y, r in enumerate(rows):
         for x, c in enumerate(r):
@@ -123,20 +127,25 @@ def compile_level(txt_path, json_path):
                 gtype = entry['type']
                 if gtype not in GATE_ENUM:
                     raise LevelError(f"unknown gate type '{gtype}'")
-                gates.append((x, y, GATE_ENUM[gtype]))
+                gates.append((x, y, GATE_ENUM[gtype], -1))
                 g_idx += 1
             elif c == 'V':
-                gates.append((x, y, 'Vine'))
+                gates.append((x, y, 'Vine', -1))
             elif c == 'I':
-                gates.append((x, y, 'Ice'))
+                gates.append((x, y, 'Ice', -1))
             elif c == 'W':
-                gates.append((x, y, 'Water'))     # M4 Water gate, cleared by the Ice spell
+                gates.append((x, y, 'Water', -1))     # M4 Water gate, cleared by the Ice spell
             elif c == 'X':
-                gates.append((x, y, 'FireWall'))  # M4 fire-wall gate, Ice extinguishes it
+                gates.append((x, y, 'FireWall', -1))  # M4 fire-wall gate, Ice extinguishes it
             elif c == 'K':
-                gates.append((x, y, 'CrackedWall'))  # M6 cracked-wall gate, Dash smashes it
+                gates.append((x, y, 'CrackedWall', -1))  # M6 cracked-wall gate, Dash smashes it
             elif c == 'k':
-                gates.append((x, y, 'CrackedFloor'))  # M8 cracked-floor gate, Stone ground-pound smashes it
+                # M8 cracked-floor gate, Stone ground-pound smashes it. Optional latch_id (SRAM-persisted
+                # shortcut) from JSON 'cracked_floors' (scan-order indexed); default -1 = not latched.
+                jcf = j_cracked_floors[cf_idx] if cf_idx < len(j_cracked_floors) else {}
+                cf_latch = jcf.get('latch_id', -1)
+                gates.append((x, y, 'CrackedFloor', cf_latch))
+                cf_idx += 1
             elif c == 'F':
                 ab = (j_pickups[f_idx].get('ability', 'fire') if f_idx < len(j_pickups) else 'fire')
                 if ab not in ABILITY_ENUM:
@@ -238,8 +247,8 @@ def emit_header(level, name):
                               [f'{{{tx},{ty},{p0},{p1},{p2}}}' for (tx, ty, p0, p1, p2) in level['enemies']],
                               '{0,0,0,0,0}'); L.append(line)
     line, gcount = emit_array('logic::GateSpawn', 'GATES',
-                              [f'{{{tx},{ty},logic::GateType::{gt}}}' for (tx, ty, gt) in level['gates']],
-                              '{0,0,logic::GateType::Gap}'); L.append(line)
+                              [f'{{{tx},{ty},logic::GateType::{gt},{lat}}}' for (tx, ty, gt, lat) in level['gates']],
+                              '{0,0,logic::GateType::Gap,-1}'); L.append(line)
     line, dcount = emit_array('logic::DoorSpawn', 'DOORS',
                               [f'{{{tx},{ty},{d}}}' for (tx, ty, d) in level['doors']],
                               '{0,0,0}'); L.append(line)

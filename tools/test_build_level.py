@@ -93,7 +93,7 @@ class TestBuildLevel(unittest.TestCase):
     def test_vine_and_ice_gates(self):
         txt = "######\n#@VI.#\n######\n"
         lvl = compile_str(txt, {})
-        self.assertEqual(lvl['gates'], [(2, 1, 'Vine'), (3, 1, 'Ice')])
+        self.assertEqual(lvl['gates'], [(2, 1, 'Vine', -1), (3, 1, 'Ice', -1)])
 
     # --- M4 symbols ---
     def test_water_is_tile_4(self):
@@ -104,7 +104,7 @@ class TestBuildLevel(unittest.TestCase):
     def test_water_gate(self):
         txt = "#####\n#@W.#\n#####\n"
         lvl = compile_str(txt, {})
-        self.assertEqual(lvl['gates'], [(2, 1, 'Water')])
+        self.assertEqual(lvl['gates'], [(2, 1, 'Water', -1)])
 
     # --- M5 wind tiles ---
     def test_wind_tiles(self):
@@ -124,7 +124,7 @@ class TestBuildLevel(unittest.TestCase):
     def test_cracked_wall_gate(self):
         txt = "#####\n#@K.#\n#####\n"
         lvl = compile_str(txt, {})
-        self.assertEqual(lvl['gates'], [(2, 1, 'CrackedWall')])
+        self.assertEqual(lvl['gates'], [(2, 1, 'CrackedWall', -1)])
 
     def test_shrine_ability(self):
         txt = "#####\n#@F.#\n#####\n"
@@ -382,13 +382,20 @@ class TestBuildLevel(unittest.TestCase):
         # 'k' compiles to a gate with GateType::CrackedFloor
         txt = "#####\n#@k.#\n#####\n"
         lvl = compile_str(txt, {})
-        self.assertEqual(lvl['gates'], [(2, 1, 'CrackedFloor')])
+        self.assertEqual(lvl['gates'], [(2, 1, 'CrackedFloor', -1)])
 
     def test_cracked_floor_gate_tile_is_empty(self):
         # 'k' is a content symbol: collision tile under it must be 0 (empty)
         txt = "#####\n#@k.#\n#####\n"
         lvl = compile_str(txt, {})
         self.assertEqual(lvl['tiles'][lvl['w'] * 1 + 2], 0)
+
+    def test_cracked_floor_latch_id(self):
+        # A 'k' with a JSON cracked_floors latch_id carries it through to the gate tuple (the
+        # SRAM-persisted Stone shortcut). Scan-order indexed like entrances/loose_platforms.
+        txt = "######\n#@kk.#\n######\n"
+        lvl = compile_str(txt, {"cracked_floors": [{"latch_id": 1}]})
+        self.assertEqual(lvl['gates'], [(2, 1, 'CrackedFloor', 1), (3, 1, 'CrackedFloor', -1)])
 
     def test_level_without_k_still_compiles(self):
         # A level with no 'k' still compiles with an empty gates list
