@@ -142,7 +142,7 @@ class TestBuildLevel(unittest.TestCase):
             "brazier_groups": [{"total": 1, "target": [5, 5]}],
         })
         self.assertEqual(lvl['blocks'], [(2, 1, False)])
-        self.assertEqual(lvl['plates'], [(3, 1, 6, 1)])
+        self.assertEqual(lvl['plates'], [(3, 1, 6, 1, False)])
         self.assertEqual(lvl['buttons'], [(4, 1, 6, 2)])
         self.assertEqual(lvl['braziers'], [(5, 1, 0)])
         self.assertEqual(lvl['brazier_groups'], [(1, 5, 5, -1)])  # latch_id defaults to -1
@@ -272,6 +272,45 @@ class TestBuildLevel(unittest.TestCase):
         self.assertIn("TESTHC2_HEART_CONTAINERS, 0", hdr)
         self.assertEqual(lvl['heart_containers'], [])
 
+
+    # --- M8 symbols: Task 2.2 heavy (pound-only) flag on plates ---
+    def test_heavy_plate_flag_true(self):
+        # A plate entry with "heavy": true must produce a plate tuple with heavy=True (5th element)
+        txt = "#######\n#@.=..#\n#######\n"
+        lvl = compile_str(txt, {"plates": [{"target": [3, 4], "heavy": True}]})
+        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, True)])
+
+    def test_heavy_plate_flag_false_by_default(self):
+        # A plate entry without "heavy" defaults to False
+        txt = "#######\n#@.=..#\n#######\n"
+        lvl = compile_str(txt, {"plates": [{"target": [3, 4]}]})
+        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, False)])
+
+    def test_heavy_plate_emit_header_true(self):
+        # emit_header must include the bool in the PlateSpawn initializer
+        txt = "#######\n#@.=..#\n#######\n"
+        lvl = compile_str(txt, {"plates": [{"target": [3, 4], "heavy": True}]})
+        hdr = build_level.emit_header(lvl, "TESTHP")
+        self.assertIn("{3,1,3,4,true}", hdr)
+
+    def test_heavy_plate_emit_header_false(self):
+        # Non-heavy plate must emit false
+        txt = "#######\n#@.=..#\n#######\n"
+        lvl = compile_str(txt, {"plates": [{"target": [3, 4]}]})
+        hdr = build_level.emit_header(lvl, "TESTHPF")
+        self.assertIn("{3,1,3,4,false}", hdr)
+
+    def test_existing_plate_test_still_green(self):
+        # The existing block/plate/button/brazier test data still compiles correctly
+        txt = "########\n#@B=?*.#\n########\n"
+        lvl = compile_str(txt, {
+            "plates": [{"target": [6, 1]}],
+            "buttons": [{"target": [6, 2]}],
+            "braziers": [{"group": 0}],
+            "brazier_groups": [{"total": 1, "target": [5, 5]}],
+        })
+        # plate still at (3,1) targeting (6,1); heavy defaults False (5th field)
+        self.assertEqual(lvl['plates'], [(3, 1, 6, 1, False)])
 
     # --- M8 symbols: Task 2.1 CrackedFloor gate 'k' ---
     def test_cracked_floor_gate(self):

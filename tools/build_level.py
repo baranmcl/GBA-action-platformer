@@ -147,8 +147,10 @@ def compile_level(txt_path, json_path):
             elif c == '=':
                 if pl_idx >= len(j_plates):
                     raise LevelError(f"plate '=' at ({x},{y}) but JSON has no 'plates' entry #{pl_idx}")
-                t = j_plates[pl_idx]['target']
-                plates.append((x, y, t[0], t[1]))
+                jp = j_plates[pl_idx]
+                t = jp['target']
+                heavy = jp.get('heavy', False)
+                plates.append((x, y, t[0], t[1], heavy))
                 pl_idx += 1
             elif c == '?':
                 if b_idx >= len(j_buttons):
@@ -237,8 +239,8 @@ def emit_header(level, name):
                               [f'{{{tx},{ty},{"true" if pull else "false"}}}' for (tx, ty, pull) in level['blocks']],
                               '{0,0,false}'); L.append(line)
     line, plcount = emit_array('logic::PlateSpawn', 'PLATES',
-                               [f'{{{tx},{ty},{ttx},{tty}}}' for (tx, ty, ttx, tty) in level['plates']],
-                               '{0,0,0,0}'); L.append(line)
+                               [f'{{{tx},{ty},{ttx},{tty},{"true" if heavy else "false"}}}' for (tx, ty, ttx, tty, heavy) in level['plates']],
+                               '{0,0,0,0,false}'); L.append(line)
     line, btcount = emit_array('logic::ButtonSpawn', 'BUTTONS',
                                [f'{{{tx},{ty},{ttx},{tty}}}' for (tx, ty, ttx, tty) in level['buttons']],
                                '{0,0,0,0}'); L.append(line)
