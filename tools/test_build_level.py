@@ -273,5 +273,25 @@ class TestBuildLevel(unittest.TestCase):
         self.assertEqual(lvl['heart_containers'], [])
 
 
+    # --- M8 symbols: Task 2.1 CrackedFloor gate 'k' ---
+    def test_cracked_floor_gate(self):
+        # 'k' compiles to a gate with GateType::CrackedFloor
+        txt = "#####\n#@k.#\n#####\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['gates'], [(2, 1, 'CrackedFloor')])
+
+    def test_cracked_floor_gate_tile_is_empty(self):
+        # 'k' is a content symbol: collision tile under it must be 0 (empty)
+        txt = "#####\n#@k.#\n#####\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['tiles'][lvl['w'] * 1 + 2], 0)
+
+    def test_level_without_k_still_compiles(self):
+        # A level with no 'k' still compiles with an empty gates list
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4]}]})
+        cracked_floor_gates = [g for g in lvl['gates'] if g[2] == 'CrackedFloor']
+        self.assertEqual(cracked_floor_gates, [])
+
+
 if __name__ == '__main__':
     unittest.main()
