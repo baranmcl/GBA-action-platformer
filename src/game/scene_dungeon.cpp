@@ -184,6 +184,15 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     };
     refresh_spell_icon();
 
+    // ---- pound VFX (placeholder): a brief dust/impact dot (bolt sprite reused, like the vine VFX)
+    //      shown for a few frames at the impact point on each pound landing, + a tiny camera nudge. ----
+    bn::sprite_ptr pound_dust = bn::sprite_items::bolt.create_sprite(0, 0);
+    pound_dust.set_camera(cam);
+    pound_dust.set_visible(false);
+    pound_dust.set_scale(1.5);   // squashed puff (placeholder)
+    int pound_vfx_t = 0;         // frames remaining the dust is shown
+    int pound_shake_t = 0;       // frames remaining of camera nudge
+
     // ---- cage / spronk ----
     logic::Body cage;
     bn::optional<bn::sprite_ptr> spronk;
@@ -471,6 +480,11 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         if(player.stone.just_landed()){
             int impact_cx = px2t(player.body.pos.x + player.body.half_w);                                  // centre column
             int impact_fy = px2t(player.body.pos.y + player.body.half_h + player.body.half_h - fx(1));     // feet row (tile landed on)
+            // Pound VFX (placeholder): puff of dust at the feet + a brief camera shake.
+            pound_dust.set_position(wx(impact_cx * 8 + 4), wy(impact_fy * 8 + 4));
+            pound_dust.set_visible(true);
+            pound_vfx_t = 8;
+            pound_shake_t = 6;
             // 1. CrackedFloor smash + continue the plunge. The landed tile is solid; if it is an unbroken
             //    cracked floor, break the WHOLE contiguous cracked-floor run at that row and RE-ARM the
             //    pound so the next frame plunges into the area below. Re-arm ONLY on a cracked tile, so one
@@ -798,9 +812,12 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             for(int i = 0; i < VINE_SEGS; ++i) vine_segs[i].set_visible(false);
         }
 
+        // ---- pound VFX tick (placeholder): fade out the dust; apply a tiny vertical camera shake ----
+        if(pound_vfx_t > 0){ if(--pound_vfx_t == 0) pound_dust.set_visible(false); }
         hud.update(health, magic);
         int cx = player.body.pos.x.to_int() + player.body.half_w.to_int();
         int cy = player.body.pos.y.to_int() + player.body.half_h.to_int();
+        if(pound_shake_t > 0){ cy += (pound_shake_t % 2 == 0) ? 2 : -2; --pound_shake_t; }  // 2px jitter
         set_clamped_cam(cx, cy);
         if(fade_in_t > 0) engine::set_fade(--fade_in_t);
         bn::core::update();
