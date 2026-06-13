@@ -331,6 +331,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         player.abilities.glide       = world.has(logic::Ability::Glide);
         player.abilities.dash        = world.has(logic::Ability::Dash);
         player.abilities.grapple     = world.has(logic::Ability::Grapple);
+        player.abilities.stone       = world.has(logic::Ability::Stone);
         // Read spell intent + cycle FIRST so the selection is current for the grapple/cast branch:
         engine::SpellIntent si = engine::read_spell_intent();
         if(si.cycle) spell.cycle(world);

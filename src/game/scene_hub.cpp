@@ -144,6 +144,7 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
         player.abilities.glide       = world.has(logic::Ability::Glide);
         player.abilities.dash        = world.has(logic::Ability::Dash);
         player.abilities.grapple     = world.has(logic::Ability::Grapple);
+        player.abilities.stone       = world.has(logic::Ability::Stone);  // harmless on flat ground; kit parity
 
         // Read spell intent + cycle FIRST so the selection is current for the grapple/cast branch.
         engine::SpellIntent si = engine::read_spell_intent();
