@@ -44,7 +44,7 @@ ABILITY_ENUM = {
     'featherleap': 'Featherleap', 'fire': 'Fire', 'ice': 'Ice', 'glide': 'Glide',
     'dash': 'Dash', 'grapple': 'Grapple', 'stone': 'Stone', 'light': 'Light',
 }
-CONTENT = set('@CEoG12345678VIWXFBPK=?*NDHk')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door; 'H' heart container; 'k' cracked-floor gate (M8, Stone)
+CONTENT = set('@CEoG12345678VIWXFBPK=?*NDHkO:')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door; 'H' heart container; 'k' cracked-floor gate (M8, Stone); 'O' boulder (M8); ':' loose platform (M8)
 
 
 class LevelError(Exception):
@@ -77,6 +77,7 @@ def compile_level(txt_path, json_path):
     j_entrances = meta.get('entrances', [])
     j_room_doors = meta.get('room_doors', [])
     j_heart_containers = meta.get('heart_containers', [])
+    j_loose_platforms = meta.get('loose_platforms', [])
 
     tiles = []
     spawns, cages, exits = [], [], []
@@ -85,13 +86,15 @@ def compile_level(txt_path, json_path):
     doors = []          # (tx,ty,dungeon)
     pickups = []        # (tx,ty,AbilityEnum)
     blocks = []         # (tx,ty,pullable)
-    plates = []         # (tx,ty,target_tx,target_ty)
+    plates = []         # (tx,ty,target_tx,target_ty,heavy)
     buttons = []        # (tx,ty,target_tx,target_ty)
     braziers = []       # (tx,ty,group)
     entrances = []       # (id, tx, ty, facing)
     room_doors = []      # (tx, ty, target_room, target_entrance)
     heart_containers = [] # (tx, ty, id)
-    e_idx = g_idx = f_idx = pl_idx = b_idx = br_idx = n_idx = rd_idx = hc_idx = 0
+    boulders = []         # (tx, ty)
+    loose_platforms = []  # (tx, ty, len)
+    e_idx = g_idx = f_idx = pl_idx = b_idx = br_idx = n_idx = rd_idx = hc_idx = lp_idx = 0
 
     for y, r in enumerate(rows):
         for x, c in enumerate(r):
@@ -179,6 +182,13 @@ def compile_level(txt_path, json_path):
                 hid = je.get('id', hc_idx)  # default: scan-order index
                 heart_containers.append((x, y, hid))
                 hc_idx += 1
+            elif c == 'O':
+                boulders.append((x, y))  # M8 rolling boulder obstacle
+            elif c == ':':
+                jlp = j_loose_platforms[lp_idx] if lp_idx < len(j_loose_platforms) else {}
+                llen = jlp.get('len', 1)  # default len=1
+                loose_platforms.append((x, y, llen))
+                lp_idx += 1
             elif c in '12345678':
                 doors.append((x, y, int(c)))
 
@@ -206,6 +216,7 @@ def compile_level(txt_path, json_path):
         'braziers': braziers, 'brazier_groups': brazier_groups,
         'entrances': entrances, 'room_doors': room_doors,
         'heart_containers': heart_containers,
+        'boulders': boulders, 'loose_platforms': loose_platforms,
     }
 
 
@@ -259,6 +270,12 @@ def emit_header(level, name):
     line, hccount = emit_array('logic::HeartContainerSpawn', 'HEART_CONTAINERS',
                                [f'{{{tx},{ty},{hid}}}' for (tx, ty, hid) in level['heart_containers']],
                                '{0,0,0}'); L.append(line)
+    line, bocount = emit_array('logic::BoulderSpawn', 'BOULDERS',
+                               [f'{{{tx},{ty}}}' for (tx, ty) in level['boulders']],
+                               '{0,0}'); L.append(line)
+    line, lpcount = emit_array('logic::LoosePlatformSpawn', 'LOOSE_PLATFORMS',
+                               [f'{{{tx},{ty},{llen}}}' for (tx, ty, llen) in level['loose_platforms']],
+                               '{0,0,1}'); L.append(line)
 
     sx, sy = level['spawn']
     cx, cy = level['cage'] if level['cage'] else (0, 0)
@@ -273,7 +290,8 @@ def emit_header(level, name):
         f'{name}_BUTTONS, {btcount}, {name}_BRAZIERS, {brcount}, '
         f'{name}_BRAZIER_GROUPS, {bgcount}, '
         f'{name}_ENTRANCES, {encount}, {name}_ROOM_DOORS, {rdcount}, '
-        f'{name}_HEART_CONTAINERS, {hccount} }};'
+        f'{name}_HEART_CONTAINERS, {hccount}, '
+        f'{name}_BOULDERS, {bocount}, {name}_LOOSE_PLATFORMS, {lpcount} }};'
     )
     L.append('')
     return '\n'.join(L)

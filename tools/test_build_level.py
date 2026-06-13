@@ -312,6 +312,71 @@ class TestBuildLevel(unittest.TestCase):
         # plate still at (3,1) targeting (6,1); heavy defaults False (5th field)
         self.assertEqual(lvl['plates'], [(3, 1, 6, 1, False)])
 
+    # --- M8 symbols: Task 2.3 boulder 'O' + loose-platform ':' ---
+    def test_boulder_symbol(self):
+        # 'O' compiles to a boulder at the right tile position
+        txt = "#######\n#@.O..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['boulders'], [(3, 1)])
+
+    def test_boulder_tile_is_empty(self):
+        # 'O' is a content symbol: collision tile under it must be 0
+        txt = "#######\n#@.O..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['tiles'][lvl['w'] * 1 + 3], 0)
+
+    def test_boulder_emit_header(self):
+        # emit_header includes BOULDERS array and wires boulder_count into LevelData
+        txt = "#######\n#@.O..#\n#######\n"
+        lvl = compile_str(txt, {})
+        hdr = build_level.emit_header(lvl, "TESTBO")
+        self.assertIn("TESTBO_BOULDERS", hdr)
+        self.assertIn("{3,1}", hdr)  # BoulderSpawn {tx, ty}
+        self.assertIn("TESTBO_BOULDERS, 1", hdr)  # count in LevelData
+
+    def test_boulder_absent_still_compiles(self):
+        # Level without 'O': null dummy array + count 0 in LevelData
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4]}]})
+        hdr = build_level.emit_header(lvl, "TESTBO2")
+        self.assertIn("TESTBO2_BOULDERS", hdr)
+        self.assertIn("TESTBO2_BOULDERS, 0", hdr)
+        self.assertEqual(lvl['boulders'], [])
+
+    def test_loose_platform_symbol_with_json_len(self):
+        # ':' with JSON loose_platforms entry emits LoosePlatformSpawn(tx, ty, len)
+        txt = "#######\n#@.:.:#\n#######\n"
+        lvl = compile_str(txt, {"loose_platforms": [{"len": 3}, {"len": 2}]})
+        self.assertEqual(lvl['loose_platforms'], [(3, 1, 3), (5, 1, 2)])
+
+    def test_loose_platform_default_len_1(self):
+        # ':' without JSON entry defaults to len=1
+        txt = "#######\n#@.:..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['loose_platforms'], [(3, 1, 1)])
+
+    def test_loose_platform_tile_is_empty(self):
+        # ':' is a content symbol: collision tile must be 0
+        txt = "#######\n#@.:..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['tiles'][lvl['w'] * 1 + 3], 0)
+
+    def test_loose_platform_emit_header(self):
+        # emit_header includes LOOSE_PLATFORMS array and wires count into LevelData
+        txt = "#######\n#@.:..#\n#######\n"
+        lvl = compile_str(txt, {"loose_platforms": [{"len": 4}]})
+        hdr = build_level.emit_header(lvl, "TESTLP")
+        self.assertIn("TESTLP_LOOSE_PLATFORMS", hdr)
+        self.assertIn("{3,1,4}", hdr)  # LoosePlatformSpawn {tx, ty, len}
+        self.assertIn("TESTLP_LOOSE_PLATFORMS, 1", hdr)
+
+    def test_loose_platform_absent_still_compiles(self):
+        # Level without ':': dummy array + count 0
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4]}]})
+        hdr = build_level.emit_header(lvl, "TESTLP2")
+        self.assertIn("TESTLP2_LOOSE_PLATFORMS", hdr)
+        self.assertIn("TESTLP2_LOOSE_PLATFORMS, 0", hdr)
+        self.assertEqual(lvl['loose_platforms'], [])
+
     # --- M8 symbols: Task 2.1 CrackedFloor gate 'k' ---
     def test_cracked_floor_gate(self):
         # 'k' compiles to a gate with GateType::CrackedFloor
