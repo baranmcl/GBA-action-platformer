@@ -131,3 +131,143 @@ TEST(abilities_stone_defaults_false){
     Abilities ab{};
     CHECK(!ab.stone); // new field: defaults false -> no behavior change
 }
+// --- Task 1.3: Player::update pound integration ---
+// Map helpers for pound tests.
+// Tall map (4 wide x 8 tall): solid floor only at row 7 (py=56..63), rest empty.
+// This gives the player plenty of vertical space so a pound doesn't land in frame 1.
+static uint8_t pound_tall_cells[4*8] = {
+    0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0,
+    0,0,0,0, 0,0,0,0, 0,0,0,0, 1,1,1,1};
+static Tilemap pound_tallmap(){ return Tilemap{4,8,pound_tall_cells}; }
+// Short floor map: 4-wide, 3-tall, solid floor at row 2.
+static uint8_t pound_floor_cells[4*3] = {0,0,0,0, 0,0,0,0, 1,1,1,1};
+static Tilemap pound_floormap(){ return Tilemap{4,3,pound_floor_cells}; }
+// Player far above the floor (pos.y=0, body 6x6px, bottom=5; floor at py=56 -> 51px gap).
+// Pound speed = 8px/frame: won't land for ~6 frames.
+static Player airborne_stone_player(){
+    Player p;
+    p.body.half_w = Fixed::from_int(3); p.body.half_h = Fixed::from_int(3);
+    p.body.pos = {Fixed::from_int(8), Fixed::from_int(0)};
+    p.body.on_ground = false;
+    return p;
+}
+TEST(pound_starts_on_down_plus_a_in_air){
+    // Airborne + stone ability + down+jump -> pound starts; vel overrides to pound speed.
+    // Player is far from the floor so the pound does NOT land in frame 1.
+    Tilemap m = pound_tallmap();
+    Player p = airborne_stone_player(); p.abilities.stone = true;
+    InputFrame in{}; in.jump_pressed = true; in.down = true;
+    p.update(in, m);
+    CHECK(p.stone.active()); // still pounding (floor is 51px away, 8px/frame -> ~6 frames)
+    // After the stone velocity override: vel.x == 0, vel.y == POUND_VY_RAW
+    CHECK_EQ(p.body.vel.x.raw, 0);
+    CHECK_EQ(p.body.vel.y.raw, StoneState::POUND_VY_RAW);
+}
+TEST(down_plus_a_overrides_double_jump){
+    // Owning both featherleap and stone, down+A in air -> pounds (NOT double-jump).
+    // air_jumps_left stays UNCHANGED and vel.y is pound speed, not JUMP_VY.
+    Tilemap m = pound_tallmap();
+    Player p = airborne_stone_player();
+    p.abilities.featherleap = true; p.abilities.stone = true;
+    p.air_jumps_left = 1;
+    InputFrame in{}; in.jump_pressed = true; in.down = true;
+    p.update(in, m);
+    CHECK(p.stone.active()); // still pounding (far from floor)
+    CHECK_EQ(p.air_jumps_left, 1); // NOT consumed
+    CHECK_EQ(p.body.vel.y.raw, StoneState::POUND_VY_RAW); // pound, not JUMP_VY
+}
+TEST(a_alone_in_air_still_double_jumps){
+    // down:false, jump_pressed:true, featherleap owned, stone owned -> double-jump (not pound).
+    Tilemap m = pound_floormap();
+    Player p = airborne_stone_player();
+    p.abilities.featherleap = true; p.abilities.stone = true;
+    p.air_jumps_left = 1;
+    InputFrame in{}; in.jump_pressed = true; // down stays false
+    p.update(in, m);
+    CHECK(!p.stone.active()); // did NOT pound
+    CHECK_EQ(p.air_jumps_left, 0); // consumed by double-jump
+    // vel.y after double-jump is JUMP_VY = -812 raw (then gravity adds 46 -> -766)
+    // Just assert it is upward (negative) — we don't want to pin the exact gravity-adjusted value.
+    CHECK(p.body.vel.y.raw < 0);
+}
+TEST(no_pound_without_ability){
+    // stone ability not owned -> down+A in air does nothing special (no pound, no double-jump).
+    Tilemap m = pound_floormap();
+    Player p = airborne_stone_player(); // abilities.stone defaults false
+    InputFrame in{}; in.jump_pressed = true; in.down = true;
+    p.update(in, m);
+    CHECK(!p.stone.active());
+}
+TEST(no_pound_on_ground){
+    // Down+A while grounded -> plain ground jump (body.vel.y = JUMP_VY), NOT a pound.
+    Tilemap m = pound_floormap();
+    Player p = grounded_player(); p.abilities.stone = true;
+    InputFrame settle{}; p.update(settle, m); // settle onto floor
+    CHECK(p.body.on_ground);
+    InputFrame in{}; in.jump_pressed = true; in.down = true;
+    p.update(in, m);
+    CHECK(!p.stone.active()); // no pound started
+    CHECK(p.body.vel.y.raw < 0); // jumped upward
+}
+TEST(pound_ends_on_landing){
+    // A pounding player driven into the floor: just_landed() true, active() false after update.
+    // Use a map deep enough to fall into.
+    static uint8_t cells[4*4] = {0,0,0,0, 0,0,0,0, 0,0,0,0, 1,1,1,1};
+    Tilemap m{4,4,cells};
+    Player p;
+    p.body.half_w = Fixed::from_int(3); p.body.half_h = Fixed::from_int(3);
+    p.body.pos = {Fixed::from_int(8), Fixed::from_int(4)};
+    p.body.on_ground = false;
+    p.abilities.stone = true;
+    // Start pound manually, then apply a large downward vel and run update.
+    p.stone.start();
+    // Run update with empty input (stone already active -> vel override sets POUND_VY_RAW each frame)
+    // Drive until landed (at most 4 ticks: 8px/frame from y=4, floor at y=16).
+    InputFrame none{};
+    for(int i = 0; i < 10 && p.stone.active(); ++i) p.update(none, m);
+    CHECK(!p.stone.active());    // pound ended on landing
+    CHECK(p.body.on_ground);     // resting on the floor
+}
+TEST(grapple_wins_over_pound){
+    // When grapple is active, its pull velocity is applied AFTER the stone override,
+    // so grapple wins. vel.y should NOT be POUND_VY_RAW after update.
+    Tilemap m = pound_floormap();
+    Player p = airborne_stone_player();
+    p.abilities.stone = true; p.abilities.grapple = true;
+    // Manually arm both: stone pounding, grapple pulling toward tile (0,0) centre (px 4,4).
+    p.stone.start();
+    p.grapple.pulling = true; p.grapple.anchor_tx = 0; p.grapple.anchor_ty = 0;
+    InputFrame none{};
+    p.update(none, m);
+    // Grapple overrides stone: vel.y is NOT the pound speed (it's a pull toward the anchor).
+    CHECK(p.body.vel.y.raw != StoneState::POUND_VY_RAW);
+}
+TEST(pound_into_thin_floor_stops_no_tunnel){
+    // TEST-3: pounding player one tile above a 1-tile-thick solid floor (empty below).
+    // Layout (4 wide x 4 tall, tile=8px):
+    //   row 0: empty
+    //   row 1: empty   <- player starts here (pos.y=8, bottom=13, just below row 1 top)
+    //   row 2: solid   <- thin floor (px 16..23)
+    //   row 3: empty   <- nothing below the floor (verifies no tunnel)
+    static uint8_t cells[4*4] = {0,0,0,0, 0,0,0,0, 1,1,1,1, 0,0,0,0};
+    Tilemap m{4,4,cells};
+    Player p;
+    p.body.half_w = Fixed::from_int(3); p.body.half_h = Fixed::from_int(3);
+    // Start at pos.y=8: body occupies py 8..13 (bottom at 13 < floor top at 16 -> airborne)
+    p.body.pos = {Fixed::from_int(8), Fixed::from_int(8)};
+    p.body.on_ground = false;
+    p.abilities.stone = true;
+    p.stone.start(); // begin pound
+    InputFrame none{};
+    // Drive until landing (pound speed 8px/frame; from bottom=13 to floor at 16 -> 1 frame)
+    for(int i = 0; i < 5 && p.stone.active(); ++i) p.update(none, m);
+    // Must have landed ON the floor, not tunnelled through.
+    CHECK(p.body.on_ground);                           // resting on solid
+    CHECK(p.stone.just_landed());                      // just_landed signal raised
+    CHECK(!p.stone.active());                          // pound ended
+    // Body bottom (pos.y + 2*half_h) must be at or above the floor top (py=16): TEST-2 exact raw.
+    // move_and_collide backs the body out until not overlapping; floor top is at py=16.
+    // Body height = 6, so final pos.y = 16 - 6 = 10; raw = 10 * 256 = 2560.
+    CHECK_EQ(p.body.pos.y.raw, Fixed::from_int(10).raw); // snapped onto floor top, did NOT tunnel
+}
+

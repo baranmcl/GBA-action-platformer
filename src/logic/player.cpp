@@ -37,9 +37,10 @@ void Player::update(const InputFrame& in, const Tilemap& map){
     if(body.vel.x > RUN_MAX) body.vel.x = RUN_MAX;
     else if(body.vel.x < -RUN_MAX) body.vel.x = -RUN_MAX;
 
-    // jump: ground jump, or ability-gated air (double) jump
+    // jump: ground jump, or ability-gated air actions (stone pound overrides double-jump)
     if(in.jump_pressed){
         if(body.on_ground){ body.vel.y = JUMP_VY; }
+        else if(abilities.stone && in.down){ stone.start(); }
         else if(abilities.featherleap && air_jumps_left > 0){ body.vel.y = JUMP_VY; --air_jumps_left; }
     }
 
@@ -59,8 +60,14 @@ void Player::update(const InputFrame& in, const Tilemap& map){
         body.vel.x = (dash.dir() > 0) ? DASH_VX : Fixed::from_raw(-DASH_VX.raw); // no Fixed::operator*(int): sign-branch
         body.vel.y = Fixed::from_int(0);
     }
+    // --- M8 stone ground-pound: lock vel to straight-down at pound speed; overrides
+    // gravity/accel/dash while active. Applied BEFORE grapple so grapple still wins. ---
+    if(stone.active()){
+        body.vel.x = Fixed::from_int(0);
+        body.vel.y = Fixed::from_raw(StoneState::POUND_VY_RAW);
+    }
     // --- M7 vine grapple: latch onto an anchor and pull the body toward it; overrides
-    // accel/friction/gravity/dash while active (applied last so it wins). ---
+    // accel/friction/gravity/dash/stone while active (applied last so it wins). ---
     grapple.latch(in.grapple_fire, body, facing, map, abilities.grapple);
     if(grapple.active()){
         body.vel = grapple.pull_velocity(body);
@@ -71,6 +78,7 @@ void Player::update(const InputFrame& in, const Tilemap& map){
         bool moved = body.pos.x.raw != grapple_prev.x.raw || body.pos.y.raw != grapple_prev.y.raw;
         grapple.post(body, map, moved);
     }
+    stone.post(body.on_ground); // raise just_landed() the frame the pound hits ground; ends pound
 
     // refresh the air-jump charge whenever grounded (only if Featherleap is owned)
     if(body.on_ground) air_jumps_left = abilities.featherleap ? 1 : 0;
