@@ -7,12 +7,14 @@ inline constexpr logic::GateSpawn DUNGEON6_ROOM1_GATES[] = { {16,18,logic::GateT
 inline constexpr logic::DoorSpawn DUNGEON6_ROOM1_DOORS[] = { {0,0,0} };
 inline constexpr logic::AbilityPickup DUNGEON6_ROOM1_PICKUPS[] = { {0,0,logic::Ability::Fire} };
 inline constexpr logic::BlockSpawn DUNGEON6_ROOM1_BLOCKS[] = { {15,18,true} };
-inline constexpr logic::PlateSpawn DUNGEON6_ROOM1_PLATES[] = { {14,18,16,18} };
+inline constexpr logic::PlateSpawn DUNGEON6_ROOM1_PLATES[] = { {14,18,16,18,false} };
 inline constexpr logic::ButtonSpawn DUNGEON6_ROOM1_BUTTONS[] = { {0,0,0,0} };
 inline constexpr logic::BrazierSpawn DUNGEON6_ROOM1_BRAZIERS[] = { {23,18,0} };
 inline constexpr logic::BrazierGroupSpawn DUNGEON6_ROOM1_BRAZIER_GROUPS[] = { {1,27,18,0} };
 inline constexpr logic::EntranceSpawn DUNGEON6_ROOM1_ENTRANCES[] = { {0,1,18,1} };
 inline constexpr logic::RoomDoorSpawn DUNGEON6_ROOM1_ROOM_DOORS[] = { {3,18,0,1} };
 inline constexpr logic::HeartContainerSpawn DUNGEON6_ROOM1_HEART_CONTAINERS[] = { {29,18,0} };
-inline constexpr logic::LevelData DUNGEON6_ROOM1_DATA = { DUNGEON6_ROOM1_TILES, 32, 22, 5, 18, false, 0, 0, false, 0, 0, DUNGEON6_ROOM1_ENEMIES, 1, DUNGEON6_ROOM1_GATES, 1, DUNGEON6_ROOM1_DOORS, 0, DUNGEON6_ROOM1_PICKUPS, 0, DUNGEON6_ROOM1_BLOCKS, 1, DUNGEON6_ROOM1_PLATES, 1, DUNGEON6_ROOM1_BUTTONS, 0, DUNGEON6_ROOM1_BRAZIERS, 1, DUNGEON6_ROOM1_BRAZIER_GROUPS, 1, DUNGEON6_ROOM1_ENTRANCES, 1, DUNGEON6_ROOM1_ROOM_DOORS, 1, DUNGEON6_ROOM1_HEART_CONTAINERS, 1 };
+inline constexpr logic::BoulderSpawn DUNGEON6_ROOM1_BOULDERS[] = { {0,0} };
+inline constexpr logic::LoosePlatformSpawn DUNGEON6_ROOM1_LOOSE_PLATFORMS[] = { {0,0,1} };
+inline constexpr logic::LevelData DUNGEON6_ROOM1_DATA = { DUNGEON6_ROOM1_TILES, 32, 22, 5, 18, false, 0, 0, false, 0, 0, DUNGEON6_ROOM1_ENEMIES, 1, DUNGEON6_ROOM1_GATES, 1, DUNGEON6_ROOM1_DOORS, 0, DUNGEON6_ROOM1_PICKUPS, 0, DUNGEON6_ROOM1_BLOCKS, 1, DUNGEON6_ROOM1_PLATES, 1, DUNGEON6_ROOM1_BUTTONS, 0, DUNGEON6_ROOM1_BRAZIERS, 1, DUNGEON6_ROOM1_BRAZIER_GROUPS, 1, DUNGEON6_ROOM1_ENTRANCES, 1, DUNGEON6_ROOM1_ROOM_DOORS, 1, DUNGEON6_ROOM1_HEART_CONTAINERS, 1, DUNGEON6_ROOM1_BOULDERS, 0, DUNGEON6_ROOM1_LOOSE_PLATFORMS, 0 };
 

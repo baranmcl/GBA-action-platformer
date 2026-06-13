@@ -7,12 +7,14 @@ inline constexpr logic::GateSpawn DUNGEON4_GATES[] = { {12,52,logic::GateType::V
 inline constexpr logic::DoorSpawn DUNGEON4_DOORS[] = { {0,0,0} };
 inline constexpr logic::AbilityPickup DUNGEON4_PICKUPS[] = { {15,33,logic::Ability::Glide} };
 inline constexpr logic::BlockSpawn DUNGEON4_BLOCKS[] = { {0,0,false} };
-inline constexpr logic::PlateSpawn DUNGEON4_PLATES[] = { {0,0,0,0} };
+inline constexpr logic::PlateSpawn DUNGEON4_PLATES[] = { {0,0,0,0,false} };
 inline constexpr logic::ButtonSpawn DUNGEON4_BUTTONS[] = { {0,0,0,0} };
 inline constexpr logic::BrazierSpawn DUNGEON4_BRAZIERS[] = { {0,0,0} };
 inline constexpr logic::BrazierGroupSpawn DUNGEON4_BRAZIER_GROUPS[] = { {0,0,0,-1} };
 inline constexpr logic::EntranceSpawn DUNGEON4_ENTRANCES[] = { {0,0,0,1} };
 inline constexpr logic::RoomDoorSpawn DUNGEON4_ROOM_DOORS[] = { {0,0,0,0} };
 inline constexpr logic::HeartContainerSpawn DUNGEON4_HEART_CONTAINERS[] = { {0,0,0} };
-inline constexpr logic::LevelData DUNGEON4_DATA = { DUNGEON4_TILES, 30, 56, 3, 50, true, 25, 5, true, 26, 6, DUNGEON4_ENEMIES, 1, DUNGEON4_GATES, 1, DUNGEON4_DOORS, 0, DUNGEON4_PICKUPS, 1, DUNGEON4_BLOCKS, 0, DUNGEON4_PLATES, 0, DUNGEON4_BUTTONS, 0, DUNGEON4_BRAZIERS, 0, DUNGEON4_BRAZIER_GROUPS, 0, DUNGEON4_ENTRANCES, 0, DUNGEON4_ROOM_DOORS, 0, DUNGEON4_HEART_CONTAINERS, 0 };
+inline constexpr logic::BoulderSpawn DUNGEON4_BOULDERS[] = { {0,0} };
+inline constexpr logic::LoosePlatformSpawn DUNGEON4_LOOSE_PLATFORMS[] = { {0,0,1} };
+inline constexpr logic::LevelData DUNGEON4_DATA = { DUNGEON4_TILES, 30, 56, 3, 50, true, 25, 5, true, 26, 6, DUNGEON4_ENEMIES, 1, DUNGEON4_GATES, 1, DUNGEON4_DOORS, 0, DUNGEON4_PICKUPS, 1, DUNGEON4_BLOCKS, 0, DUNGEON4_PLATES, 0, DUNGEON4_BUTTONS, 0, DUNGEON4_BRAZIERS, 0, DUNGEON4_BRAZIER_GROUPS, 0, DUNGEON4_ENTRANCES, 0, DUNGEON4_ROOM_DOORS, 0, DUNGEON4_HEART_CONTAINERS, 0, DUNGEON4_BOULDERS, 0, DUNGEON4_LOOSE_PLATFORMS, 0 };
 

@@ -7,12 +7,14 @@ inline constexpr logic::GateSpawn DUNGEON3_GATES[] = { {18,18,logic::GateType::V
 inline constexpr logic::DoorSpawn DUNGEON3_DOORS[] = { {0,0,0} };
 inline constexpr logic::AbilityPickup DUNGEON3_PICKUPS[] = { {29,18,logic::Ability::Ice} };
 inline constexpr logic::BlockSpawn DUNGEON3_BLOCKS[] = { {0,0,false} };
-inline constexpr logic::PlateSpawn DUNGEON3_PLATES[] = { {0,0,0,0} };
+inline constexpr logic::PlateSpawn DUNGEON3_PLATES[] = { {0,0,0,0,false} };
 inline constexpr logic::ButtonSpawn DUNGEON3_BUTTONS[] = { {0,0,0,0} };
 inline constexpr logic::BrazierSpawn DUNGEON3_BRAZIERS[] = { {0,0,0} };
 inline constexpr logic::BrazierGroupSpawn DUNGEON3_BRAZIER_GROUPS[] = { {0,0,0,-1} };
 inline constexpr logic::EntranceSpawn DUNGEON3_ENTRANCES[] = { {0,0,0,1} };
 inline constexpr logic::RoomDoorSpawn DUNGEON3_ROOM_DOORS[] = { {0,0,0,0} };
 inline constexpr logic::HeartContainerSpawn DUNGEON3_HEART_CONTAINERS[] = { {0,0,0} };
-inline constexpr logic::LevelData DUNGEON3_DATA = { DUNGEON3_TILES, 64, 22, 3, 18, true, 60, 18, true, 61, 18, DUNGEON3_ENEMIES, 4, DUNGEON3_GATES, 3, DUNGEON3_DOORS, 0, DUNGEON3_PICKUPS, 1, DUNGEON3_BLOCKS, 0, DUNGEON3_PLATES, 0, DUNGEON3_BUTTONS, 0, DUNGEON3_BRAZIERS, 0, DUNGEON3_BRAZIER_GROUPS, 0, DUNGEON3_ENTRANCES, 0, DUNGEON3_ROOM_DOORS, 0, DUNGEON3_HEART_CONTAINERS, 0 };
+inline constexpr logic::BoulderSpawn DUNGEON3_BOULDERS[] = { {0,0} };
+inline constexpr logic::LoosePlatformSpawn DUNGEON3_LOOSE_PLATFORMS[] = { {0,0,1} };
+inline constexpr logic::LevelData DUNGEON3_DATA = { DUNGEON3_TILES, 64, 22, 3, 18, true, 60, 18, true, 61, 18, DUNGEON3_ENEMIES, 4, DUNGEON3_GATES, 3, DUNGEON3_DOORS, 0, DUNGEON3_PICKUPS, 1, DUNGEON3_BLOCKS, 0, DUNGEON3_PLATES, 0, DUNGEON3_BUTTONS, 0, DUNGEON3_BRAZIERS, 0, DUNGEON3_BRAZIER_GROUPS, 0, DUNGEON3_ENTRANCES, 0, DUNGEON3_ROOM_DOORS, 0, DUNGEON3_HEART_CONTAINERS, 0, DUNGEON3_BOULDERS, 0, DUNGEON3_LOOSE_PLATFORMS, 0 };
 
