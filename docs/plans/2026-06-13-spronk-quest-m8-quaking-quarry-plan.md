@@ -69,7 +69,7 @@ notes and commit messages.
 |---|---|---|---|
 | 1 — Pure logic: StoneState + input/ability/data | ⬜ Not started | — | — |
 | 2 — Level compiler: cracked-floor/boulder/heavy-switch/loose-platform symbols | ✅ Shipped | 54a4554 (k gate), 612cac9 (heavy plate), a1925bd (boulder+loose-platform), 10ce2d3 (header regen) | — |
-| 3 — Engine/scene wiring (pound input, impact resolution, falling terrain last, VFX) | ⬜ Not started | — | — |
+| 3 — Engine/scene wiring (pound input, impact resolution, falling terrain last, VFX) | ✅ Shipped | e83c2f3, b24c8fa, e80de4e, aa4a8ce, 13b9fa6 (impact-row fix) | 261/261 host tests; ROM fixed; purity OK |
 | 4 — Content: Quaking Quarry 3 rooms + hub Door 7 + no-soft-lock invariants + QA | ⬜ Not started | — | — |
 
 ### Deviations
@@ -264,7 +264,7 @@ Add the data the content + scene need (mirror the existing nullable-array+count 
 
 ## Phase 3 — Engine/scene wiring (pound input, impact resolution, falling terrain LAST, VFX)
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED — 2026-06-13. Commits: e83c2f3 (3.1 input+ability flag), b24c8fa (3.2 cracked-floor/heavy/crush/boulder), e80de4e (3.3 loose platforms), aa4a8ce (3.4 VFX), 13b9fa6 (impact-row correctness fix — cracked floor/boulder match the SOLID tile under the feet, distinct from the plate-trip occupied-tile row). 261/261 host tests; ROM fixed; purity OK. New pure helper `include/logic/stone_impact.h` (`loose_platform_in_shockwave`, Chebyshev radius 6) with `test/test_stone_impact.cpp`. No existing logic-layer file modified.
 
 **BEFORE starting:** read `src/game/scene_dungeon.cpp` — specifically the dash→CrackedWall block (`~424-430`: `if(!gi.open && gi.spawn.type==GateType::CrackedWall && player.dash.active() && aabb_overlap(player.body, gi.body)){ gi.open=true; open_column(...); persist_latch(...); }`), the plate resolution (`~500-505`), the enemy bolt/fire/contact block (`~440-453`), `open_column`/`fill_column` (`~89-104`), and `src/engine/input.cpp`. **Do NOT modify `src/logic/`** (Phase 1 is frozen).
 
