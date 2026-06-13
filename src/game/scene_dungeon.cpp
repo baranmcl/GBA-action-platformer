@@ -32,6 +32,7 @@
 #include "logic/pushable_block.h"
 #include "logic/puzzle.h"
 #include "logic/gates.h"
+#include "logic/stone_impact.h" // loose_platform_in_shockwave (pound shockwave radius)
 #include "logic/room_graph.h"   // find_entrance, room_door_at
 #include "engine/input.h"
 #include "engine/spell_input.h"
@@ -74,6 +75,13 @@ namespace
     struct CrackedFloorInst { int tx, ty, latch_id; bool broken = false; };
     // M8 Stone: a breakable solid boulder (NOT pushable). Solid tile + sprite; removed on a pound.
     struct BoulderInst { int tx, ty; bn::optional<bn::sprite_ptr> sprite; bool broken = false; };
+    // M8 Stone: a horizontal run of `len` tiles, suspended, that DROPS straight down (drop-to-rest,
+    // no momentum) when a pound's shockwave lands within Chebyshev distance <=6. Collision tiles + sprites.
+    struct LoosePlatformInst {
+        int tx, ty, len, cur_ty;
+        bool falling = false, fallen = false;
+        bn::vector<bn::sprite_ptr, 8> sprites;   // one per tile in the run
+    };
     struct ShrineInst { logic::AbilityPickup pk; logic::Body body; bn::optional<bn::sprite_ptr> sprite; };
     struct HeartInst  { logic::HeartContainerSpawn hc; logic::Body body; bn::optional<bn::sprite_ptr> sprite; bool collected = false; };
     // src_tx/ty: plate or button tile to test; group: brazier group (Braziers kind)
@@ -283,6 +291,20 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         bo.sprite = bn::sprite_items::block.create_sprite(0, 0);  // placeholder art (reuse block)
         bo.sprite->set_camera(cam);
         bo.sprite->set_position(wx(b.tx * 8 + 4), wy(b.ty * 8 + 4));
+    }
+
+    // ---- loose platforms (M8 Stone: drop straight down on a nearby pound shockwave) ----
+    bn::vector<LoosePlatformInst, 8> loose_platforms;
+    for(int i = 0; i < level.loose_platform_count && i < 8; ++i){
+        const logic::LoosePlatformSpawn& lp = level.loose_platforms[i];
+        loose_platforms.push_back(LoosePlatformInst{ lp.tx, lp.ty, lp.len, lp.ty, false, false, {} });
+        LoosePlatformInst& li = loose_platforms.back();
+        for(int dx = 0; dx < lp.len && dx < 8; ++dx){
+            engine::set_collision_tile(lp.tx + dx, lp.ty, 1);     // solid run; bg blank, sprites show it
+            li.sprites.push_back(bn::sprite_items::block.create_sprite(0, 0));  // placeholder art
+            li.sprites.back().set_camera(cam);
+            li.sprites.back().set_position(wx((lp.tx + dx) * 8 + 4), wy(lp.ty * 8 + 4));
+        }
     }
 
     // ---- room-doors (bg tile 5 open-door; 2-wide x 4-tall archway grounded on the floor,
@@ -506,6 +528,34 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                 }
             }
 
+            // 4. Loose-platform shockwave: any not-yet-falling loose platform whose run is within
+            //    Chebyshev distance <=6 of the impact begins falling (drop-to-rest; see step loop below).
+            for(LoosePlatformInst& li : loose_platforms){
+                if(li.falling || li.fallen) continue;
+                if(logic::loose_platform_in_shockwave(li.tx, li.cur_ty, li.len, impact_cx, impact_fy))
+                    li.falling = true;
+            }
+        }
+
+        // ---- loose platforms: drop-to-rest one tile/frame while falling (solid-grid test only) ----
+        // The fall test considers ONLY the collision grid; the player is not a collision tile, so a
+        // platform never rests on the player (content guarantees the player isn't under a dropping run).
+        for(LoosePlatformInst& li : loose_platforms){
+            if(!li.falling) continue;
+            bool clear_below = true;
+            for(int dx = 0; dx < li.len; ++dx)
+                if(lvl.map.is_solid(li.tx + dx, li.cur_ty + 1)){ clear_below = false; break; }
+            if(clear_below){
+                for(int dx = 0; dx < li.len; ++dx){
+                    engine::set_collision_tile(li.tx + dx, li.cur_ty, 0);       // clear old row
+                    engine::set_collision_tile(li.tx + dx, li.cur_ty + 1, 1);   // set new row solid
+                }
+                ++li.cur_ty;
+                for(int dx = 0; dx < (int)li.sprites.size(); ++dx)
+                    li.sprites[dx].set_position(wx((li.tx + dx) * 8 + 4), wy(li.cur_ty * 8 + 4));
+            } else {
+                li.falling = false; li.fallen = true;   // rest; drop-to-rest, no bounce
+            }
         }
 
         logic::Vec2 muzzle = { player.body.pos.x + player.body.half_w,
