@@ -479,9 +479,16 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         // armed via player.stone (logic); the scene resolves WHAT it hits, mirroring dash->CrackedWall.
         if(player.stone.just_landed()){
             int impact_cx = px2t(player.body.pos.x + player.body.half_w);                                  // centre column
-            int impact_fy = px2t(player.body.pos.y + player.body.half_h + player.body.half_h - fx(1));     // feet row (tile landed on)
-            // Pound VFX (placeholder): puff of dust at the feet + a brief camera shake.
-            pound_dust.set_position(wx(impact_cx * 8 + 4), wy(impact_fy * 8 + 4));
+            // Two distinct rows (the collision resolver leaves the body resting just ABOVE the floor):
+            //  - impact_fy: the body's lowest OCCUPIED tile (matches the plate-trip convention, ~500-505);
+            //    a plate/heavy-plate marker is a non-solid tile the body stands ON, so we match this row.
+            //  - impact_floor: the SOLID tile directly under the feet (matches the on_ground probe,
+            //    collision.cpp:75); cracked floors + boulders are SOLID tiles the player lands ON TOP of,
+            //    so they live at this row, not impact_fy.
+            int impact_fy    = px2t(player.body.pos.y + player.body.half_h + player.body.half_h - fx(1));
+            int impact_floor = px2t(player.body.pos.y + player.body.half_h + player.body.half_h);
+            // Pound VFX (placeholder): puff of dust at the impacted floor + a brief camera shake.
+            pound_dust.set_position(wx(impact_cx * 8 + 4), wy(impact_floor * 8 + 4));
             pound_dust.set_visible(true);
             pound_vfx_t = 8;
             pound_shake_t = 6;
@@ -491,7 +498,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             //    pound chains through STACKED cracked floors and naturally ends on the first non-cracked solid.
             bool smashed = false;
             for(CrackedFloorInst& cf : cracked_floors){
-                if(cf.broken || cf.tx != impact_cx || cf.ty != impact_fy) continue;
+                if(cf.broken || cf.tx != impact_cx || cf.ty != impact_floor) continue;
                 // Break the contiguous run of cracked-floor tiles at this row (left + right of impact).
                 for(CrackedFloorInst& run : cracked_floors){
                     if(run.broken || run.ty != cf.ty) continue;
@@ -534,7 +541,8 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             //    tile itself), remove it so the path clears. (Boulders rebuild on room re-entry — fine.)
             for(BoulderInst& bo : boulders){
                 if(bo.broken) continue;
-                bool below = (bo.tx == impact_cx && (bo.ty == impact_fy || bo.ty == impact_fy + 1));
+                // The boulder the player landed ON TOP of is the solid tile under the feet (impact_floor).
+                bool below = (bo.tx == impact_cx && bo.ty == impact_floor);
                 if(below){
                     bo.broken = true;
                     engine::set_collision_tile(bo.tx, bo.ty, 0);
@@ -546,7 +554,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             //    Chebyshev distance <=6 of the impact begins falling (drop-to-rest; see step loop below).
             for(LoosePlatformInst& li : loose_platforms){
                 if(li.falling || li.fallen) continue;
-                if(logic::loose_platform_in_shockwave(li.tx, li.cur_ty, li.len, impact_cx, impact_fy))
+                if(logic::loose_platform_in_shockwave(li.tx, li.cur_ty, li.len, impact_cx, impact_floor))
                     li.falling = true;
             }
         }
