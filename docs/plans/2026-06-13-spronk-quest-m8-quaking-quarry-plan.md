@@ -76,7 +76,8 @@ notes and commit messages.
 - _(none yet)_
 
 ### Discoveries
-- _(none yet)_
+- **Heavy plates have no `latch_id`** (Phase 3, `scene_dungeon.cpp` heavy-plate handler): a heavy switch's `open_column` holds only for the current visit — NOT persisted to SRAM. So the spec §4 "latched shortcut" must NOT be built from a heavy switch alone. **Resolution (Phase 4 content):** build the persistent latched shortcut from a **latched `CrackedFloor`** instead — the pound-smash handler already calls `persist_latch(world, latch_id)`, and a CrackedFloor whose latch is set spawns pre-broken (open) on re-entry. Heavy switches are for in-visit gates only. (Avoids reopening the frozen Phase 1-2 to add a plate `latch_id`.)
+- **Impact-tile convention** (Phase 3, fixed in `13b9fa6`): cracked-floor/boulder/loose-platform use the solid tile under the player's feet (`px_to_tile(feet)`); heavy plates use the body's occupied tile (`px_to_tile(feet-1)`), matching the existing plate convention. Future scene work touching pound impact must respect this split.
 
 ---
 
