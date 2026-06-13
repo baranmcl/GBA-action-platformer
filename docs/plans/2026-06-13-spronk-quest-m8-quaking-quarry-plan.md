@@ -68,7 +68,7 @@ notes and commit messages.
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure logic: StoneState + input/ability/data | ⬜ Not started | — | — |
-| 2 — Level compiler: cracked-floor/boulder/heavy-switch/loose-platform symbols | ⬜ Not started | — | — |
+| 2 — Level compiler: cracked-floor/boulder/heavy-switch/loose-platform symbols | ✅ Shipped | 54a4554 (k gate), 612cac9 (heavy plate), a1925bd (boulder+loose-platform), 10ce2d3 (header regen) | — |
 | 3 — Engine/scene wiring (pound input, impact resolution, falling terrain last, VFX) | ⬜ Not started | — | — |
 | 4 — Content: Quaking Quarry 3 rooms + hub Door 7 + no-soft-lock invariants + QA | ⬜ Not started | — | — |
 
@@ -222,7 +222,7 @@ Add the data the content + scene need (mirror the existing nullable-array+count 
 
 ## Phase 2 — Level compiler: new symbols
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED — 2026-06-13. Commits: 54a4554 ('k' CrackedFloor gate), 612cac9 (heavy plate flag), a1925bd (boulder 'O' + loose-platform ':'), 10ce2d3 (header regen). 254/254 host tests pass.
 
 **BEFORE starting:** read `tools/build_level.py` — the `TILE` map, the `CONTENT` set, the per-symbol entity-collection loop, the JSON sidecar mapping (study how `=`/plates, `B`/`P` blocks, and `G`/gates with `latch_id` are parsed + emitted), and `emit_header`. Read `tools/test_build_level.py` for the test style.
 
