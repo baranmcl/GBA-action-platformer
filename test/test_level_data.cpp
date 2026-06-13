@@ -38,3 +38,45 @@ TEST(heart_container_null_when_absent){
     CHECK_EQ(L.heart_container_count, 0);
     // Default-initialised pointer is nullptr — don't dereference, just check count.
 }
+
+// --- Task 1.4: M8 Stone spawn types ---
+// PlateSpawn.heavy field
+static const PlateSpawn HEAVY_PLATES[] = { {3, 5, 6, 5, /*heavy=*/true}, {1, 2, 4, 2} };
+// BoulderSpawn
+static const BoulderSpawn BOULDERS[] = { {7, 3} };
+// LoosePlatformSpawn
+static const LoosePlatformSpawn LOOSE[] = { {2, 4, 3} };
+static constexpr LevelData L_M8 = { TILES,3,3, 1,1, false,0,0, false,0,0,
+    ENEMIES,1, GATES,1, DOORS,1, PICKUPS,1, BLOCKS,1,
+    HEAVY_PLATES,2, BUTTONS,1, BRAZIERS,1, BGROUPS,1,
+    nullptr,0, nullptr,0, nullptr,0,
+    BOULDERS,1, LOOSE,1 };
+TEST(plate_heavy_field_default_false){
+    // PlateSpawn.heavy defaults false
+    PlateSpawn p{1,1,2,2};
+    CHECK(!p.heavy);
+}
+TEST(plate_heavy_field_can_be_true){
+    CHECK(HEAVY_PLATES[0].heavy);
+    CHECK_EQ(HEAVY_PLATES[0].tx, 3); CHECK_EQ(HEAVY_PLATES[0].ty, 5);
+}
+TEST(plate_heavy_defaults_false_for_plain_plate){
+    CHECK(!HEAVY_PLATES[1].heavy); // second plate: heavy not set -> false
+}
+TEST(boulder_spawn_fields){
+    CHECK_EQ(L_M8.boulder_count, 1);
+    CHECK_EQ(L_M8.boulders[0].tx, 7);
+    CHECK_EQ(L_M8.boulders[0].ty, 3);
+}
+TEST(loose_platform_spawn_fields){
+    CHECK_EQ(L_M8.loose_platform_count, 1);
+    CHECK_EQ(L_M8.loose_platforms[0].tx, 2);
+    CHECK_EQ(L_M8.loose_platforms[0].ty, 4);
+    CHECK_EQ(L_M8.loose_platforms[0].len, 3);
+}
+TEST(boulder_null_when_absent){
+    CHECK_EQ(L.boulder_count, 0); // existing L has no boulders -> count==0
+}
+TEST(loose_platform_null_when_absent){
+    CHECK_EQ(L.loose_platform_count, 0); // existing L has no loose platforms -> count==0
+}
