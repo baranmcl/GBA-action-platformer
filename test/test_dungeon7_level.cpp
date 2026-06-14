@@ -357,12 +357,25 @@ TEST(d7_room_doors_resolve_and_two_way){
             const LevelData& T = *D7_ROOMS[d.target_room];
             bool found=false; for(int e=0;e<T.entrance_count;++e) if(T.entrances[e].id==d.target_entrance) found=true;
             CHECK(found);
-            // co-located return entrance: a same-row entrance within 1..2 tiles of the door.
+            // Two-way return entrance. Normally co-located: a same-row entrance within 1..2 tiles of
+            // the door. EXCEPTION for a GATE-GUARDED door: a door sealed behind a 2-wide DarkVeil fill
+            // (cols gate..gate+1) CANNOT have its return entrance within 2 tiles on the SAFE side — the
+            // entrance must clear the gate fill (and not float its archway on it), so it sits just beyond
+            // the gate with a DarkVeil column strictly between it and the door. That paired-across-the-gate
+            // entrance is the legitimate return spot (the player teleports to the safe side on return).
+            auto darkveil_between=[&](int a,int b){     // a DarkVeil gate column strictly between cols a,b
+                int lo=a<b?a:b, hi=a<b?b:a;
+                for(int gi=0; gi<L.gate_count; ++gi)
+                    if(L.gates[gi].type==GateType::DarkVeil && L.gates[gi].tx>lo && L.gates[gi].tx<hi) return true;
+                return false;
+            };
             bool near=false;
             for(int e=0;e<L.entrance_count;++e){
                 const EntranceSpawn& n=L.entrances[e];
+                if(n.ty!=d.ty) continue;
                 int dx=n.tx-d.tx; if(dx<0) dx=-dx;
-                if(n.ty==d.ty && dx>=1 && dx<=2) near=true;
+                if(dx>=1 && dx<=2) near=true;                                   // co-located (ungated door)
+                else if(dx>=1 && darkveil_between(n.tx,d.tx)) near=true;        // paired across a DarkVeil gate
             }
             CHECK(near);
         }
@@ -764,6 +777,49 @@ static const RoomDoorSpawn* d7_find_door(const LevelData& L, int target_room){
     for(int i=0;i<L.room_door_count;++i)
         if(L.room_doors[i].target_room==target_room) return &L.room_doors[i];
     return nullptr;
+}
+
+// 7b. DOOR GROUNDING (anti-floating-archway). The scene grounds each room-door archway on the FIRST
+//     solid tile below the door tile (floor_row_below), and a DarkVeil gate renders a 2-WIDE fill
+//     (cols gate..gate+1, rows 1..h-3) when CLOSED — the state a room loads in. If a door sits in a
+//     gate-fill column (or above any non-floor solid), its archway grounds on THAT and FLOATS above the
+//     real floor, overlapping the wall. This invariant asserts every Room-0 door column (room-1, room-2,
+//     hub-exit Q) grounds cleanly on the MAIN bottom floor (row h-2): the first solid at/below the door
+//     tile, with all DarkVeil gates CLOSED (2-wide fill), is the bottom floor row and there is NO
+//     intervening solid. Break test: place a door in a gate-fill column -> first-solid-below becomes the
+//     fill (row h-3) instead of the floor (row h-2) -> RED. (Verified by moving the door under the gate.)
+TEST(d7_room0_doors_ground_on_main_floor){
+    const LevelData& L = DUNGEON7_ROOM0_DATA;
+    const int floor_row = L.h - 2;                 // bottom interior floor row (row 20 for h=22)
+    // Render-faithful solid map with every DarkVeil gate CLOSED: its 2-wide fill (cols tx..tx+1,
+    // rows 1..h-3) mirrors scene_dungeon.cpp fill_column.
+    std::vector<uint8_t> solid(L.w*L.h, 0);
+    for(int y=0;y<L.h;++y) for(int x=0;x<L.w;++x)
+        if((TileKind)L.tiles[y*L.w+x]==TileKind::Solid || (TileKind)L.tiles[y*L.w+x]==TileKind::IcePlatform)
+            solid[y*L.w+x]=1;
+    for(int gi=0; gi<L.gate_count; ++gi){
+        if(L.gates[gi].type!=GateType::DarkVeil) continue;
+        for(int ty=1; ty<L.h-2; ++ty) for(int dx=0; dx<2; ++dx){
+            int x=L.gates[gi].tx+dx; if(x>=0 && x<L.w) solid[ty*L.w+x]=1;   // 2-wide closed fill
+        }
+    }
+    int checked=0;
+    for(int i=0;i<L.room_door_count;++i){
+        const RoomDoorSpawn& d = L.room_doors[i];
+        for(int dx=0; dx<2; ++dx){                  // the archway is 2-wide (cols d.tx, d.tx+1)
+            int col=d.tx+dx;
+            // first solid strictly below the door tile (mirrors floor_row_below)
+            int fr=-1;
+            for(int y=d.ty+1; y<L.h; ++y) if(solid[y*L.w+col]){ fr=y; break; }
+            CHECK(fr==floor_row);                   // grounds on the MAIN floor, not a gate fill/wall
+            if(fr!=floor_row)
+                std::printf("  [ground] door(%d,%d) col %d grounds at row %d (want %d) -> FLOATING\n",
+                            d.tx,d.ty,col,fr,floor_row);
+            ++checked;
+        }
+    }
+    std::printf("  [ground] %d door columns checked (all grounded on row %d)\n", checked, floor_row);
+    CHECK(checked>=4);   // >=2 doors x 2 columns
 }
 
 // 8. The Room-1 door MUST be gated behind the heavy switch: with the DarkVeil gate CLOSED and no pound
