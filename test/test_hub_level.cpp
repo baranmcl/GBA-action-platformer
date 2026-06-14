@@ -27,43 +27,21 @@ TEST(hub_spawn_on_empty){
     const LevelData& L = HUB_DATA;
     CHECK_EQ(tile(L, L.spawn_tx, L.spawn_ty), 0);
 }
-TEST(hub_has_grapple_anchors){
-    // M7 ability parity: the hub gained grapple anchors so Grapple is demonstrable in the plaza.
+TEST(hub_no_grapple_anchors){
+    // The M7 hub grapple anchors + raised platforms were removed (unnecessary). The plaza is a
+    // clean floor again: no GrapplePoint tiles remain.
     const LevelData& L = HUB_DATA;
     int anchors = 0;
     for(int i = 0; i < L.w*L.h; ++i)
         if(L.tiles[i] == (uint8_t)TileKind::GrapplePoint) ++anchors;
-    CHECK(anchors >= 2);
-}
-TEST(hub_every_anchor_has_solid_below){
-    // Grapple-landing rule (mirrors d6_every_anchor_has_solid_below): on arrival the engine scans
-    // DOWN the anchor column for the first solid tile and snaps the player to STAND on top of it. So
-    // every authored anchor MUST have a Solid tile directly below it (the ledge to land on).
-    const LevelData& L = HUB_DATA;
-    for(int y = 0; y < L.h; ++y)
-    for(int x = 0; x < L.w; ++x){
-        if(L.tiles[y*L.w + x] != (uint8_t)TileKind::GrapplePoint) continue;
-        CHECK(y + 1 < L.h);                                              // anchor not on the bottom row
-        CHECK_EQ((int)L.tiles[(y+1)*L.w + x], (int)TileKind::Solid);     // solid ledge directly below
-    }
-}
-TEST(hub_anchor_has_clear_air_above){
-    // Each anchor needs >=4 clear (non-solid) tiles above so the player can grapple UP to it.
-    const LevelData& L = HUB_DATA;
-    for(int y = 0; y < L.h; ++y)
-    for(int x = 0; x < L.w; ++x){
-        if(L.tiles[y*L.w + x] != (uint8_t)TileKind::GrapplePoint) continue;
-        CHECK(y - 4 >= 0);
-        for(int k = 1; k <= 4; ++k)
-            CHECK_EQ((int)L.tiles[(y-k)*L.w + x], (int)TileKind::Empty);
-    }
+    CHECK_EQ(anchors, 0);
 }
 TEST(hub_doors_and_spawn_intact){
-    // Verticality additions must NOT disturb the door layout or the single spawn.
+    // Removing the anchors/platforms must NOT disturb the door layout or the single spawn.
     const LevelData& L = HUB_DATA;
     CHECK_EQ(L.door_count, 7);
     CHECK_EQ(tile(L, L.spawn_tx, L.spawn_ty), 0);   // exactly-one '@' is enforced by the level compiler
-    // No anchor or platform overwrote a door tile (doors sit on row 15).
+    // No door tile got clobbered (doors sit on row 15).
     for(int i = 0; i < L.door_count; ++i)
         CHECK_EQ(tile(L, L.doors[i].tx, L.doors[i].ty), 0);
 }
