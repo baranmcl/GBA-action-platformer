@@ -24,6 +24,13 @@ static constexpr int CLIMB = 6;   // Featherleap double-jump reaches ~6-7 tiles;
 // runtime. So the flood-fill must treat them as SOLID (the player walks on them / they block) from the
 // gate/boulder/loose-platform arrays, NOT from tiles[]. Hazards (Lava/Water/Spikes) are non-solid.
 // ---------------------------------------------------------------------------
+// PLAYER GEOMETRY: the Laurel body is half_w=8px (2 tiles wide) x half_h=16px (4 tiles tall) — see
+// scene_dungeon.cpp player.body. The flood-fill MODELS this 2-wide x 4-tall body: a foot-anchor is
+// (x = left body column, y = the FEET row). The body occupies columns x..x+1 and rows y-3..y. This is
+// what makes a 1-wide gap in a wall IMPASSABLE (the 2-wide body can't fit) — the bug QA round 1 hit.
+static constexpr int PW = 2;   // player width in tiles
+static constexpr int PH = 4;   // player height in tiles
+
 struct Grid {
     int w, h;
     std::vector<uint8_t> solid;   // 1 = blocks (Solid/IcePlatform/cracked/boulder/loose), 0 = passable
@@ -37,9 +44,19 @@ struct Grid {
         if(x < 0 || y < 0 || x >= w || y >= h) return false;
         return hazard[y*w + x] != 0;
     }
-    // standable: a passable, non-hazard cell with a blocking cell directly below.
+    bool cell_clear(int x, int y) const { return !blk(x,y) && !haz(x,y); }
+
+    // The 2-wide x 4-tall body fits with feet on row y (body cols x..x+1, rows y-3..y all clear).
+    bool fits(int x, int y) const {
+        if(x < 0 || x+PW-1 >= w || y-PH+1 < 0 || y >= h) return false;
+        for(int cx = x; cx < x+PW; ++cx)
+            for(int cy = y-PH+1; cy <= y; ++cy)
+                if(!cell_clear(cx, cy)) return false;
+        return true;
+    }
+    // standable: the body fits AND there is solid support directly below the feet (either foot column).
     bool standable(int x, int y) const {
-        return !blk(x, y) && !haz(x, y) && blk(x, y+1);
+        return fits(x, y) && (blk(x, y+1) || blk(x+PW-1, y+1));
     }
 };
 
@@ -85,72 +102,118 @@ static Grid build_grid(const LevelData& L,
     return g;
 }
 
-// Bounded reachability flood-fill over STANDABLE tiles. A move from (x,y):
-//   * walk to a horizontally-adjacent standable tile,
-//   * drop down (any depth) to the first standable tile in a column step away,
-//   * climb up to <= CLIMB tiles to a higher standable tile one column away.
-// Returns the set of reached standable tiles (as a w*h bool grid).
+// Build the "fully Stone-cleared" grid: every boulder broken + every cracked floor smashed + every
+// loose platform dropped to its rest row. Models the frontier a player WITH the Stone pound can reach
+// after performing the Stone interactions (smash lids, break boulders, drop platforms to bridge gaps).
+static Grid build_grid_stone_cleared(const LevelData& L){
+    Grid g = build_grid(L);
+    for(int i=0;i<L.boulder_count;++i)      g.solid[L.boulders[i].ty*L.w + L.boulders[i].tx] = 0;
+    for(int i=0;i<L.gate_count;++i)
+        if(L.gates[i].type==GateType::CrackedFloor)
+            g.solid[L.gates[i].ty*L.w + L.gates[i].tx] = 0;
+    for(int i=0;i<L.loose_platform_count;++i){
+        const LoosePlatformSpawn& lp = L.loose_platforms[i];
+        for(int dx=0;dx<lp.len;++dx) g.solid[lp.ty*L.w + (lp.tx+dx)] = 0;   // clear authored row
+        int ty = lp.ty;
+        while(ty+1 < L.h){
+            bool rest=false;
+            for(int dx=0;dx<lp.len;++dx) if(g.solid[(ty+1)*L.w + (lp.tx+dx)]) rest=true;
+            if(rest) break;
+            ++ty;
+        }
+        for(int dx=0;dx<lp.len;++dx) g.solid[ty*L.w + (lp.tx+dx)] = 1;       // set rest row solid
+    }
+    return g;
+}
+
+// Snap a (sx, foot-row sy) start to the nearest standable 2-wide foot-anchor at/below it.
+static bool snap_start(const Grid& g, int& sx, int& sy){
+    // entrances/spawns are authored on the content row (18); the feet rest on row 19. Try the column
+    // as the LEFT body column first, then shifted one left (so the 2-wide body straddles the tile).
+    for(int lx : { sx, sx-1 }){
+        int y = sy;
+        while(y < g.h){
+            if(g.standable(lx, y)){ sx = lx; sy = y; return true; }
+            // fall further down this column
+            if(g.fits(lx, y) && !(g.blk(lx,y+1)||g.blk(lx+PW-1,y+1))) { ++y; continue; }
+            ++y;
+        }
+    }
+    return false;
+}
+
+// Bounded reachability flood-fill over 2-wide x 4-tall STANDABLE foot-anchors (x = left body column,
+// y = feet row). A move shifts the footprint one column left/right then settles vertically:
+//   * step across to a same-or-near-height standable anchor,
+//   * climb up to <= CLIMB rows (double-jump) to a higher anchor (needs head clearance),
+//   * drop down (any depth) to the first standable anchor.
+// The leading column must be clear for the body height during the shift (so 1-wide holes don't pass).
+// Result keys reached anchors at index (y*w + x).
 static std::vector<uint8_t> reachable(const Grid& g, int sx, int sy){
     std::vector<uint8_t> seen(g.w*g.h, 0);
-    if(!g.standable(g.w ? sx : 0, sy)) {
-        // snap the start down to the nearest standable tile in its column (entrances sit on a floor)
-        while(sy+1 < g.h && !g.blk(sx, sy+1) && !g.haz(sx,sy+1)) ++sy;
-    }
-    if(sx < 0 || sy < 0 || sx >= g.w || sy >= g.h) return seen;
+    if(!snap_start(g, sx, sy)) return seen;
     std::queue<std::pair<int,int>> q;
     auto push = [&](int x, int y){
         if(x<0||y<0||x>=g.w||y>=g.h) return;
         if(!g.standable(x,y) || seen[y*g.w+x]) return;
         seen[y*g.w+x] = 1; q.push({x,y});
     };
-    // seed: snap start to a standable tile
-    int y0 = sy; while(y0+1 < g.h && !g.blk(sx,y0+1) && !g.haz(sx,y0+1)) ++y0;
-    push(sx, y0);
+    push(sx, sy);
     while(!q.empty()){
         auto [x,y] = q.front(); q.pop();
+        // Straight-up climb in the SAME column (a player-width vertical shaft): rise <= CLIMB rows to a
+        // higher standable anchor at the same footprint. Needed for 2-wide shafts where no lateral
+        // move is possible (walls flush on both sides), e.g. climbing out of a 2-wide heart pit.
+        for(int up = 1; up <= CLIMB; ++up){
+            int ny = y - up;
+            if(ny - PH + 1 < 0) break;
+            if(!g.fits(x, ny)) break;             // a ceiling/ledge blocks rising further
+            if(g.standable(x, ny)) push(x, ny);
+        }
         for(int dir = -1; dir <= 1; dir += 2){
-            int nx = x + dir;
-            if(!g.blk(nx, y)){
-                // the body row is clear that way: walk and/or drop down the neighbor column.
-                if(g.standable(nx, y)) push(nx, y);
-                int dy = y;
-                while(dy+1 < g.h && !g.blk(nx, dy+1) && !g.haz(nx, dy+1)) ++dy;
-                if(dy != y) push(nx, dy);
-            }
-            // climb / wall-jump: rise up to CLIMB tiles to a higher standable tile in the neighbor
-            // column (double-jump). Allowed even when a wall blocks the body row (jumping onto a
-            // ledge); requires clear air directly above the player's CURRENT position to get airborne.
+            int nx = x + dir;                     // new LEFT body column after the shift
+            // Climb up onto an adjacent LEDGE (the realistic motion: jump straight up in your own
+            // column to the apex height, then nudge sideways onto the ledge at that height). Allowed
+            // when the player can rise in their OWN column to row ny (fits(x,ny)) AND the destination
+            // footprint is a standable anchor (standable(nx,ny)), for any ny in [y-CLIMB, y-1]. This
+            // does NOT require the destination column to be clear at the intermediate rows (the ledge
+            // tile itself is below the landing), so climbing ONTO a ledge works.
             for(int up = 1; up <= CLIMB; ++up){
-                int uy = y - up;
-                if(uy < 0) break;
-                if(g.blk(x, uy)) break;           // a ceiling above the player blocks getting airborne
-                if(g.blk(nx, uy)) continue;       // that target cell is wall; a higher one may still be open
-                if(g.standable(nx, uy)) push(nx, uy);
+                int ny = y - up;
+                if(ny - PH + 1 < 0) break;
+                if(!g.fits(x, ny)) break;         // can't rise this high in our own column (ceiling)
+                if(g.standable(nx, ny)) push(nx, ny);
+            }
+            // Step across / drop: from the current foot row, the body must be able to slide into the
+            // new footprint at row y (same height) — require fits(nx,y) — then fall to the first anchor.
+            if(g.fits(nx, y)){
+                int ny = y;
+                while(ny+1 < g.h && g.fits(nx, ny+1) && !(g.blk(nx,ny+1)||g.blk(nx+PW-1,ny+1))) ++ny;
+                if(g.standable(nx, ny)) push(nx, ny);
+                else if(g.standable(nx, y)) push(nx, y);
             }
         }
     }
     return seen;
 }
 
-// True if any reached standable tile is a forward exit: a room-door, the cage, or the exit. We accept
-// "near" (within 1 tile horizontally on the same row) because the door/cage/exit sprite spans tiles.
+// True if a reached 2-wide foot-anchor stands AT a target (door/cage/exit). The SPRITE sits on the
+// content row (18); the player stands with feet on the floor row (ty+1) and a 2-wide footprint whose
+// left column is tx-1 or tx (the body straddles/covers the sprite tile).
+static bool stands_at(const LevelData& L, const std::vector<uint8_t>& seen, int tx, int ty){
+    for(int dy = 0; dy <= 1; ++dy){            // sprite row, or the feet row just below it
+        int fy = ty + dy;
+        if(fy < 0 || fy >= L.h) continue;
+        for(int lx = tx-PW+1; lx <= tx; ++lx)  // any 2-wide footprint covering column tx
+            if(lx >= 0 && lx < L.w && seen[fy*L.w + lx]) return true;
+    }
+    return false;
+}
 static bool reaches_forward_exit(const LevelData& L, const std::vector<uint8_t>& seen){
-    // A door/cage/exit SPRITE sits on the content row (18) but the player STANDS on the floor row
-    // (19, solid below at 20). So a target at (tx,ty) is "reached" if a reached standable tile is at
-    // the target tile OR directly below it (the standing position), within +/-1 column.
-    auto hit = [&](int tx, int ty)->bool{
-        for(int dx = -1; dx <= 1; ++dx){
-            int x = tx+dx;
-            if(x<0 || x>=L.w) continue;
-            if(ty>=0   && ty<L.h   && seen[ty*L.w + x])     return true;
-            if(ty+1>=0 && ty+1<L.h && seen[(ty+1)*L.w + x]) return true;  // standing row below the sprite
-        }
-        return false;
-    };
     for(int i = 0; i < L.room_door_count; ++i)
-        if(hit(L.room_doors[i].tx, L.room_doors[i].ty)) return true;
-    if(L.has_cage && hit(L.cage_tx, L.cage_ty)) return true;
-    if(L.has_exit && hit(L.exit_tx, L.exit_ty)) return true;
+        if(stands_at(L, seen, L.room_doors[i].tx, L.room_doors[i].ty)) return true;
+    if(L.has_cage && stands_at(L, seen, L.cage_tx, L.cage_ty)) return true;
+    if(L.has_exit && stands_at(L, seen, L.exit_tx, L.exit_ty)) return true;
     return false;
 }
 
@@ -222,13 +285,20 @@ TEST(d7_one_spronk_one_exit_grounded){
 }
 
 TEST(d7_floor_content_on_row_18){
-    // spawn/enemy/shrine/heart ground on content row 18 (feet land on the row-20 floor).
+    // Floor-bound content (spawn/enemy/shrine) grounds on content row 18 (feet land on the row-20
+    // floor). NOTE: heart containers are EXEMPT — the engine places a heart via a static overlap body
+    // at its exact tile (no floor-scan), so a heart may legitimately sit on a raised ledge (D7's heart
+    // is on a Stone-gated mezzanine ledge). Its grounding + Stone-gating is covered by the heart-alcove
+    // invariant; here we only require it has solid directly below so it doesn't float.
     for(int r = 0; r < D7_N; ++r){
         const LevelData& L = *D7_ROOMS[r];
         CHECK_EQ(L.spawn_ty, 18);
         for(int i=0;i<L.enemy_count;++i)  CHECK_EQ((int)L.enemies[i].ty,18);
         for(int i=0;i<L.pickup_count;++i) CHECK_EQ((int)L.pickups[i].ty,18);
-        for(int i=0;i<L.heart_container_count;++i) CHECK_EQ((int)L.heart_containers[i].ty,18);
+        for(int i=0;i<L.heart_container_count;++i){
+            const HeartContainerSpawn& hc = L.heart_containers[i];
+            CHECK(hc.ty+1 < L.h && (int)L.tiles[(hc.ty+1)*L.w + hc.tx] == (int)TileKind::Solid); // solid below
+        }
     }
 }
 
@@ -305,10 +375,9 @@ TEST(d7_every_cracked_floor_drop_has_forward_exit){
             int land = pound_landing_row(L, g, tx, ty);
             CHECK(land >= 0);                              // the plunge ends on real ground
             if(land < 0) continue;
-            // remove the smashed cracked-floor tiles in this column so the flood-fill sees the opening,
-            // then flood from the landing tile and require a forward exit.
-            Grid gp = g;
-            for(int y=ty; y<=land; ++y) if(is_cracked(L,tx,y)) gp.solid[y*L.w+tx]=0;
+            // Flood from the landing on the player's achievable frontier: Stone-cleared (all cracked
+            // smashed + boulders broken + loose platforms dropped to bridge gaps). Require a forward exit.
+            Grid gp = build_grid_stone_cleared(L);
             std::vector<uint8_t> seen = reachable(gp, tx, land);
             bool ok = reaches_forward_exit(L, seen);
             CHECK(ok);
@@ -413,7 +482,7 @@ TEST(d7_no_pound_pit_traps){
             int tx=L.gates[i].tx, ty=L.gates[i].ty;
             int land = pound_landing_row(L, g, tx, ty);
             CHECK(land>=0); if(land<0) continue;
-            Grid gp = g; for(int y=ty;y<=land;++y) if(is_cracked(L,tx,y)) gp.solid[y*L.w+tx]=0;
+            Grid gp = build_grid_stone_cleared(L);
             std::vector<uint8_t> seen = reachable(gp, tx, land);
             bool exit_ok = reaches_forward_exit(L, seen);
             // terminal: the landing reaches the cage/exit -> intended end (handled by exit_ok via cage/exit).
@@ -450,4 +519,74 @@ TEST(d7_magic_beats_have_a_source_before_them){
     }
     std::printf("  [magic] %d magic-gated beats checked\n", beats);
     CHECK(beats >= 1);
+}
+
+// 6. Heart-container alcoves are REACHABLE (with the Stone kit) AND RETURNABLE (the player can grab H
+//    and LEAVE) — the soft-lock QA round 1 hit (a 1-wide entry the 2-wide body couldn't fit + a sealed
+//    well with no exit). With the 2-wide model + one-way-drop reachability, a sealed/1-wide alcove fails
+//    BOTH halves: it is unreachable (1-wide) and/or un-returnable (sealed well).
+TEST(d7_heart_alcove_reachable_and_returnable){
+    int checked = 0;
+    for(int r = 0; r < D7_N; ++r){
+        const LevelData& L = *D7_ROOMS[r];
+        for(int i=0;i<L.heart_container_count;++i){
+            const HeartContainerSpawn& hc = L.heart_containers[i];
+            Grid g = build_grid_stone_cleared(L);
+            int sx = L.entrance_count? L.entrances[0].tx : L.spawn_tx;
+            int sy = L.entrance_count? L.entrances[0].ty : L.spawn_ty;
+            // (a) reachable from the entrance: a reached anchor must STAND AT the heart tile.
+            std::vector<uint8_t> from_entrance = reachable(g, sx, sy);
+            bool reach = stands_at(L, from_entrance, hc.tx, hc.ty);
+            CHECK(reach);
+            // (b) returnable: flooding FROM the heart standing anchor must reach a forward exit (door).
+            //     Find a standable anchor that stands at the heart, seed reachability there.
+            bool returnable = false;
+            for(int lx = hc.tx-PW+1; lx <= hc.tx && !returnable; ++lx){
+                for(int fy = hc.ty+1; fy >= hc.ty && !returnable; --fy){
+                    if(lx<0||lx>=L.w||fy<0||fy>=L.h) continue;
+                    if(!g.standable(lx, fy)) continue;
+                    std::vector<uint8_t> from_heart = reachable(g, lx, fy);
+                    if(reaches_forward_exit(L, from_heart)) returnable = true;
+                }
+            }
+            CHECK(returnable);
+            std::printf("  [heart] room %d H(%d,%d): reachable=%s returnable=%s\n",
+                        r, hc.tx, hc.ty, reach?"yes":"NO", returnable?"yes":"NO");
+            ++checked;
+        }
+    }
+    std::printf("  [heart] %d heart alcoves checked\n", checked);
+    CHECK(checked >= 1);
+}
+
+// 7. No one-way traps: every region the player can ENTER from the room entrance, they can also LEAVE
+//    (re-reach a forward exit) — UNLESS it is the intended terminal (the spronk chamber: a region that
+//    contains the cage/exit). Concretely: for every cracked-floor LANDING anchor reachable from the
+//    entrance, flooding from that landing must re-reach a forward exit. A deep sealed pit fails this.
+TEST(d7_no_one_way_traps){
+    int checked = 0, terminals = 0;
+    for(int r = 0; r < D7_N; ++r){
+        const LevelData& L = *D7_ROOMS[r];
+        Grid g = build_grid(L);
+        for(int i=0;i<L.gate_count;++i){ if(L.gates[i].type!=GateType::CrackedFloor) continue;
+            int tx=L.gates[i].tx, ty=L.gates[i].ty;
+            int land = pound_landing_row(L, g, tx, ty);
+            if(land < 0) continue;
+            Grid gp = build_grid_stone_cleared(L);
+            // seed reachability from the landing anchor (snap to a 2-wide standable foot there).
+            std::vector<uint8_t> from_land = reachable(gp, tx, land);
+            bool can_leave = reaches_forward_exit(L, from_land);
+            // a landing that itself stands at the cage/exit IS the terminal -> exempt.
+            bool is_terminal = (L.has_cage && stands_at(L, from_land, L.cage_tx, L.cage_ty))
+                            || (L.has_exit && stands_at(L, from_land, L.exit_tx, L.exit_ty));
+            if(is_terminal){ ++terminals; }
+            CHECK(can_leave);   // reaches_forward_exit includes cage/exit, so terminals also pass
+            if(!can_leave)
+                std::printf("  [oneway] room %d k(%d,%d) land row %d -> ONE-WAY TRAP (can't leave)\n",
+                            r,tx,ty,land);
+            ++checked;
+        }
+    }
+    std::printf("  [oneway] %d cracked-floor landings checked (%d terminal)\n", checked, terminals);
+    CHECK(checked >= 1);
 }

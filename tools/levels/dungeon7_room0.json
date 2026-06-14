@@ -2,6 +2,6 @@
   "pickups":[{"ability":"stone"}],
   "enemies":[{"patrol":[5,9]}],
   "gates":[{"type":"gap"}],
-  "plates":[{"target":[29,13],"heavy":true}],
+  "plates":[{"target":[31,13],"heavy":true}],
   "entrances":[{"id":1,"facing":1},{"id":2,"facing":-1}],
   "room_doors":[{"target_room":1,"target_entrance":0},{"target_room":2,"target_entrance":0}] }

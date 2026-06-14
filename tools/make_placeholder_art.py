@@ -117,7 +117,8 @@ def gen_bolt():
 def gen_tiles():
     """Background tileset: 26 tiles of 8x8 in a horizontal strip. Index order:
     0 blank, 1 ground, 2 one-way, 3 gate(closed wall), 4 cage, 5 door-open, 6 door-locked,
-    7 vine, 8 ice-gate, 9 water-gate(waterfall, M4), 10 fire-wall-gate(M4), 11-12 reserved, 13 lava,
+    7 vine, 8 ice-gate, 9 water-gate(waterfall, M4), 10 fire-wall-gate(M4), 11 cracked-floor(M8 Stone),
+    12 reserved, 13 lava,
     14 brazier-unlit, 15 brazier-lit, 16 water(M4), 17 plate, 18 button, 19 ice-platform(M4),
     20 updraft(M5), 21 wind-left(M5), 22 wind-right(M5), 23 cracked-wall(M6), 24 spikes(M6),
     25 grapple-anchor(M7).
@@ -162,6 +163,16 @@ def gen_tiles():
     ox = 8 * 8
     rect(im, ox, 0, ox + 7, 7, 8)            # cyan fill
     rect(im, ox, 0, ox + 7, 0, 9); rect(im, ox + 1, 1, ox + 2, 2, 9)  # white glints
+    # tile 11: cracked FLOOR (M8 Stone) — a brown ground slab (like tile 1) but with a dark fracture
+    # line + chips so it READS as "pound here to break through" and is distinct from solid ground.
+    ox = 8 * 11
+    rect(im, ox, 0, ox + 7, 7, 10)        # brown ground body (matches tile 1)
+    rect(im, ox, 0, ox + 7, 0, 11)        # dark top mortar (no grass -> reads as an interior floor)
+    rect(im, ox, 7, ox + 7, 7, 11)        # dark bottom
+    # jagged fracture running across the slab (near-black), with a couple of loosened chips
+    px(im, ox + 1, 2, 1); px(im, ox + 2, 3, 1); px(im, ox + 3, 2, 1); px(im, ox + 4, 4, 1)
+    px(im, ox + 5, 3, 1); px(im, ox + 6, 5, 1)
+    px(im, ox + 2, 5, 14); px(im, ox + 4, 6, 14); px(im, ox + 5, 1, 14)  # chip shadows
     # tile 13: lava (red with orange/gold bubbles)
     ox = 8 * 13
     rect(im, ox, 0, ox + 7, 7, 13)          # red
