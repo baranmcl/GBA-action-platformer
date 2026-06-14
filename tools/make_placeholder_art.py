@@ -121,9 +121,9 @@ def gen_tiles():
     12 dark-veil barrier(M8 Light gate), 13 lava,
     14 brazier-unlit, 15 brazier-lit, 16 water(M4), 17 plate, 18 button, 19 ice-platform(M4),
     20 updraft(M5), 21 wind-left(M5), 22 wind-right(M5), 23 cracked-wall(M6), 24 spikes(M6),
-    25 grapple-anchor(M7).
+    25 grapple-anchor(M7), 26 exit-to-hub portal door (target_room=-1; distinct from tiles 5/6).
     (block + shrine are SPRITES, not bg tiles.)"""
-    im = new_img(8 * 26, 8)
+    im = new_img(8 * 27, 8)
     # tile 0: blank -> all index 0 (transparent, shows backdrop). nothing to draw.
     # tile 1: ground (brown with grass top, dark bottom)
     ox = 8 * 1
@@ -277,6 +277,17 @@ def gen_tiles():
         px(im, ox + cx, 3, 9); px(im, ox + cx, 4, 9)
     for cy in range(0, 8):
         px(im, ox + 3, cy, 9); px(im, ox + 4, cy, 9)
+    # tile 26: exit-to-hub portal door SEGMENT — a glowing cyan/white portal inside stone jambs.
+    # Distinct from tile 5 (dark room-door opening) and tile 6 (gold-barred dungeon goal): here the
+    # opening GLOWS cyan with a white swirl, reading as a magical "way out / hub portal" when tiled
+    # 2-wide x 4-tall into an archway.
+    ox = 8 * 26
+    rect(im, ox, 0, ox + 7, 7, 8)               # cyan portal glow fill (pal 8 bolt-cyan)
+    rect(im, ox, 0, ox, 7, 12); rect(im, ox + 7, 0, ox + 7, 7, 12)  # stone jambs (left/right)
+    # white swirl/sheen down the centre so it shimmers like an active portal
+    px(im, ox + 3, 1, 9); px(im, ox + 4, 2, 9); px(im, ox + 3, 3, 9)
+    px(im, ox + 4, 4, 9); px(im, ox + 3, 5, 9); px(im, ox + 4, 6, 9)
+    px(im, ox + 2, 2, 15); px(im, ox + 5, 5, 15)  # bright white glints
     write(im, "tiles", {"type": "regular_bg_tiles", "bpp_mode": "bpp_4"})
 
 def gen_ember_sprites():

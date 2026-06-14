@@ -13,6 +13,7 @@ Grid symbols (collision tile in parens):
   F=ability shrine  B=pushable block  P=pullable block  ==pressure plate
   ?=hidden button  *=brazier
   N=entrance (JSON: {"id":N,"facing":±1}; id defaults to scan-order index, facing to +1)  D=room-door
+  Q=exit-to-hub door (no JSON; hardcoded room-door with target_room=-1 -> returns player to the hub)
   (all content symbols except ~ set collision tile 0; positions recorded as entities)
 
 JSON sidecar (Nth metadata entry -> Nth matching symbol in row-major scan order):
@@ -46,7 +47,7 @@ ABILITY_ENUM = {
     'featherleap': 'Featherleap', 'fire': 'Fire', 'ice': 'Ice', 'glide': 'Glide',
     'dash': 'Dash', 'grapple': 'Grapple', 'stone': 'Stone', 'light': 'Light',
 }
-CONTENT = set('@CEoG12345678VIWXFBPK=?*NDHkO:')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door; 'H' heart container; 'k' cracked-floor gate (M8, Stone); 'O' boulder (M8); ':' loose platform (M8)
+CONTENT = set('@CEoG12345678VIWXFBPK=?*NDQHkO:')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door, 'Q' exit-to-hub door (target_room=-1); 'H' heart container; 'k' cracked-floor gate (M8, Stone); 'O' boulder (M8); ':' loose platform (M8)
 
 
 class LevelError(Exception):
@@ -186,6 +187,10 @@ def compile_level(txt_path, json_path):
                 t = j_room_doors[rd_idx]
                 room_doors.append((x, y, t['target_room'], t['target_entrance']))
                 rd_idx += 1
+            elif c == 'Q':
+                # exit-to-hub door: a room-door with the sentinel target_room=-1 (no JSON entry needed,
+                # like 'K' hardcodes its gate type). The scene routes target_room==-1 to the hub exit.
+                room_doors.append((x, y, -1, 0))
             elif c == 'H':
                 je = j_heart_containers[hc_idx] if hc_idx < len(j_heart_containers) else {}
                 hid = je.get('id', hc_idx)  # default: scan-order index

@@ -184,6 +184,22 @@ class TestBuildLevel(unittest.TestCase):
         with self.assertRaises(build_level.LevelError):
             compile_str(txt, {})  # room-door with no target metadata
 
+    def test_exit_to_hub_door_symbol(self):
+        # 'Q' compiles to a room-door with the sentinel target_room=-1 (exit to hub),
+        # WITHOUT needing a JSON room_doors entry (hardcoded, like 'K').
+        txt = "######\n#@.Q.#\n######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['room_doors'], [(3, 1, -1, 0)])  # (tx, ty, target_room=-1, target_entrance=0)
+
+    def test_exit_to_hub_door_emit_header(self):
+        # emit_header wires the Q door into the ROOM_DOORS array with target_room=-1.
+        txt = "######\n#@.Q.#\n######\n"
+        lvl = compile_str(txt, {})
+        hdr = build_level.emit_header(lvl, "TESTQ")
+        self.assertIn("TESTQ_ROOM_DOORS", hdr)
+        self.assertIn("{3,1,-1,0}", hdr)
+        self.assertIn("TESTQ_ROOM_DOORS, 1", hdr)
+
     def test_brazier_group_latch_id(self):
         txt = "########\n#@*....#\n########\n"
         lvl = compile_str(txt, {
