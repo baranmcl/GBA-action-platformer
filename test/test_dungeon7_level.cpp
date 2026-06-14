@@ -126,6 +126,23 @@ static Grid build_grid_stone_cleared(const LevelData& L){
     return g;
 }
 
+// Mark every DarkVeil gate tile SOLID — its CLOSED state (a solid wall only the heavy switch opens via
+// open_column; not bypassable by any owned ability). build_grid() leaves DarkVeil passable, so the
+// gating/re-entry invariants must add it explicitly.
+static void close_dark_veil(const LevelData& L, Grid& g){
+    for(int i=0;i<L.gate_count;++i)
+        if(L.gates[i].type==GateType::DarkVeil)
+            g.solid[L.gates[i].ty*L.w + L.gates[i].tx] = 1;
+}
+// Simulate the heavy switch firing open_column(tx): clear collision at columns tx and tx+1 for the
+// full interior height (mirrors scene_dungeon.cpp open_column, rows 1..h-3). Opens the DarkVeil gate.
+static void open_heavy_gate(const LevelData& L, Grid& g, int tx){
+    for(int ty=1; ty<L.h-2; ++ty) for(int dx=0; dx<2; ++dx){
+        int x = tx+dx; if(x<0||x>=L.w) continue;
+        g.solid[ty*L.w + x] = 0;
+    }
+}
+
 // Snap a (sx, foot-row sy) start to the nearest standable 2-wide foot-anchor at/below it.
 static bool snap_start(const Grid& g, int& sx, int& sy){
     // entrances/spawns are authored on the content row (18); the feet rest on row 19. Try the column
@@ -309,6 +326,8 @@ TEST(d7_room_doors_resolve_and_two_way){
         const LevelData& L = *D7_ROOMS[r];
         for(int i = 0; i < L.room_door_count; ++i){
             const RoomDoorSpawn& d = L.room_doors[i];
+            if(d.target_room < 0) continue;   // hub-exit door (Q, target_room=-1): returns to the hub,
+                                              // re-enterable; it needs no in-room return entrance.
             CHECK(d.target_room>=0 && d.target_room<D7_N);
             const LevelData& T = *D7_ROOMS[d.target_room];
             bool found=false; for(int e=0;e<T.entrance_count;++e) if(T.entrances[e].id==d.target_entrance) found=true;
@@ -589,4 +608,79 @@ TEST(d7_no_one_way_traps){
     }
     std::printf("  [oneway] %d cracked-floor landings checked (%d terminal)\n", checked, terminals);
     CHECK(checked >= 1);
+}
+
+// ===========================================================================
+// ROOM 0 — QA-driven gating + re-entry-safety invariants (each FAILS on a broken layout; see report).
+// ===========================================================================
+
+// Find a room-door by its target_room in room 0 (-1 = hub-exit 'Q', 1/2 = branch rooms).
+static const RoomDoorSpawn* d7_find_door(const LevelData& L, int target_room){
+    for(int i=0;i<L.room_door_count;++i)
+        if(L.room_doors[i].target_room==target_room) return &L.room_doors[i];
+    return nullptr;
+}
+
+// 8. The Room-1 door MUST be gated behind the heavy switch: with the DarkVeil gate CLOSED and no pound
+//    (cracked floors solid), the Room-1 door is NOT reachable from spawn; once the heavy switch fires
+//    its open_column (opening the gate), it BECOMES reachable. Proves the gate genuinely blocks it.
+TEST(d7_room0_room1_requires_heavy_switch){
+    const LevelData& L = DUNGEON7_ROOM0_DATA;
+    const RoomDoorSpawn* r1 = d7_find_door(L, 1);
+    CHECK(r1 != nullptr);
+    // BASE KIT: static grid + cracked floors solid (build_grid already does this) + DarkVeil closed.
+    Grid base = build_grid(L);
+    close_dark_veil(L, base);
+    std::vector<uint8_t> seen_closed = reachable(base, L.spawn_tx, L.spawn_ty);
+    bool reachable_closed = stands_at(L, seen_closed, r1->tx, r1->ty);
+    CHECK(!reachable_closed);     // GATED: cannot reach the Room-1 door without opening the gate.
+
+    // OPEN the heavy switch's gate column(s) (mirror open_column at the heavy plate's target).
+    Grid opened = build_grid(L);
+    close_dark_veil(L, opened);
+    int heavy_target = -1;
+    for(int i=0;i<L.plate_count;++i) if(L.plates[i].heavy) heavy_target = L.plates[i].target_tx;
+    CHECK(heavy_target >= 0);
+    open_heavy_gate(L, opened, heavy_target);
+    std::vector<uint8_t> seen_open = reachable(opened, L.spawn_tx, L.spawn_ty);
+    bool reachable_open = stands_at(L, seen_open, r1->tx, r1->ty);
+    CHECK(reachable_open);        // UNGATED once the heavy switch opens the DarkVeil gate.
+    std::printf("  [r1-gate] Room-1 door (%d,%d): closed=%s open=%s\n",
+                r1->tx, r1->ty, reachable_closed?"REACHABLE(bad)":"gated", reachable_open?"reachable":"STILL-GATED(bad)");
+}
+
+// 9. RE-ENTRY SOFT-LOCK GUARD: with ALL cracked floors respawned SOLID and ALL gates CLOSED (the state a
+//    room is rebuilt into on every entry), the hub-return 'Q' door AND the Room-2 door must be reachable
+//    by the 2-wide flood-fill from the dungeon-entry spawn AND from EACH return entrance (id1, id2) —
+//    WITHOUT pounding. Guarantees the player can never be stranded after re-entry.
+TEST(d7_room0_hub_exit_and_room2_always_reachable){
+    const LevelData& L = DUNGEON7_ROOM0_DATA;
+    const RoomDoorSpawn* q  = d7_find_door(L, -1);   // hub-exit 'Q'
+    const RoomDoorSpawn* r2 = d7_find_door(L, 2);    // Room-2 door
+    CHECK(q  != nullptr);
+    CHECK(r2 != nullptr);
+
+    // Re-entry grid: cracked floors SOLID (build_grid default) + DarkVeil CLOSED. No pound, no open.
+    Grid g = build_grid(L);
+    close_dark_veil(L, g);
+
+    // Seed set: the dungeon-entry spawn, plus every return entrance (id1, id2).
+    struct Seed { const char* name; int x, y; };
+    std::vector<Seed> seeds;
+    seeds.push_back({"spawn", L.spawn_tx, L.spawn_ty});
+    for(int e=0;e<L.entrance_count;++e)
+        seeds.push_back({"entrance", L.entrances[e].tx, L.entrances[e].ty});
+
+    int verified = 0;
+    for(const Seed& s : seeds){
+        std::vector<uint8_t> seen = reachable(g, s.x, s.y);
+        bool q_ok  = stands_at(L, seen, q->tx,  q->ty);
+        bool r2_ok = stands_at(L, seen, r2->tx, r2->ty);
+        CHECK(q_ok);
+        CHECK(r2_ok);
+        std::printf("  [reentry] from %s (%d,%d): Q=%s Room2=%s\n",
+                    s.name, s.x, s.y, q_ok?"reachable":"STRANDED", r2_ok?"reachable":"STRANDED");
+        ++verified;
+    }
+    CHECK(verified >= 3);   // spawn + id1 + id2
 }
