@@ -126,6 +126,31 @@ static Grid build_grid_stone_cleared(const LevelData& L){
     return g;
 }
 
+// Build the "full traversal kit MINUS the Stone pound" grid: boulders broken + loose platforms dropped
+// to their rest rows (so the player can cross the room with Stone's boulder-break/loose-drop), but every
+// CrackedFloor RE-SOLIDIFIED (the pound-through is NOT used). This is the faithful BASE-movement notion
+// for the heart gate: the heart must be UNREACHABLE even when the player can fully traverse the room and
+// stand on the deck above the alcove — only pounding through the 2-wide cracked ceiling drops them in.
+static Grid build_grid_no_pound(const LevelData& L){
+    Grid g = build_grid_stone_cleared(L);             // boulders broken + loose dropped (full traversal)
+    for(int i=0;i<L.gate_count;++i)                    // ...but cracked floors stay SOLID (no pound)
+        if(L.gates[i].type==GateType::CrackedFloor)
+            g.solid[L.gates[i].ty*L.w + L.gates[i].tx] = 1;
+    return g;
+}
+
+// Freeze every Water tile in-place: the Ice spell turns a water run into a standable IcePlatform-like
+// bridge. Models the FULL-path notion for water-gated beats (water becomes solid/standable, no longer a
+// hazard). Mutates the passed grid. BASE movement (no freeze) leaves water a non-standable hazard.
+static void freeze_water(const LevelData& L, Grid& g){
+    for(int y=0;y<L.h;++y) for(int x=0;x<L.w;++x){
+        if((TileKind)L.tiles[y*L.w + x] == TileKind::Water){
+            g.hazard[y*L.w + x] = 0;
+            g.solid [y*L.w + x] = 1;   // frozen surface is standable
+        }
+    }
+}
+
 // Mark every DarkVeil gate tile SOLID — its CLOSED state (a solid wall only the heavy switch opens via
 // open_column; not bypassable by any owned ability). build_grid() leaves DarkVeil passable, so the
 // gating/re-entry invariants must add it explicitly.
@@ -607,6 +632,126 @@ TEST(d7_no_one_way_traps){
         }
     }
     std::printf("  [oneway] %d cracked-floor landings checked (%d terminal)\n", checked, terminals);
+    CHECK(checked >= 1);
+}
+
+// ===========================================================================
+// ROOM-1 / ROOM-2 "REQUIRES-X" GATING INVARIANTS (QA round 2). Each distinguishes BASE movement
+// (jump/double-jump <=CLIMB, cracked floors SOLID, water a non-standable HAZARD — proves the gate)
+// from the FULL path (Stone pound smashes cracked floors; Ice freezes water to a standable bridge).
+// Each was verified to FAIL on a deliberately-broken layout — see the report for what was broken.
+// ===========================================================================
+
+// 10. ROOM 1: the heart MUST require the Stone pound. The heart's alcove is sealed on all sides except
+//     a 2-wide cracked-floor ceiling directly above it; BASE movement (cracked SOLID) cannot reach it
+//     by any jump/double-jump/climb, and the FULL kit (cracked smashed -> a 2-wide drop into the alcove)
+//     can. Break test: open the alcove wall so a double-jump reaches it -> the BASE half goes REACHABLE
+//     (RED). (Verified by deleting a wall tile beside the heart during authoring.)
+TEST(d7_room1_heart_requires_pound){
+    const LevelData& L = DUNGEON7_ROOM1_DATA;
+    CHECK(L.heart_container_count >= 1);
+    int checked = 0;
+    for(int i=0;i<L.heart_container_count;++i){
+        const HeartContainerSpawn& hc = L.heart_containers[i];
+        // (a) FULL-TRAVERSAL-MINUS-POUND: boulders broken + loose dropped (the player CAN cross the room
+        //     with the Stone kit) but cracked floors RE-SOLIDIFIED (the pound-through is NOT used). The
+        //     heart must NOT be in the reachable set — no jump/double-jump/climb reaches the alcove even
+        //     standing on the deck right above it; only pounding the 2-wide cracked ceiling drops you in.
+        Grid base = build_grid_no_pound(L);
+        int sx = L.entrance_count? L.entrances[0].tx : L.spawn_tx;
+        int sy = L.entrance_count? L.entrances[0].ty : L.spawn_ty;
+        std::vector<uint8_t> base_seen = reachable(base, sx, sy);
+        bool base_reach = stands_at(L, base_seen, hc.tx, hc.ty);
+        CHECK(!base_reach);          // GATED: base movement cannot reach the heart.
+
+        // (b) The alcove sits directly under a 2-wide cracked-floor run: there is a CrackedFloor tile in
+        //     the heart's column (or its 2-wide footprint columns) somewhere above it, whose smash drops
+        //     the player into the alcove. Assert a cracked floor sits above the heart in its footprint.
+        bool kk_above = false;
+        for(int gi=0; gi<L.gate_count; ++gi){
+            if(L.gates[gi].type!=GateType::CrackedFloor) continue;
+            if(L.gates[gi].ty < hc.ty &&
+               (L.gates[gi].tx==hc.tx || L.gates[gi].tx==hc.tx+1 || L.gates[gi].tx==hc.tx-1))
+                kk_above = true;
+        }
+        CHECK(kk_above);             // a pound-through ceiling exists above the heart.
+
+        // (c) FULL kit: cracked smashed -> the heart IS reachable from the entrance (the pound drop +
+        //     climb-out path). Reuses the stone-cleared frontier (see d7_heart_alcove_reachable...).
+        Grid full = build_grid_stone_cleared(L);
+        std::vector<uint8_t> full_seen = reachable(full, sx, sy);
+        bool full_reach = stands_at(L, full_seen, hc.tx, hc.ty);
+        CHECK(full_reach);           // UNGATED with the Stone pound.
+
+        std::printf("  [r1-heart] H(%d,%d): base=%s full=%s kk_above=%s\n",
+                    hc.tx, hc.ty, base_reach?"REACHABLE(bad)":"gated",
+                    full_reach?"reachable":"UNREACHABLE(bad)", kk_above?"yes":"NO");
+        ++checked;
+    }
+    CHECK(checked >= 1);
+}
+
+// 11. ROOM 2: the spronk/exit MUST require the Ice freeze. With BASE movement (water a non-standable
+//     hazard, cracked SOLID) the cage C and exit E are NOT reachable from the entrance — the only
+//     crossing is the water run, capped by a low tunnel ceiling so there is no jump-over bypass. Once
+//     the water is frozen to a standable bridge (full kit + Stone pound to descend), C and E become
+//     reachable. Break test: remove the tunnel ceiling / add a bypass ledge so BASE movement crosses the
+//     water -> the BASE half goes REACHABLE (RED). (Verified by deleting the ceiling cap during authoring.)
+TEST(d7_room2_spronk_requires_freeze){
+    const LevelData& L = DUNGEON7_ROOM2_DATA;
+    CHECK(L.has_cage); CHECK(L.has_exit);
+    int sx = L.entrance_count? L.entrances[0].tx : L.spawn_tx;
+    int sy = L.entrance_count? L.entrances[0].ty : L.spawn_ty;
+
+    // (a) FULL-KIT-MINUS-FREEZE: cracked SMASHED (the Stone pound IS available) but water left a
+    //     non-standable HAZARD (the Ice freeze is NOT used). C and E must be unreachable from the
+    //     entrance — the water run is the only crossing and there is no jump-over platform bypass, so
+    //     without freezing it the player can never reach the descent / the spronk chamber.
+    Grid base = build_grid_stone_cleared(L);
+    std::vector<uint8_t> base_seen = reachable(base, sx, sy);
+    bool base_c = stands_at(L, base_seen, L.cage_tx, L.cage_ty);
+    bool base_e = stands_at(L, base_seen, L.exit_tx, L.exit_ty);
+    CHECK(!base_c); CHECK(!base_e);     // GATED by the water (no jump-over bypass).
+
+    // (b) FULL kit: freeze the water (standable bridge) + Stone-clear cracked floors. C and E reachable.
+    Grid full = build_grid_stone_cleared(L);
+    freeze_water(L, full);
+    std::vector<uint8_t> full_seen = reachable(full, sx, sy);
+    bool full_c = stands_at(L, full_seen, L.cage_tx, L.cage_ty);
+    bool full_e = stands_at(L, full_seen, L.exit_tx, L.exit_ty);
+    CHECK(full_c); CHECK(full_e);       // UNGATED once the water is frozen.
+
+    std::printf("  [r2-freeze] C(%d,%d) E(%d,%d): base=(%s,%s) frozen=(%s,%s)\n",
+                L.cage_tx,L.cage_ty,L.exit_tx,L.exit_ty,
+                base_c?"reach(bad)":"gated", base_e?"reach(bad)":"gated",
+                full_c?"reach":"MISS(bad)", full_e?"reach":"MISS(bad)");
+}
+
+// 12. ROOM 2: no exit soft-lock. From the cracked-floor DESCENT landing tile, BOTH the cage C and the
+//     exit E are reachable by the 2-wide flood-fill — the player who pounds down can always free the
+//     spronk AND leave. Break test: wall off E from the landing -> E goes unreachable from the landing
+//     (RED). (Verified by inserting a wall between the landing and E during authoring.)
+TEST(d7_room2_exit_reachable_from_descent){
+    const LevelData& L = DUNGEON7_ROOM2_DATA;
+    CHECK(L.has_cage); CHECK(L.has_exit);
+    Grid g = build_grid(L);                       // for the pound-landing scan (cracked solid)
+    int checked = 0;
+    for(int i=0;i<L.gate_count;++i){
+        if(L.gates[i].type!=GateType::CrackedFloor) continue;
+        int tx=L.gates[i].tx, ty=L.gates[i].ty;
+        int land = pound_landing_row(L, g, tx, ty);
+        CHECK(land >= 0); if(land<0) continue;
+        // Flood from the landing on the Stone-cleared frontier (cracked smashed); the chamber holds both
+        // C and E and is reachable from the landing without needing the frozen water.
+        Grid gp = build_grid_stone_cleared(L);
+        std::vector<uint8_t> seen = reachable(gp, tx, land);
+        bool c_ok = stands_at(L, seen, L.cage_tx, L.cage_ty);
+        bool e_ok = stands_at(L, seen, L.exit_tx, L.exit_ty);
+        CHECK(c_ok); CHECK(e_ok);                 // both the spronk AND the exit reachable -> no soft-lock.
+        std::printf("  [r2-descent] k(%d,%d) lands row %d -> C=%s E=%s\n",
+                    tx,ty,land, c_ok?"reached":"STUCK", e_ok?"reached":"STUCK");
+        ++checked;
+    }
     CHECK(checked >= 1);
 }
 
