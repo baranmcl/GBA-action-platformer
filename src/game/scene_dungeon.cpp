@@ -276,7 +276,13 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         HeartInst& hi = hearts.back();
         hi.sprite = bn::sprite_items::heart_container.create_sprite(0, 0);
         hi.sprite->set_camera(cam);
-        hi.sprite->set_position(wx(hc.tx * 8 + 8), wy(hc.ty * 8 + 8));
+        // Ground the 16x16 sprite on the FIRST SOLID tile below the authored row (like the
+        // cage/exit/room-doors), so its BOTTOM rests on the floor surface. M7 hard-coded a
+        // tile-centre position assuming a row-18 floor-2-below layout; in D7's tight alcove the
+        // floor is only 1 row below, so that sank the sprite INTO the platform. Floor surface is
+        // at fr*8; sprite half-height is 8, so centre = fr*8 - 8.
+        int hc_fr = floor_row_below(lvl.map, hc.tx, hc.ty);
+        hi.sprite->set_position(wx(hc.tx * 8 + 8), wy(hc_fr * 8 - 8));
     }
 
     // ---- pushable blocks (solid collision cell + 8x8 sprite) ----
