@@ -115,8 +115,9 @@ namespace
     }
 }
 
-static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, logic::World& world, logic::PlayerState& ps, logic::SpellState& spell)
+static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, logic::World& world, logic::PlayerState& ps)
 {
+    logic::SpellState& spell = ps.spell;   // selected tool lives in PlayerState -> persists across rooms/hub/scenes
     const int d = world.current_dungeon;
     bn::bg_palettes::set_transparent_color(bn::color(8, 8, 24));
 
@@ -756,7 +757,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         for(ShrineInst& si2 : shrines){
             if(!world.has(si2.pk.ability) && logic::aabb_overlap(player.body, si2.body)){
                 world.grant(si2.pk.ability);
-                spell.refresh(world);
+                spell.ensure_valid(world);   // auto-select the new ability ONLY if nothing valid was selected; never clobber a cycled choice
                 if(si2.sprite) si2.sprite->set_visible(false);
             }
         }
@@ -855,9 +856,9 @@ DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world
     // continued game may have upgrades). Only raise the CAP here; the pickup itself refills to full.
     ps.health.max = logic::max_health_for(world);
     if(ps.health.cur > ps.health.max) ps.health.cur = ps.health.max;
-    logic::SpellState spell; spell.refresh(world);  // selected spell persists across room transitions
+    ps.spell.ensure_valid(world);  // selected tool lives in PlayerState; init a default without clobbering a carried-in choice (persists across rooms, hub, hub<->dungeon)
     while(true){
-        RoomOutcome out = play_room(*dungeon.rooms[cur_room], cur_entrance, world, ps, spell);
+        RoomOutcome out = play_room(*dungeon.rooms[cur_room], cur_entrance, world, ps);
         engine::fade_out(16);   // one fade-out per room exit; next play_room fades in
         switch(out.kind){
             case RoomOutcome::ExitDungeon: return DungeonResult::Cleared;

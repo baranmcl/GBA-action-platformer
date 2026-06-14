@@ -101,8 +101,10 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
     engine::SpellPool spells(lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::Hud hud; // shows the persistent health/magic in the hub too
 
-    // Spell selection, local to the hub (resets to the default owned tool on each hub entry).
-    logic::SpellState spell; spell.refresh(world);
+    // Spell selection lives in PlayerState so it persists across the hub, dungeon rooms, AND
+    // hub<->dungeon. ensure_valid initializes a default without clobbering a carried-in choice.
+    ps.spell.ensure_valid(world);
+    logic::SpellState& spell = ps.spell;
 
     // Vine VFX: 4 dot sprites (bolt reused as placeholder) drawn along player->anchor line.
     // Visible only while player.grapple.active() (or during a miss-vine animation).

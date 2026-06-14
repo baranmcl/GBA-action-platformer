@@ -44,3 +44,42 @@ TEST(grapple_not_owned_without_ability){
     s.selected = SpellId::Fire; s.cycle(w);   // only Fire owned -> stays Fire
     CHECK(s.selected == SpellId::Fire);
 }
+
+// --- ensure_valid: persist the player's choice across rooms/hub/scenes; only fall back to a
+// default when the current selection is invalid (None or not owned). This is the key behavior
+// that keeps a cycled tool across room transitions and stops a shrine pickup from resetting it. ---
+TEST(ensure_valid_keeps_a_valid_selection){
+    World w; w.grant(Ability::Fire); w.grant(Ability::Ice);
+    SpellState s; s.selected = SpellId::Ice;   // a deliberately cycled choice
+    s.ensure_valid(w);
+    CHECK(s.selected == SpellId::Ice);         // LEFT untouched (Ice is owned)
+}
+TEST(ensure_valid_refreshes_when_none){
+    World w; w.grant(Ability::Fire); w.grant(Ability::Ice);
+    SpellState s;                              // selected defaults to None
+    s.ensure_valid(w);
+    CHECK(s.selected == SpellId::Fire);        // first owned
+}
+TEST(ensure_valid_refreshes_when_unowned){
+    World w; w.grant(Ability::Fire);           // Ice NOT owned
+    SpellState s; s.selected = SpellId::Ice;   // stale/invalid selection
+    s.ensure_valid(w);
+    CHECK(s.selected == SpellId::Fire);        // falls back to first owned
+}
+TEST(ensure_valid_preserves_cycled_choice_across_transition){
+    // Simulate: own Fire+Ice, cycle to Ice, then a "room transition" calls ensure_valid.
+    World w; w.grant(Ability::Fire); w.grant(Ability::Ice);
+    SpellState s; s.refresh(w);                // Fire
+    s.cycle(w);                                // -> Ice (player's choice)
+    CHECK(s.selected == SpellId::Ice);
+    s.ensure_valid(w);                         // room transition / scene entry
+    CHECK(s.selected == SpellId::Ice);         // choice preserved, NOT reset to Fire
+}
+TEST(ensure_valid_shrine_pickup_does_not_reset){
+    // Grabbing a NEW ability (shrine) calls ensure_valid: a valid cycled choice survives.
+    World w; w.grant(Ability::Fire); w.grant(Ability::Ice);
+    SpellState s; s.selected = SpellId::Ice;
+    w.grant(Ability::Grapple);                 // shrine grants Stone/Grapple-style ability
+    s.ensure_valid(w);
+    CHECK(s.selected == SpellId::Ice);         // still Ice, not reset to Fire
+}
