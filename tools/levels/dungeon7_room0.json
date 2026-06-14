@@ -1,7 +1,8 @@
 { "tileset":"tiles",
   "pickups":[{"ability":"stone"}],
-  "enemies":[{"patrol":[5,9]}],
+  "enemies":[{"patrol":[4,9]},{"patrol":[36,37]}],
   "gates":[{"type":"dark_veil"}],
-  "plates":[{"target":[23,13],"heavy":true}],
+  "plates":[{"target":[34,18],"heavy":true}],
+  "cracked_floors":[{"latch_id":-1},{"latch_id":-1}],
   "entrances":[{"id":1,"facing":1},{"id":2,"facing":-1}],
   "room_doors":[{"target_room":1,"target_entrance":0},{"target_room":2,"target_entrance":0}] }
