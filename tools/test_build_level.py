@@ -419,6 +419,93 @@ class TestBuildLevel(unittest.TestCase):
         cracked_floor_gates = [g for g in lvl['gates'] if g[2] == 'CrackedFloor']
         self.assertEqual(cracked_floor_gates, [])
 
+    # --- M10 symbols: Task 2.1 hidden-platform 'h' + magic-crystal '$' ---
+
+    def test_hidden_platform_symbol_with_json_len(self):
+        # 'h' with JSON hidden_platforms entry emits HiddenPlatformSpawn(tx, ty, len)
+        txt = "#######\n#@.h..#\n#######\n"
+        lvl = compile_str(txt, {"hidden_platforms": [{"len": 3}]})
+        self.assertEqual(lvl['hidden_platforms'], [(3, 1, 3)])
+
+    def test_hidden_platform_default_len_1(self):
+        # 'h' without JSON entry defaults to len=1 (mirrors ':' loose_platform)
+        txt = "#######\n#@.h..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['hidden_platforms'], [(3, 1, 1)])
+
+    def test_hidden_platform_multiple_with_mixed_json(self):
+        # Two 'h's; JSON covers first (len=4), second defaults to len=1
+        txt = "#######\n#@h.h.#\n#######\n"
+        lvl = compile_str(txt, {"hidden_platforms": [{"len": 4}]})
+        self.assertEqual(lvl['hidden_platforms'], [(2, 1, 4), (4, 1, 1)])
+
+    def test_hidden_platform_tile_is_empty(self):
+        # 'h' is a content symbol: collision tile under it must be 0
+        txt = "#######\n#@.h..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['tiles'][lvl['w'] * 1 + 3], 0)
+
+    def test_hidden_platform_emit_header(self):
+        # emit_header includes HIDDEN_PLATFORMS array and wires count into LevelData
+        txt = "#######\n#@.h..#\n#######\n"
+        lvl = compile_str(txt, {"hidden_platforms": [{"len": 5}]})
+        hdr = build_level.emit_header(lvl, "TESTHP2")
+        self.assertIn("TESTHP2_HIDDEN_PLATFORMS", hdr)
+        self.assertIn("{3,1,5}", hdr)  # HiddenPlatformSpawn {tx, ty, len}
+        self.assertIn("TESTHP2_HIDDEN_PLATFORMS, 1", hdr)  # count in LevelData
+
+    def test_hidden_platform_absent_still_compiles(self):
+        # Level without 'h': dummy array + count 0 in LevelData
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4]}]})
+        hdr = build_level.emit_header(lvl, "TESTNOHP")
+        self.assertIn("TESTNOHP_HIDDEN_PLATFORMS", hdr)
+        self.assertIn("TESTNOHP_HIDDEN_PLATFORMS, 0", hdr)
+        self.assertEqual(lvl['hidden_platforms'], [])
+
+    def test_magic_crystal_symbol(self):
+        # '$' compiles to a magic crystal at the right tile position (no JSON needed)
+        txt = "#######\n#@.$..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['magic_crystals'], [(3, 1)])
+
+    def test_magic_crystal_tile_is_empty(self):
+        # '$' is a content symbol: collision tile under it must be 0
+        txt = "#######\n#@.$..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['tiles'][lvl['w'] * 1 + 3], 0)
+
+    def test_magic_crystal_multiple(self):
+        # Multiple '$' symbols are all collected in scan order
+        txt = "#########\n#@.$.$..#\n#########\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['magic_crystals'], [(3, 1), (5, 1)])
+
+    def test_magic_crystal_emit_header(self):
+        # emit_header includes MAGIC_CRYSTALS array and wires count into LevelData
+        txt = "#######\n#@.$..#\n#######\n"
+        lvl = compile_str(txt, {})
+        hdr = build_level.emit_header(lvl, "TESTMC")
+        self.assertIn("TESTMC_MAGIC_CRYSTALS", hdr)
+        self.assertIn("{3,1}", hdr)  # MagicCrystalSpawn {tx, ty}
+        self.assertIn("TESTMC_MAGIC_CRYSTALS, 1", hdr)  # count in LevelData
+
+    def test_magic_crystal_absent_still_compiles(self):
+        # Level without '$': dummy array + count 0 in LevelData
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4]}]})
+        hdr = build_level.emit_header(lvl, "TESTNOMC")
+        self.assertIn("TESTNOMC_MAGIC_CRYSTALS", hdr)
+        self.assertIn("TESTNOMC_MAGIC_CRYSTALS, 0", hdr)
+        self.assertEqual(lvl['magic_crystals'], [])
+
+    def test_hidden_platform_and_magic_crystal_together(self):
+        # Both symbols in the same level compile without interfering with each other
+        txt = "########\n#@.h.$..#\n########\n"
+        # Adjust to fit the 8-wide level with solid borders
+        txt = "#########\n#@.h.$..#\n#########\n"
+        lvl = compile_str(txt, {"hidden_platforms": [{"len": 2}]})
+        self.assertEqual(lvl['hidden_platforms'], [(3, 1, 2)])
+        self.assertEqual(lvl['magic_crystals'], [(5, 1)])
+
 
 if __name__ == '__main__':
     unittest.main()
