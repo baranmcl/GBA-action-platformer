@@ -152,6 +152,12 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     logic::Meter& health = ps.health;   // persist across hub <-> dungeon (no reset on entry)
     logic::Meter& magic  = ps.magic;
     int invuln = 0;
+    // Post-respawn grace: i-frames granted on death so a player who died in a sub-floor
+    // hazard pit cannot be re-damaged before regaining control. MUST exceed the hazard
+    // re-arm (invuln=45 per hit) so even an authored-unsafe spawn yields real control
+    // frames instead of an unbreakable every-frame death loop (the "stuck at the bottom"
+    // report). The entrance is authored safe, but this guarantees robustness regardless.
+    constexpr int RESPAWN_IFRAMES = 60;
 
     engine::Avatar avatar(player, lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::BoltPool bolts(lvl.view.map_px_w, lvl.view.map_px_h, cam);
@@ -740,7 +746,17 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         else avatar.set_visible(true);
         if(health.is_empty()){
             player.body.pos = spawn_pos; player.body.vel = { fx(0), fx(0) };
-            health.cur = health.max; invuln = 0;
+            health.cur = health.max;
+            invuln = RESPAWN_IFRAMES;   // grace window (NOT 0): never re-die before regaining control
+            // Clear transient movement states so a death mid-dash / mid-pound / mid-grapple doesn't
+            // carry velocity or i-frame state into the respawn (which could re-plunge into the pit).
+            player.dash = logic::DashState{};
+            player.grapple = logic::GrappleState{};
+            player.stone = logic::StoneState{};
+            player.body.on_ground = false;
+            // Re-sync the avatar to the respawn position THIS frame so the sprite doesn't linger
+            // one frame at the death spot (cosmetic ghost in the pit).
+            avatar.sync(player);
             // Reset pushable blocks to their authored start so a block shoved into a dead corner
             // (a soft-lock) is recoverable by dying. (Plates re-evaluate next frame; latched
             // button/brazier gates stay solved.)
