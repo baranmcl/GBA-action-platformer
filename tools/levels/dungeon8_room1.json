@@ -1,0 +1,6 @@
+{ "tileset":"tiles",
+  "enemies":[{"patrol":[5,9]}],
+  "gates":[{"type":"dark_veil"},{"type":"dark_veil"},{"type":"dark_veil"},{"type":"dark_veil"},{"type":"dark_veil"}],
+  "cracked_floors":[{"latch_id":2},{"latch_id":2}],
+  "entrances":[{"id":0,"facing":1}],
+  "room_doors":[{"target_room":0,"target_entrance":1}] }
