@@ -83,3 +83,56 @@ TEST(ensure_valid_shrine_pickup_does_not_reset){
     s.ensure_valid(w);
     CHECK(s.selected == SpellId::Ice);         // still Ice, not reset to Fire
 }
+
+// --- M10 Light spell ---
+TEST(light_owns_only_with_ability){
+    World w; SpellState s;
+    CHECK(!s.owns(w, SpellId::Light));         // no Light ability -> not owned
+    w.grant(Ability::Light);
+    CHECK(s.owns(w, SpellId::Light));          // Light ability granted -> owned
+}
+TEST(light_has_any_includes_light){
+    World w; SpellState s;
+    CHECK(!s.has_any(w));
+    w.grant(Ability::Light);
+    CHECK(s.has_any(w));
+}
+TEST(light_refresh_picks_light_when_only_spell){
+    World w; w.grant(Ability::Light);
+    SpellState s; s.refresh(w);
+    CHECK(s.selected == SpellId::Light);
+}
+TEST(light_refresh_prefers_fire_over_light){
+    World w; w.grant(Ability::Fire); w.grant(Ability::Light);
+    SpellState s; s.refresh(w);
+    CHECK(s.selected == SpellId::Fire);        // Fire preferred
+}
+TEST(light_cycle_full_ring_fire_ice_grapple_light){
+    // All four owned: Fire -> Ice -> Grapple -> Light -> Fire
+    World w;
+    w.grant(Ability::Fire); w.grant(Ability::Ice);
+    w.grant(Ability::Grapple); w.grant(Ability::Light);
+    SpellState s; s.selected = SpellId::Fire;
+    s.cycle(w); CHECK(s.selected == SpellId::Ice);
+    s.cycle(w); CHECK(s.selected == SpellId::Grapple);
+    s.cycle(w); CHECK(s.selected == SpellId::Light);
+    s.cycle(w); CHECK(s.selected == SpellId::Fire);  // wraps
+}
+TEST(light_cycle_fire_and_light_only){
+    // Fire + Light (no Ice/Grapple): Fire -> Light -> Fire
+    World w; w.grant(Ability::Fire); w.grant(Ability::Light);
+    SpellState s; s.selected = SpellId::Fire;
+    s.cycle(w); CHECK(s.selected == SpellId::Light);
+    s.cycle(w); CHECK(s.selected == SpellId::Fire);
+}
+TEST(light_cycle_from_light_wraps_to_fire){
+    World w; w.grant(Ability::Fire); w.grant(Ability::Ice); w.grant(Ability::Light);
+    SpellState s; s.selected = SpellId::Light;
+    s.cycle(w); CHECK(s.selected == SpellId::Fire);
+}
+TEST(light_ensure_valid_keeps_light_selected){
+    World w; w.grant(Ability::Light);
+    SpellState s; s.selected = SpellId::Light;
+    s.ensure_valid(w);
+    CHECK(s.selected == SpellId::Light);
+}

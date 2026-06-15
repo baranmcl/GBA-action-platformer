@@ -47,7 +47,7 @@ ABILITY_ENUM = {
     'featherleap': 'Featherleap', 'fire': 'Fire', 'ice': 'Ice', 'glide': 'Glide',
     'dash': 'Dash', 'grapple': 'Grapple', 'stone': 'Stone', 'light': 'Light',
 }
-CONTENT = set('@CEoG12345678VIWXFBPK=?*NDQHkO:')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door, 'Q' exit-to-hub door (target_room=-1); 'H' heart container; 'k' cracked-floor gate (M8, Stone); 'O' boulder (M8); ':' loose platform (M8)
+CONTENT = set('@CEoG12345678VIWXFBPK=?*NDQHkO:h$')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door, 'Q' exit-to-hub door (target_room=-1); 'H' heart container; 'k' cracked-floor gate (M8, Stone); 'O' boulder (M8); ':' loose platform (M8); 'h' hidden platform (M10); '$' magic crystal (M10)
 
 
 class LevelError(Exception):
@@ -82,6 +82,7 @@ def compile_level(txt_path, json_path):
     j_heart_containers = meta.get('heart_containers', [])
     j_loose_platforms = meta.get('loose_platforms', [])
     j_cracked_floors = meta.get('cracked_floors', [])
+    j_hidden_platforms = meta.get('hidden_platforms', [])
 
     tiles = []
     spawns, cages, exits = [], [], []
@@ -98,8 +99,11 @@ def compile_level(txt_path, json_path):
     heart_containers = [] # (tx, ty, id)
     boulders = []         # (tx, ty)
     loose_platforms = []  # (tx, ty, len)
+    hidden_platforms = [] # (tx, ty, len)  M10 Light
+    magic_crystals = []   # (tx, ty)       M10 Light
     e_idx = g_idx = f_idx = pl_idx = b_idx = br_idx = n_idx = rd_idx = hc_idx = lp_idx = 0
     cf_idx = 0  # scan-order index for cracked floors ('k'), maps into j_cracked_floors
+    hp_idx = 0  # scan-order index for hidden platforms ('h'), maps into j_hidden_platforms
 
     for y, r in enumerate(rows):
         for x, c in enumerate(r):
@@ -203,6 +207,16 @@ def compile_level(txt_path, json_path):
                 llen = jlp.get('len', 1)  # default len=1
                 loose_platforms.append((x, y, llen))
                 lp_idx += 1
+            elif c == 'h':
+                # M10 Light: invisible platform revealed when RevealState is active.
+                # Optional len from JSON 'hidden_platforms' (scan-order indexed); default len=1.
+                jhp = j_hidden_platforms[hp_idx] if hp_idx < len(j_hidden_platforms) else {}
+                hlen = jhp.get('len', 1)  # default len=1
+                hidden_platforms.append((x, y, hlen))
+                hp_idx += 1
+            elif c == '$':
+                # M10: a magic crystal — fully refills the magic meter on touch (respawns each attempt). No JSON needed.
+                magic_crystals.append((x, y))
             elif c in '12345678':
                 doors.append((x, y, int(c)))
 
@@ -231,6 +245,7 @@ def compile_level(txt_path, json_path):
         'entrances': entrances, 'room_doors': room_doors,
         'heart_containers': heart_containers,
         'boulders': boulders, 'loose_platforms': loose_platforms,
+        'hidden_platforms': hidden_platforms, 'magic_crystals': magic_crystals,
     }
 
 
@@ -290,6 +305,12 @@ def emit_header(level, name):
     line, lpcount = emit_array('logic::LoosePlatformSpawn', 'LOOSE_PLATFORMS',
                                [f'{{{tx},{ty},{llen}}}' for (tx, ty, llen) in level['loose_platforms']],
                                '{0,0,1}'); L.append(line)
+    line, hpcount = emit_array('logic::HiddenPlatformSpawn', 'HIDDEN_PLATFORMS',
+                               [f'{{{tx},{ty},{hlen}}}' for (tx, ty, hlen) in level['hidden_platforms']],
+                               '{0,0,1}'); L.append(line)
+    line, mccount = emit_array('logic::MagicCrystalSpawn', 'MAGIC_CRYSTALS',
+                               [f'{{{tx},{ty}}}' for (tx, ty) in level['magic_crystals']],
+                               '{0,0}'); L.append(line)
 
     sx, sy = level['spawn']
     cx, cy = level['cage'] if level['cage'] else (0, 0)
@@ -305,7 +326,8 @@ def emit_header(level, name):
         f'{name}_BRAZIER_GROUPS, {bgcount}, '
         f'{name}_ENTRANCES, {encount}, {name}_ROOM_DOORS, {rdcount}, '
         f'{name}_HEART_CONTAINERS, {hccount}, '
-        f'{name}_BOULDERS, {bocount}, {name}_LOOSE_PLATFORMS, {lpcount} }};'
+        f'{name}_BOULDERS, {bocount}, {name}_LOOSE_PLATFORMS, {lpcount}, '
+        f'{name}_HIDDEN_PLATFORMS, {hpcount}, {name}_MAGIC_CRYSTALS, {mccount} }};'
     )
     L.append('')
     return '\n'.join(L)

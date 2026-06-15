@@ -1,0 +1,5 @@
+{ "tileset":"tiles",
+  "enemies":[{"patrol":[8,12]}],
+  "hidden_platforms":[{"len":4},{"len":4}],
+  "entrances":[{"id":0,"facing":1}],
+  "room_doors":[{"target_room":0,"target_entrance":2}] }

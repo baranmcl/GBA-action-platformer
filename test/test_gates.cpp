@@ -14,3 +14,16 @@ TEST(gate_cleared_by_spell){
   CHECK(gate_cleared_by(GateType::Water)    == SpellId::Ice);
   CHECK(gate_cleared_by(GateType::FireWall) == SpellId::Ice);   // Ice extinguishes a fire wall
   CHECK(gate_cleared_by(GateType::Gap)      == SpellId::None); } // geometry gate, not spell-cleared
+
+// --- M10 Light ---
+TEST(spell_for_ability_light){
+    CHECK(spell_for_ability(Ability::Light) == SpellId::Light);
+}
+TEST(dark_veil_cleared_by_light){
+    CHECK(gate_cleared_by(GateType::DarkVeil) == SpellId::Light);
+}
+TEST(dark_veil_needs_light_ability){
+    CHECK(!can_pass(GateType::DarkVeil, 0));
+    uint16_t light_bit = (uint16_t)(1u << (int)Ability::Light);
+    CHECK(can_pass(GateType::DarkVeil, light_bit));
+}

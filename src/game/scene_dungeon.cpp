@@ -15,9 +15,13 @@
 #include "bn_sprite_items_shrine.h"
 #include "bn_sprite_items_fire_proj.h"
 #include "bn_sprite_items_ice_proj.h"
+#include "bn_sprite_items_light_proj.h"
 #include "bn_sprite_items_bolt.h"
 #include "bn_sprite_items_grapple_icon.h"
 #include "bn_sprite_items_heart_container.h"
+#include "bn_sprite_items_magic_crystal.h"
+
+#include "logic/reveal.h"
 
 #include "logic/tilemap.h"
 #include "logic/world_state.h"   // max_health_for, collect/has heart container
@@ -83,6 +87,15 @@ namespace
         bool falling = false, fallen = false;
         bn::vector<bn::sprite_ptr, 8> sprites;   // one per tile in the run
     };
+    // M10 Light: a horizontal run of `len` tiles that is NON-solid + invisible until a Light cast
+    // reveals it (RevealState window) — then solid + visible; reverts when the timer expires.
+    struct HiddenPlatformInst {
+        int tx, ty, len;
+        bool shown = false;
+        bn::vector<bn::sprite_ptr, 8> sprites;   // one per tile in the run
+    };
+    // M10 Light: a respawning full-magic-refill pickup (reset each attempt — never latched).
+    struct MagicCrystalInst { int tx, ty; logic::Body body; bn::optional<bn::sprite_ptr> sprite; bool collected = false; };
     struct ShrineInst { logic::AbilityPickup pk; logic::Body body; bn::optional<bn::sprite_ptr> sprite; };
     struct HeartInst  { logic::HeartContainerSpawn hc; logic::Body body; bn::optional<bn::sprite_ptr> sprite; bool collected = false; };
     // src_tx/ty: plate or button tile to test; group: brazier group (Braziers kind)
@@ -186,6 +199,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             if(spell.selected == logic::SpellId::Ice)         spell_icon.set_item(bn::sprite_items::ice_proj);
             else if(spell.selected == logic::SpellId::Fire)   spell_icon.set_item(bn::sprite_items::fire_proj);
             else if(spell.selected == logic::SpellId::Grapple) spell_icon.set_item(bn::sprite_items::grapple_icon); // green hook icon (distinct from cyan Ice)
+            else if(spell.selected == logic::SpellId::Light)   spell_icon.set_item(bn::sprite_items::light_proj);   // white/gold Light bolt (distinct from red Fire / cyan Ice)
             last_icon = spell.selected;
         }
         spell_icon.set_visible(spell.selected != logic::SpellId::None);
@@ -208,7 +222,14 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         cage = tile_body(level.cage_tx, level.cage_ty, 8, 12);
         spronk = bn::sprite_items::spronk.create_sprite(0, 0);
         spronk->set_camera(cam);
-        spronk->set_position(wx(cage.pos.x.to_int() + 8), wy(cage.pos.y.to_int() + 8));
+        // Ground the 16x16 spronk sprite on the FIRST SOLID/one-way tile below the authored cage
+        // row, so its BOTTOM rests on the floor surface (not embedded in it).  Sprite half-height
+        // is 8 px, so centre = floor_surface - 8.  For the D1-D7 convention (cage_ty=18, floor at
+        // row 20): floor_row_below(…,18)==20 → wy(20*8 - 8) == wy(cage.pos.y.to_int()+8) — no
+        // visible regression.  For ledge cages (D8+ Room 2) the sprite now rests on the ledge
+        // instead of being embedded in it.
+        int cage_fr = floor_row_below(lvl.map, level.cage_tx, level.cage_ty);
+        spronk->set_position(wx(level.cage_tx * 8 + 8), wy(cage_fr * 8 - 8));
         spronk->set_visible(!world.spronk_freed(d));
     }
     logic::Body exit;
@@ -328,6 +349,35 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             li.sprites.back().set_camera(cam);
             li.sprites.back().set_position(wx((lp.tx + dx) * 8 + 4), wy(lp.ty * 8 + 4));
         }
+    }
+
+    // ---- hidden platforms (M10 Light: NON-solid + invisible at spawn; a Light cast reveals them
+    //      solid+visible for the RevealState window, then they revert). Mirrors loose platforms but
+    //      we do NOT make them solid here and the sprites start hidden. ----
+    bn::vector<HiddenPlatformInst, 8> hidden_platforms;
+    for(int i = 0; i < level.hidden_platform_count && i < 8; ++i){
+        const logic::HiddenPlatformSpawn& hp = level.hidden_platforms[i];
+        hidden_platforms.push_back(HiddenPlatformInst{ hp.tx, hp.ty, hp.len, false, {} });
+        HiddenPlatformInst& hi2 = hidden_platforms.back();
+        for(int dx = 0; dx < hp.len && dx < 8; ++dx){
+            // NON-solid + invisible until revealed (do NOT set_collision_tile here).
+            hi2.sprites.push_back(bn::sprite_items::block.create_sprite(0, 0));  // placeholder art (reuse block)
+            hi2.sprites.back().set_camera(cam);
+            hi2.sprites.back().set_position(wx((hp.tx + dx) * 8 + 4), wy(hp.ty * 8 + 4));
+            hi2.sprites.back().set_visible(false);
+        }
+    }
+    logic::RevealState reveal;   // room-wide Light reveal timer (a Light cast (re)starts it)
+
+    // ---- magic crystals (M10 Light: full-magic-refill pickup; respawns each attempt, NOT latched) ----
+    bn::vector<MagicCrystalInst, 8> magic_crystals;
+    for(int i = 0; i < level.magic_crystal_count && i < 8; ++i){
+        const logic::MagicCrystalSpawn& mc = level.magic_crystals[i];
+        magic_crystals.push_back(MagicCrystalInst{ mc.tx, mc.ty, tile_body(mc.tx, mc.ty, 6, 8), {}, false });
+        MagicCrystalInst& ci = magic_crystals.back();
+        ci.sprite = bn::sprite_items::magic_crystal.create_sprite(0, 0);
+        ci.sprite->set_camera(cam);
+        ci.sprite->set_position(wx(mc.tx * 8 + 8), wy(mc.ty * 8 + 8));
     }
 
     // ---- room-doors (bg tile 5 open-door; 2-wide x 4-tall archway grounded on the floor,
@@ -485,7 +535,8 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             }
         }
         bool cast_spell = si.cast && (spell.selected == logic::SpellId::Fire ||
-                                      spell.selected == logic::SpellId::Ice);
+                                      spell.selected == logic::SpellId::Ice  ||
+                                      spell.selected == logic::SpellId::Light);
         // Capture the "tried to anchor-grapple" flag BEFORE player.update consumes it.
         bool tried_anchor = want_grapple && in.grapple_fire;
         player.update(in, lvl.map);
@@ -607,7 +658,25 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                                player.body.pos.y + player.body.half_h };
         bolts.update(in.fire_pressed, muzzle, player.facing, lvl.map);
 
-        spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);
+        logic::SpellId fired = spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);
+
+        // ---- M10 Light reveal: a Light cast that ACTUALLY fired (re)starts the room-wide window.
+        //      Detect via the returned fired-spell (NOT a magic delta — the crystal refill mutates
+        //      magic.cur the same frame and would corrupt a before/after inference). Then tick; toggle
+        //      hidden-platform collision+visibility on the timer EDGE (don't rewrite every frame).
+        if(fired == logic::SpellId::Light) reveal.on_cast();
+        reveal.tick();
+        {
+            bool want_shown = reveal.revealed();
+            for(HiddenPlatformInst& hp : hidden_platforms){
+                if(want_shown == hp.shown) continue;            // edge only
+                for(int dx = 0; dx < hp.len && dx < 8; ++dx)
+                    engine::set_collision_tile(hp.tx + dx, hp.ty, want_shown ? 1 : 0);
+                for(int dx = 0; dx < (int)hp.sprites.size(); ++dx)
+                    hp.sprites[dx].set_visible(want_shown);
+                hp.shown = want_shown;
+            }
+        }
 
         // ---- spell resolution (ORDER: gates -> braziers -> enemies -> freeze/melt -> despawn-on-solid) ----
         for(GateInst& gi : gates){
@@ -777,6 +846,12 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                 engine::set_collision_tile(bi.blk.tx, bi.blk.ty, 1);          // solid at the start cell
                 if(bi.sprite) bi.sprite->set_position(wx(bi.blk.tx * 8 + 4), wy(bi.blk.ty * 8 + 4));
             }
+            // M10: reset magic crystals each attempt (NOT latched) so a fresh full-refill is always
+            // available after a death-respawn — guarantees no magic soft-lock on the Light ascent.
+            for(MagicCrystalInst& ci : magic_crystals){
+                ci.collected = false;
+                if(ci.sprite) ci.sprite->set_visible(true);
+            }
         }
 
         // ---- ability shrines ----
@@ -797,6 +872,17 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                 engine::write_world(world);                  // persist immediately (same path as latches)
                 hi.collected = true;
                 if(hi.sprite) hi.sprite->set_visible(false);
+            }
+        }
+
+        // ---- magic crystals: collect on overlap -> full magic refill. NOT latched (resets each
+        //      attempt below) so a Light beat never soft-locks on empty magic. ----
+        for(MagicCrystalInst& ci : magic_crystals){
+            if(ci.collected) continue;
+            if(logic::aabb_overlap(player.body, ci.body)){
+                magic.cur = magic.max;   // full refill — the guaranteed combat-free magic source
+                ci.collected = true;
+                if(ci.sprite) ci.sprite->set_visible(false);
             }
         }
 

@@ -80,3 +80,30 @@ TEST(boulder_null_when_absent){
 TEST(loose_platform_null_when_absent){
     CHECK_EQ(L.loose_platform_count, 0); // existing L has no loose platforms -> count==0
 }
+
+// --- Task 1.3: M10 hidden platforms + magic crystals ---
+static const HiddenPlatformSpawn HIDDEN[] = { {4, 6, 5} };
+static const MagicCrystalSpawn CRYSTALS[] = { {7, 2} };
+static constexpr LevelData L_M10 = { TILES,3,3, 1,1, false,0,0, false,0,0,
+    ENEMIES,1, GATES,1, DOORS,1, PICKUPS,1, BLOCKS,1,
+    PLATES,1, BUTTONS,1, BRAZIERS,1, BGROUPS,1,
+    nullptr,0, nullptr,0, nullptr,0,
+    nullptr,0, nullptr,0,
+    HIDDEN,1, CRYSTALS,1 };
+TEST(hidden_platform_spawn_fields){
+    CHECK_EQ(L_M10.hidden_platform_count, 1);
+    CHECK_EQ(L_M10.hidden_platforms[0].tx, 4);
+    CHECK_EQ(L_M10.hidden_platforms[0].ty, 6);
+    CHECK_EQ(L_M10.hidden_platforms[0].len, 5);
+}
+TEST(magic_crystal_spawn_fields){
+    CHECK_EQ(L_M10.magic_crystal_count, 1);
+    CHECK_EQ(L_M10.magic_crystals[0].tx, 7);
+    CHECK_EQ(L_M10.magic_crystals[0].ty, 2);
+}
+TEST(hidden_platform_null_when_absent){
+    CHECK_EQ(L.hidden_platform_count, 0);
+}
+TEST(magic_crystal_null_when_absent){
+    CHECK_EQ(L.magic_crystal_count, 0);
+}
