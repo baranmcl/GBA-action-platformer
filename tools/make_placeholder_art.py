@@ -397,6 +397,46 @@ def gen_heart_container():
     px(im, 7, 13, 1); px(im, 8, 13, 1)
     write(im, "heart_container", {"type": "sprite"})
 
+def gen_light_proj():
+    """Light projectile 8x8 (M10) — a bright white/yellow bolt, distinct from the red/orange
+    fire orb and the cyan ice orb. Gold halo (pal 6) around a pure-white core (pal 15), with
+    four white sparks so it reads as a radiant Light shot at a glance."""
+    im = new_img(8, 8)
+    rect(im, 2, 2, 5, 5, 6)                  # gold halo
+    rect(im, 3, 3, 4, 4, 15)                 # pure-white core
+    px(im, 1, 4, 15); px(im, 6, 3, 15); px(im, 4, 1, 15); px(im, 3, 6, 15)  # white sparks
+    write(im, "light_proj", {"type": "sprite"})
+
+def gen_magic_crystal():
+    """Magic crystal pickup 16x16 (M10) — a faceted cyan/blue gem, distinct from the red heart
+    container and gold shrine. Full magic refill; respawns each attempt. Cyan body (pal 8) with
+    a white facet glint (pal 15) and a near-black outline (pal 1) so it reads as a magic gem."""
+    im = new_img(16, 16)
+    # Diamond/crystal silhouette: narrow top, wide middle, point at the bottom (per-row spans).
+    spans = {
+        2:  [(7, 8)],
+        3:  [(6, 9)],
+        4:  [(5, 10)],
+        5:  [(4, 11)],
+        6:  [(3, 12)],
+        7:  [(3, 12)],
+        8:  [(4, 11)],
+        9:  [(5, 10)],
+        10: [(6, 9)],
+        11: [(7, 8)],
+    }
+    for y, segs in spans.items():
+        for x0, x1 in segs:
+            rect(im, x0, y, x1, y, 8)        # cyan body
+    # White facet glints down the left face + a bright top, so it sparkles.
+    px(im, 7, 3, 15); px(im, 6, 5, 15); px(im, 5, 6, 15)
+    px(im, 8, 2, 9)
+    # Near-black outline along the lower V edges for depth.
+    px(im, 3, 7, 1); px(im, 12, 7, 1)
+    px(im, 6, 10, 1); px(im, 9, 10, 1)
+    px(im, 7, 11, 1); px(im, 8, 11, 1)
+    write(im, "magic_crystal", {"type": "sprite"})
+
 def gen_grapple_icon():
     """Grapple HUD icon 8x8 — a green hook glyph, clearly distinct from the cyan Ice orb.
     Uses bright green (pal 4) + dark green (pal 5) + near-black outline (pal 1).
@@ -428,6 +468,8 @@ if __name__ == "__main__":
     gen_hud()
     gen_hud_life()
     gen_ember_sprites()
+    gen_light_proj()
+    gen_magic_crystal()
     gen_grapple_icon()
     gen_heart_container()
     print("placeholder sprites + bg tiles + hud + ember art generated.")

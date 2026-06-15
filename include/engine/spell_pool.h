@@ -15,8 +15,10 @@ class SpellPool {
 public:
     SpellPool(int map_px_w, int map_px_h, const bn::camera_ptr& cam);
     // Tick cooldown; cast the SELECTED spell if magic allows; advance projectiles; despawn OFF-LEVEL only.
-    void update_and_cast(bool cast_pressed, logic::SpellState& spell, logic::Meter& magic,
-                         logic::Vec2 muzzle, int facing, const logic::Tilemap& map);
+    // Returns the SpellId that FIRED this frame (None if nothing fired) — the scene uses this to know
+    // a Light shot was cast (e.g. to start the room reveal) without inferring it from a magic delta.
+    logic::SpellId update_and_cast(bool cast_pressed, logic::SpellState& spell, logic::Meter& magic,
+                                   logic::Vec2 muzzle, int facing, const logic::Tilemap& map);
     // Despawn a shot of `kind` overlapping `target`; return true (scene applies the effect).
     bool consume_hit(const logic::Body& target, logic::SpellId kind);
     // Despawn a shot of `spell_kind` whose column contains `target_kind` below it (chest-height

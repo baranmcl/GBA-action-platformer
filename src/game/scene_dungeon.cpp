@@ -15,6 +15,7 @@
 #include "bn_sprite_items_shrine.h"
 #include "bn_sprite_items_fire_proj.h"
 #include "bn_sprite_items_ice_proj.h"
+#include "bn_sprite_items_light_proj.h"
 #include "bn_sprite_items_bolt.h"
 #include "bn_sprite_items_grapple_icon.h"
 #include "bn_sprite_items_heart_container.h"
@@ -186,6 +187,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             if(spell.selected == logic::SpellId::Ice)         spell_icon.set_item(bn::sprite_items::ice_proj);
             else if(spell.selected == logic::SpellId::Fire)   spell_icon.set_item(bn::sprite_items::fire_proj);
             else if(spell.selected == logic::SpellId::Grapple) spell_icon.set_item(bn::sprite_items::grapple_icon); // green hook icon (distinct from cyan Ice)
+            else if(spell.selected == logic::SpellId::Light)   spell_icon.set_item(bn::sprite_items::light_proj);   // white/gold Light bolt (distinct from red Fire / cyan Ice)
             last_icon = spell.selected;
         }
         spell_icon.set_visible(spell.selected != logic::SpellId::None);
@@ -485,7 +487,8 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             }
         }
         bool cast_spell = si.cast && (spell.selected == logic::SpellId::Fire ||
-                                      spell.selected == logic::SpellId::Ice);
+                                      spell.selected == logic::SpellId::Ice  ||
+                                      spell.selected == logic::SpellId::Light);
         // Capture the "tried to anchor-grapple" flag BEFORE player.update consumes it.
         bool tried_anchor = want_grapple && in.grapple_fire;
         player.update(in, lvl.map);

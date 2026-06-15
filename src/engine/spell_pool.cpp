@@ -2,14 +2,16 @@
 #include "logic/collision.h"
 #include "bn_sprite_items_fire_proj.h"
 #include "bn_sprite_items_ice_proj.h"
+#include "bn_sprite_items_light_proj.h"
 namespace engine {
 
 SpellPool::SpellPool(int map_px_w, int map_px_h, const bn::camera_ptr& cam)
     : _half_w_px(map_px_w / 2), _half_h_px(map_px_h / 2), _camera(cam) {}
 
-void SpellPool::update_and_cast(bool cast_pressed, logic::SpellState& spell, logic::Meter& magic,
-                                logic::Vec2 muzzle, int facing, const logic::Tilemap& map){
+logic::SpellId SpellPool::update_and_cast(bool cast_pressed, logic::SpellState& spell, logic::Meter& magic,
+                                          logic::Vec2 muzzle, int facing, const logic::Tilemap& map){
     _caster.tick();
+    logic::SpellId fired = logic::SpellId::None;
     if(spell.selected != logic::SpellId::None){
         logic::BoltSpawn spawn;
         if(_caster.try_cast(cast_pressed, magic, muzzle, facing, spawn)){
@@ -23,8 +25,11 @@ void SpellPool::update_and_cast(bool cast_pressed, logic::SpellState& spell, log
                     s.vel = spawn.vel;
                     s.sprite = (spell.selected == logic::SpellId::Ice)
                              ? bn::sprite_items::ice_proj.create_sprite(0, 0)
+                             : (spell.selected == logic::SpellId::Light)
+                             ? bn::sprite_items::light_proj.create_sprite(0, 0)
                              : bn::sprite_items::fire_proj.create_sprite(0, 0);
                     s.sprite->set_camera(_camera);
+                    fired = spell.selected;             // report what fired (scene drives the Light reveal off this)
                     break;
                 }
             }
@@ -45,6 +50,7 @@ void SpellPool::update_and_cast(bool cast_pressed, logic::SpellState& spell, log
         int cy = y + s.body.half_h.to_int();
         s.sprite->set_position(cx - _half_w_px, cy - _half_h_px);
     }
+    return fired;
 }
 
 bool SpellPool::consume_hit(const logic::Body& target, logic::SpellId kind){
