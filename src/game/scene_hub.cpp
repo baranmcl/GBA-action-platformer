@@ -93,7 +93,28 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
 
     logic::Player player;
     player.body.half_w = fx(8); player.body.half_h = fx(16);
-    player.body.pos = { fx(HUB_DATA.spawn_tx * 8), fx(HUB_DATA.spawn_ty * 8) };
+    // Spawn at the door of the dungeon we just came from (emerge where we entered), facing into the
+    // plaza. last_dungeon == 0 means first entry from the title screen -> use the default spawn.
+    // The door's base sits on the floor at dr.ty; mirror the default spawn's vertical offset
+    // (HUB spawn_ty is 3 tiles above the door base) so the player lands cleanly on the floor in
+    // front of the archway. Door entry needs a fresh Up press, so spawning here can't re-enter it.
+    int spawn_tx = HUB_DATA.spawn_tx;
+    int spawn_ty = HUB_DATA.spawn_ty;
+    if(ps.last_dungeon > 0)
+    {
+        for(int i = 0; i < HUB_DATA.door_count; ++i)
+        {
+            const logic::DoorSpawn& dr = HUB_DATA.doors[i];
+            if(dr.dungeon == ps.last_dungeon)
+            {
+                spawn_tx = dr.tx;
+                spawn_ty = dr.ty - 3;                   // stand on the floor under/in front of the archway
+                player.facing = (dr.tx < HUB_DATA.w / 2) ? 1 : -1; // face inward toward the plaza centre
+                break;
+            }
+        }
+    }
+    player.body.pos = { fx(spawn_tx * 8), fx(spawn_ty * 8) };
 
     logic::Meter& magic = ps.magic;   // earned-magic pool (banked across hub <-> dungeon)
 

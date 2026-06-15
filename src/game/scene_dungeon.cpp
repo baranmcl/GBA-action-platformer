@@ -868,6 +868,10 @@ DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world
 {
     int cur_room = dungeon.start_room;
     int cur_entrance = 0;
+    // Remember which dungeon this is so the hub can spawn the player at the matching door on return.
+    // main() sets world.current_dungeon = n BEFORE calling run_dungeon; capturing it here persists the
+    // number in PlayerState even after the scene resets world.current_dungeon to 0 on exit.
+    ps.last_dungeon = world.current_dungeon;
     // Sync the max-HP cap to the collected heart containers (PlayerState defaults to 100/100, but a
     // continued game may have upgrades). Only raise the CAP here; the pickup itself refills to full.
     ps.health.max = logic::max_health_for(world);
