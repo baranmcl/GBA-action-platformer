@@ -63,16 +63,25 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started.
+**Overall:** 4/4 phases shipped + an extensive QA-driven polish pass (7 emulator rounds). 312/312 host tests green, purity clean, ROM builds, QA scaffold reverted. Branch `feat/m8-quaking-quarry` ready for final review + merge.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 1 — Pure logic: StoneState + input/ability/data | ⬜ Not started | — | — |
+| 1 — Pure logic: StoneState + input/ability/data | ✅ Shipped | 17aaf60, fb2bd32, 2db33ee, 6fc100c | 254/254; Down+A pound, grapple-wins, no-tunnel |
 | 2 — Level compiler: cracked-floor/boulder/heavy-switch/loose-platform symbols | ✅ Shipped | 54a4554 (k gate), 612cac9 (heavy plate), a1925bd (boulder+loose-platform), 10ce2d3 (header regen) | — |
 | 3 — Engine/scene wiring (pound input, impact resolution, falling terrain last, VFX) | ✅ Shipped | e83c2f3, b24c8fa, e80de4e, aa4a8ce, 13b9fa6 (impact-row fix) | 261/261 host tests; ROM fixed; purity OK |
-| 4 — Content: Quaking Quarry 3 rooms + hub Door 7 + no-soft-lock invariants + QA | 🚧 4.1–4.3 shipped; 4.4 (emulator QA) pending | f67aff8 (4.1 rooms), cf27be0 (4.2 hub Door 7), 55dde58 (4.3 invariants) | 275/275 host tests; ROM fixed; purity OK. Tasks 4.1–4.3 complete; 4.4 manual QA not yet run. |
+| 4 — Content: Quaking Quarry 3 rooms + hub Door 7 + no-soft-lock invariants + QA | ✅ Shipped | f67aff8 (rooms), cf27be0 (Door 7), 55dde58 (invariants) + QA reworks below | 7 emulator QA rounds passed; all D7 mechanics + soft-lock guards verified |
 
-### Deviations
+### Deviations (QA-driven, beyond the written plan — all user-requested during the 7 emulator rounds)
+- **Soft-lock invariants strengthened to model the 2-wide×4-tall player + pocket exitability** (`de23def`) after QA round 1 hit a real heart-pocket soft-lock the tile-connectivity flood-fill missed; added `requires_pound`/`requires_freeze`/`exit_reachable`/`no_one_way_traps`/`hub_exit_reachable` invariants (each verified RED on a broken layout).
+- **Room reworks:** D7 room0 reworked twice (`39b089c`, `279e6e3`, `70992ec`) — poundable heavy switch gating the Room-1 door, visible dark-veil gate (art tile 12), meaningful+reversible cracked-floor descent, hub-return door, doors grounded + gate/door/entrance spacing (no re-entry glitch). Room1 heart now pound-only + 2-wide alcove; room2 freeze-required + exit reachable (`993caf3`). Loose-platform bridges an un-jumpable spike gap (`6d4cd68`).
+- **Heart container fixes** (`8ef5bad`, `5acc2e5`): sprite grounds to the floor below it (alcove placement); health-bar length scales with max HP so containers are visible.
+- **Spell/tool persistence** (`d13b564`): hoisted the selection into `PlayerState.spell` + `SpellState::ensure_valid` so it persists across rooms, the hub, AND hub↔dungeon; a shrine pickup no longer resets it.
+- **Exit-to-hub door** (`54035ac`): new generic `Q` door (`target_room=-1` → returns to hub, re-enterable) + portal art (tile 26); added to D7 (`279e6e3`) and retrofitted to D1–D6 (`237c625`).
+- **Death/respawn fix** (`2bea529`): 60-frame post-respawn i-frames + transient-state clear — fixes the death-loop in sub-floor hazard pits across all dungeons.
+- **Hub reorg** (`78769f3`, `44a8f2f`): evenly-spaced doors, removed the vestigial gate wall, and spawn-at-the-door-you-just-exited (`PlayerState.last_dungeon`).
+- **Hub cleanup** (`2f952a2`): removed the M7 grapple anchors + platforms.
+- **Deferred:** a **Lives + Game Over** system was proposed by the user; advised + agreed to scope it as its own milestone (M9) rather than expand M8.
 - **Compiler latch for `k` (Task 4.1):** the `k` cracked-floor symbol gained an optional
   `latch_id` via a JSON `cracked_floors` list (scan-order indexed) so Room 1's shortcut can
   persist. Phases 1–2 were frozen, but this is a Phase-4-local compiler addition (the GateSpawn
