@@ -63,20 +63,26 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started.
+**Overall:** 4/4 phases shipped + QA-driven polish (5 emulator rounds). 390/390 host tests green, purity clean, ROM builds, QA scaffold reverted. Branch `feat/m10-gloom-spire` ready for final review + merge. **This completes the 8-dungeon spine** (the Nightmare King boss is the next/final milestone).
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 1 — Pure logic: SpellId::Light + RevealState + spawns | ⬜ Not started | — | — |
-| 2 — Level compiler: hidden-platform + magic-crystal symbols | ⬜ Not started | — | — |
-| 3 — Engine/scene: Light cast (DarkVeil + reveal) + crystal + sprites | ⬜ Not started | — | — |
-| 4 — Content: Gloom Spire 3 rooms + hub Door 8 + no-soft-lock invariants + QA | ⬜ Not started | — | — |
+| 1 — Pure logic: SpellId::Light + RevealState + spawns | ✅ Shipped | 49f821f, 0c6582e, 074be22 | 375/375; Light threads cycle; gate_cleared_by(DarkVeil)==Light |
+| 2 — Level compiler: hidden-platform + magic-crystal symbols | ✅ Shipped | 5081817, 623a7a8 | `h` + `$`; header regen |
+| 3 — Engine/scene: Light cast (DarkVeil + reveal) + crystal + sprites | ✅ Shipped | 6bd452e, e43d23b, b2aaf5c | Light projectile clears DarkVeil; timed reveal; respawning crystal |
+| 4 — Content: Gloom Spire 3 rooms + hub Door 8 + no-soft-lock invariants + QA | ✅ Shipped | 1ccdea5 (rooms), QA fixes below | 5 emulator QA rounds; ascent solvable + balanced |
 
-### Deviations
-- _(none yet)_
+### Deviations (QA-driven)
+- **Rooms are 32 tall** (not 22): fitting >7-tile vertical Light-climbs + comfortable headroom needs the room-to-room engine's tall-level support (vertical camera scroll — fits a spire). Standard floor convention applied relative to `h`.
+- **Light-climb reachability fix** (`8ca6b67`): hidden-platform steps re-spaced to a **reliable** double-jump (≤5 tiles, **staggered** horizontally — a directly-overhead platform clips the body mid-jump), with Light-less gaps >7 (un-bypassable). The invariant uses **dual CLIMB thresholds** (5 reliable / 7 edge): lit-path reachable @5, base-path unreachable @7.
+- **Cage/spronk + heart sprite grounding** fixed at the ROOT (`210a630`): grounds to `floor_row_below` so the spronk rests on any ledge (the recurring "embedded spronk" bug across dungeons — fixed once for all).
+- **DarkVeil made meaningful** (`8ca6b67`): removed the pointless off-path tutorial barrier; the Room-1 heart container (id 2) is now DarkVeil-gated (cast Light to clear → reach the reward).
+- **Crystals reduced** to one-per-Light-region (QA: "too many"); **Room 2 ceiling removed** (comfortable final hop); **Room 0 hub-return portal moved next to the spawn** (`<this commit>`), Room-1 door swapped off the spawn.
+- **King teaser**: omitted (out of scope — the boss is the next milestone; D8 completes by freeing spronk 8 + earning Light).
 
 ### Discoveries
-- _(none yet)_
+- **Vertical-jump-onto-overhead-platform clips the 2-wide×4-tall body** (Phase 4 QA): a platform stacked directly above the launch column is unreachable; platforms must be staggered horizontally. The flood-fill harness models this (matched empirically). Future vertical-climb content must stagger footholds.
+- **Spronk/cage grounding** was hardcoded to the row-18 floor convention (`210a630` fixed it via `floor_row_below`) — the root cause of the recurring "embedded spronk" QA reports across D6/D7/D8.
 
 ---
 
