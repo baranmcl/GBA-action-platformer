@@ -63,17 +63,18 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Phases 1 and 3 shipped (Phase 2 not yet started).
+**Overall:** 4/4 phases shipped + 2 QA fixes. 352/352 host tests green, purity clean, ROM builds, no scaffold used. Branch `feat/m9-lives-game-over` ready for final review + merge.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 1 — Pure logic: World.lives + max_lives + SaveData v4 | ✅ Shipped 2026-06-15 | a3f2ac3, 0de0075 | 345/345 host tests green; purity clean |
-| 2 — Engine/scene: death→Game-Over flow + run_game_over + main routing | ⬜ Not started | — | — |
-| 3 — HUD lives counter | ✅ Shipped 2026-06-15 | 87620ed (art), a338f38 (hud) | 352/352 host tests green; purity clean; ROM fixed! |
-| 4 — Emulator QA | ⬜ Not started | — | — |
+| 1 — Pure logic: World.lives + max_lives + SaveData v4 | ✅ Shipped 2026-06-15 | a3f2ac3, 0de0075 | 345/345 host tests; v1/v2/v3→v4 migration |
+| 2 — Engine/scene: death→Game-Over flow + run_game_over + main routing | ✅ Shipped 2026-06-15 | 373d6f6 (scene), 07e3e22 (flow), fe317d2 (main routing) | ROM builds; death→0→Game Over→Continue/Quit |
+| 3 — HUD lives counter | ✅ Shipped 2026-06-15 | 87620ed (art), a338f38 (hud) | 352/352; gold-shield life pips |
+| 4 — Emulator QA | ✅ Shipped 2026-06-15 | QA fixes below | 2 emulator rounds passed |
 
-### Deviations
-- _(none yet)_
+### Deviations (QA-driven)
+- **Lives granted on spronk PICKUP, not on dungeon exit** (QA round 1): the +1 max-life + refill now fires the instant the spronk is freed (the just-freed transition in `play_room`), not in the `ExitDungeon` case. Commit in the Phase-4 fix.
+- **Vitals refilled on BOTH Game-Over choices** (QA round 1): Quit-to-title was returning to the hub with `ps.health.cur == 0` (empty health bar); the `GameOver` case now refills health+magic before either return. Same fix commit.
 
 ### Discoveries
 - `engine/save.cpp` uses `bn::sram::read(s)`/`write(s)` with the struct directly (template deduces size) — no hardcoded 16, so the 20-byte v4 struct is handled automatically with no changes needed.
