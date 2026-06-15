@@ -222,7 +222,14 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         cage = tile_body(level.cage_tx, level.cage_ty, 8, 12);
         spronk = bn::sprite_items::spronk.create_sprite(0, 0);
         spronk->set_camera(cam);
-        spronk->set_position(wx(cage.pos.x.to_int() + 8), wy(cage.pos.y.to_int() + 8));
+        // Ground the 16x16 spronk sprite on the FIRST SOLID/one-way tile below the authored cage
+        // row, so its BOTTOM rests on the floor surface (not embedded in it).  Sprite half-height
+        // is 8 px, so centre = floor_surface - 8.  For the D1-D7 convention (cage_ty=18, floor at
+        // row 20): floor_row_below(…,18)==20 → wy(20*8 - 8) == wy(cage.pos.y.to_int()+8) — no
+        // visible regression.  For ledge cages (D8+ Room 2) the sprite now rests on the ledge
+        // instead of being embedded in it.
+        int cage_fr = floor_row_below(lvl.map, level.cage_tx, level.cage_ty);
+        spronk->set_position(wx(level.cage_tx * 8 + 8), wy(cage_fr * 8 - 8));
         spronk->set_visible(!world.spronk_freed(d));
     }
     logic::Body exit;
