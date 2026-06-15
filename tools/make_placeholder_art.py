@@ -342,6 +342,30 @@ def gen_hud():
         rect(im, 0, 0, 6, 6, idx)
         write(im, name, {"type": "sprite"})
 
+def gen_hud_life():
+    """HUD life-icon pip 8x8: a gold shield glyph — visually distinct from the red health
+    pip (flat square) and the cyan magic pip (flat square). The shield reads as a 'life'
+    token at a glance: rounded top, narrow V-bottom, gold body (pal 6) with dark outline (pal 1)
+    and a rose highlight (pal 7) so it's legible at 8x8."""
+    im = new_img(8, 8)
+    # Shield outline: near-black (pal 1) forms the border
+    # Top arc (row 0): full width
+    rect(im, 1, 0, 5, 0, 1)
+    # Left and right edges (rows 1-4)
+    for y in range(1, 5):
+        px(im, 0, y, 1); px(im, 6, y, 1)
+    # Narrowing V toward tip (rows 5-6)
+    px(im, 1, 5, 1); px(im, 5, 5, 1)
+    px(im, 2, 6, 1); px(im, 4, 6, 1)
+    px(im, 3, 7, 1)    # tip
+    # Gold fill (pal 6 = spronk gold) inside the outline
+    rect(im, 1, 1, 5, 4, 6)
+    rect(im, 2, 5, 4, 5, 6)
+    rect(im, 3, 6, 3, 6, 6)
+    # Rose highlight glint (pal 7) top-left corner for depth
+    px(im, 1, 1, 7); px(im, 2, 1, 7)
+    write(im, "hud_life", {"type": "sprite"})
+
 def gen_heart_container():
     """Heart-container pickup 16x16 — a red heart on the transparent backdrop (palette idx 0).
     Permanent max-HP upgrade. Red body (pal 13) with a rose-light highlight (pal 7) and a
@@ -402,6 +426,7 @@ if __name__ == "__main__":
     gen_tiles()
     gen_bg_palette()
     gen_hud()
+    gen_hud_life()
     gen_ember_sprites()
     gen_grapple_icon()
     gen_heart_container()
