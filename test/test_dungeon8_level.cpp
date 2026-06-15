@@ -24,7 +24,13 @@ using namespace logic;
 static const LevelData* const D8_ROOMS[] = {
     &DUNGEON8_ROOM0_DATA, &DUNGEON8_ROOM1_DATA, &DUNGEON8_ROOM2_DATA };
 static constexpr int D8_N = 3;
-static constexpr int CLIMB = 6;   // Featherleap double-jump reach; the escapable-wall bound (same as D7).
+// Featherleap double-jump reach. Bumped 6 -> 7 (M10 QA) so the flood-fill reflects the REAL player:
+// Featherleap reaches ~6-7 tiles straight up, so a climb is only TRULY Light-required when its rest-to-rest
+// VERTICAL gap exceeds 7 (a CLIMB=7 flood-fill base-unreachable then matches the in-game player — neither can
+// bypass). NOTE: glide extends HORIZONTAL distance and is NOT modeled here, so a horizontal "Light-gate" would
+// be unsafe (glide bypasses it); ALL D8 Light-climbs are therefore VERTICAL (gap > 7 straight up, hidden-only
+// footholds, no grapple anchor) — the only shape this model can soundly prove requires Light.
+static constexpr int CLIMB = 7;
 
 static constexpr int PW = 2;   // player width in tiles
 static constexpr int PH = 4;   // player height in tiles
@@ -267,6 +273,34 @@ TEST(d8_uses_darkveil_and_hidden_and_crystals){
         mc += L.magic_crystal_count;
     }
     CHECK(dv >= 1); CHECK(hp >= 1); CHECK(mc >= 1);
+}
+
+// Room 1 is the heart-container REWARD room (M10 QA: "give Room 1 a purpose"). It holds exactly one heart
+// container with id 2 (D6 used id0, D7 id1), GROUNDED (a solid tile directly below it), and SEALED behind the
+// Light puzzle: from the room-1 entrance it is BASE-unreachable (hidden platforms non-solid + DarkVeil closed)
+// but LIT-reachable (reveal + open). So the heart is an OPTIONAL permanent-max-HP reward for using Light.
+// Break tests: change the id off 2 -> RED; float the heart (no solid below) -> RED; make the climb static '#'
+// so base reaches it -> base-reachable -> RED; wall it off so lit can't reach -> lit-miss -> RED.
+TEST(d8_room1_has_heart_container){
+    const LevelData& L = DUNGEON8_ROOM1_DATA;
+    CHECK_EQ(L.heart_container_count, 1);
+    const HeartContainerSpawn& hc = L.heart_containers[0];
+    CHECK_EQ(hc.id, 2);                       // D8 heart container id
+    CHECK(d8_solid(L, hc.tx, hc.ty+1));       // grounded (the engine grounds it onto the ledge below)
+
+    int sx = room_start_x(L), sy = room_start_y(L);
+    Grid base = build_grid(L, /*reveal*/false, /*open_dv*/false);
+    std::vector<uint8_t> base_seen = reachable(base, sx, sy);
+    bool base_h = stands_at(L, base_seen, hc.tx, hc.ty);
+    CHECK(!base_h);                            // sealed: NOT reachable before Light
+
+    Grid lit = build_grid(L, /*reveal*/true, /*open_dv*/true);
+    std::vector<uint8_t> lit_seen = reachable(lit, sx, sy);
+    bool lit_h = stands_at(L, lit_seen, hc.tx, hc.ty);
+    CHECK(lit_h);                              // reachable once Light reveals the climb
+
+    std::printf("  [room1-heart] H(%d,%d) id=%d grounded=yes base=%s lit=%s\n",
+                hc.tx, hc.ty, hc.id, base_h?"reach(bad)":"sealed", lit_h?"reach":"MISS(bad)");
 }
 
 // ===========================================================================
