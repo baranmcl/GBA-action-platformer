@@ -63,11 +63,11 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started.
+**Overall:** Phase 1 shipped.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 1 — Pure logic: World.lives + max_lives + SaveData v4 | ⬜ Not started | — | — |
+| 1 — Pure logic: World.lives + max_lives + SaveData v4 | ✅ Shipped 2026-06-15 | a3f2ac3, 0de0075 | 345/345 host tests green; purity clean |
 | 2 — Engine/scene: death→Game-Over flow + run_game_over + main routing | ⬜ Not started | — | — |
 | 3 — HUD lives counter | ⬜ Not started | — | — |
 | 4 — Emulator QA | ⬜ Not started | — | — |
@@ -76,7 +76,7 @@ notes and commit messages.
 - _(none yet)_
 
 ### Discoveries
-- _(none yet)_
+- `engine/save.cpp` uses `bn::sram::read(s)`/`write(s)` with the struct directly (template deduces size) — no hardcoded 16, so the 20-byte v4 struct is handled automatically with no changes needed.
 
 ---
 
@@ -106,7 +106,7 @@ notes and commit messages.
 
 ## Phase 1 — Pure logic: World.lives + max_lives + SaveData v4
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED 2026-06-15 | Task 1.1: a3f2ac3 | Task 1.2: 0de0075
 
 **BEFORE starting:** read `include/logic/world_state.h` (the `World` struct + the v3 `SaveData` layout, `make_save`/`load_save`, `checksum_v3`, the v1/v2/v3 migration branches, `SAVE_VERSION`, the `static_assert(sizeof(SaveData)==16)`), `include/logic/player_state.h`, and `test/test_world_state_v3.cpp` for the save-test style. Note `World.spronks_freed` (uint16, bit d-1 = dungeon d) + `free_spronk`/`spronk_freed`.
 
@@ -137,7 +137,7 @@ inline void clamp_lives_on_load(World& w){                                      
 - `refill_lives` sets `lives = max_lives` (e.g. with 2 spronks → 5).
 - `clamp_lives_on_load`: lives 0 → max; lives > max → max; lives in [1,max] → unchanged.
 - Death-boundary semantics (documented for Phase 2): starting `lives=3`, three `lose_life` calls give 2,1,0 — the call that reaches 0 is the Game-Over trigger.
-- [ ] failing tests → implement → `bash tools/host_test.sh` green → `python tools/check_logic_purity.py` clean → commit `feat(logic): World.lives + max_lives (from spronks_freed) + lives helpers`.
+- [x] failing tests → implement → `bash tools/host_test.sh` green → `python tools/check_logic_purity.py` clean → commit `feat(logic): World.lives + max_lives (from spronks_freed) + lives helpers`.
 
 ### Task 1.2: SaveData v4 (add `lives`) + migration (host-tested)
 
@@ -157,7 +157,7 @@ Current v3 SaveData is 16 bytes: `magic[0..3] version[4..5] spronks[6..7] abilit
 - v1 and v2 migrations still succeed and set `lives == STARTING_LIVES` (keep the existing v1/v2 tests green).
 - Corrupt/empty SRAM (bad magic / bad checksum) → `load_save` returns false (caller starts a fresh game with `lives = STARTING_LIVES` by `World{}` default).
 - Boot clamp: a v4 buffer with `lives=0` → after load, `lives == max_lives` (clamped).
-- [ ] failing tests → implement → host_test green → purity clean → commit `feat(logic): SaveData v4 — persist lives + v1/v2/v3 migration (default 3)`.
+- [x] failing tests → implement → host_test green → purity clean → commit `feat(logic): SaveData v4 — persist lives + v1/v2/v3 migration (default 3)`.
 
 **After Phase 1:** review (≥3 rounds): the derivation (`max_lives` from spronks), the boundary (`lose_life` to 0 = game over), v4 sizeof/checksum/migration correctness, all prior save tests green, no `bn::` in logic. Update the banner ✅ SHIPPED.
 
