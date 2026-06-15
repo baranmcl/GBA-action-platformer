@@ -3,7 +3,7 @@
 #include "logic/meters.h"      // Meter
 #include "logic/world_state.h" // World, Ability
 namespace logic {
-enum class SpellId : uint8_t { None=0, Fire, Ice, Grapple };  // Grapple: free traversal tool (not a magic spell); D5+: Light, Stone...
+enum class SpellId : uint8_t { None=0, Fire, Ice, Grapple, Light };  // Grapple: free traversal tool; Light: M10 reveal spell
 
 // Spell-agnostic caster: spends magic + yields a projectile. The POOL tags the projectile with
 // SpellState::selected (Fire vs Ice); the caster itself doesn't care which spell it is.
@@ -27,22 +27,24 @@ struct SpellCast {
 struct SpellState {
     SpellId selected = SpellId::None;
     bool owns(const World& w, SpellId s) const {
-        return (s==SpellId::Fire    && w.has(Ability::Fire)) ||
-               (s==SpellId::Ice     && w.has(Ability::Ice))  ||
-               (s==SpellId::Grapple && w.has(Ability::Grapple));
+        return (s==SpellId::Fire    && w.has(Ability::Fire))    ||
+               (s==SpellId::Ice     && w.has(Ability::Ice))     ||
+               (s==SpellId::Grapple && w.has(Ability::Grapple)) ||
+               (s==SpellId::Light   && w.has(Ability::Light));
     }
-    bool has_any(const World& w) const { return owns(w,SpellId::Fire) || owns(w,SpellId::Ice) || owns(w,SpellId::Grapple); }
-    void refresh(const World& w){                    // first owned: Fire, then Ice, then Grapple (Fire/Ice preferred)
-        if(owns(w,SpellId::Fire))        selected = SpellId::Fire;
-        else if(owns(w,SpellId::Ice))    selected = SpellId::Ice;
+    bool has_any(const World& w) const { return owns(w,SpellId::Fire) || owns(w,SpellId::Ice) || owns(w,SpellId::Grapple) || owns(w,SpellId::Light); }
+    void refresh(const World& w){                    // first owned: Fire, then Ice, then Grapple (Fire/Ice preferred); Light last
+        if(owns(w,SpellId::Fire))         selected = SpellId::Fire;
+        else if(owns(w,SpellId::Ice))     selected = SpellId::Ice;
         else if(owns(w,SpellId::Grapple)) selected = SpellId::Grapple;
-        else                             selected = SpellId::None;
+        else if(owns(w,SpellId::Light))   selected = SpellId::Light;
+        else                              selected = SpellId::None;
     }
-    void cycle(const World& w){                      // rotate Fire->Ice->Grapple among owned spells
+    void cycle(const World& w){                      // rotate Fire->Ice->Grapple->Light among owned spells
         if(!has_any(w)){ selected = SpellId::None; return; }
-        SpellId order[3] = { SpellId::Fire, SpellId::Ice, SpellId::Grapple };
-        int start = (selected==SpellId::Ice) ? 1 : (selected==SpellId::Grapple) ? 2 : 0;  // None/unknown -> Fire slot (has_any guard above rejects None first)
-        for(int i=1;i<=3;++i){ SpellId c = order[(start+i)%3]; if(owns(w,c)){ selected = c; return; } }
+        SpellId order[4] = { SpellId::Fire, SpellId::Ice, SpellId::Grapple, SpellId::Light };
+        int start = (selected==SpellId::Ice) ? 1 : (selected==SpellId::Grapple) ? 2 : (selected==SpellId::Light) ? 3 : 0;
+        for(int i=1;i<=4;++i){ SpellId c = order[(start+i)%4]; if(owns(w,c)){ selected = c; return; } }
     }
     // Initialize a default selection WITHOUT clobbering a valid one. Call on scene entry and
     // after granting an ability: if the current `selected` is None or not owned, fall back to

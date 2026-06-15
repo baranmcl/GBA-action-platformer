@@ -38,8 +38,9 @@ inline bool can_pass(GateType t, uint16_t abilities){ return (abilities >> (int)
 
 // Which spell's projectile clears an obstacle gate (None for geometry/ability-only gates).
 inline SpellId spell_for_ability(Ability a){
-    if(a==Ability::Fire) return SpellId::Fire;
-    if(a==Ability::Ice)  return SpellId::Ice;
+    if(a==Ability::Fire)  return SpellId::Fire;
+    if(a==Ability::Ice)   return SpellId::Ice;
+    if(a==Ability::Light) return SpellId::Light;
     return SpellId::None;
 }
 inline SpellId gate_cleared_by(GateType t){
