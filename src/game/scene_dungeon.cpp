@@ -20,6 +20,8 @@
 #include "bn_sprite_items_grapple_icon.h"
 #include "bn_sprite_items_heart_container.h"
 
+#include "logic/reveal.h"
+
 #include "logic/tilemap.h"
 #include "logic/world_state.h"   // max_health_for, collect/has heart container
 #include "logic/player.h"
@@ -82,6 +84,13 @@ namespace
     struct LoosePlatformInst {
         int tx, ty, len, cur_ty;
         bool falling = false, fallen = false;
+        bn::vector<bn::sprite_ptr, 8> sprites;   // one per tile in the run
+    };
+    // M10 Light: a horizontal run of `len` tiles that is NON-solid + invisible until a Light cast
+    // reveals it (RevealState window) — then solid + visible; reverts when the timer expires.
+    struct HiddenPlatformInst {
+        int tx, ty, len;
+        bool shown = false;
         bn::vector<bn::sprite_ptr, 8> sprites;   // one per tile in the run
     };
     struct ShrineInst { logic::AbilityPickup pk; logic::Body body; bn::optional<bn::sprite_ptr> sprite; };
@@ -331,6 +340,24 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             li.sprites.back().set_position(wx((lp.tx + dx) * 8 + 4), wy(lp.ty * 8 + 4));
         }
     }
+
+    // ---- hidden platforms (M10 Light: NON-solid + invisible at spawn; a Light cast reveals them
+    //      solid+visible for the RevealState window, then they revert). Mirrors loose platforms but
+    //      we do NOT make them solid here and the sprites start hidden. ----
+    bn::vector<HiddenPlatformInst, 8> hidden_platforms;
+    for(int i = 0; i < level.hidden_platform_count && i < 8; ++i){
+        const logic::HiddenPlatformSpawn& hp = level.hidden_platforms[i];
+        hidden_platforms.push_back(HiddenPlatformInst{ hp.tx, hp.ty, hp.len, false, {} });
+        HiddenPlatformInst& hi2 = hidden_platforms.back();
+        for(int dx = 0; dx < hp.len && dx < 8; ++dx){
+            // NON-solid + invisible until revealed (do NOT set_collision_tile here).
+            hi2.sprites.push_back(bn::sprite_items::block.create_sprite(0, 0));  // placeholder art (reuse block)
+            hi2.sprites.back().set_camera(cam);
+            hi2.sprites.back().set_position(wx((hp.tx + dx) * 8 + 4), wy(hp.ty * 8 + 4));
+            hi2.sprites.back().set_visible(false);
+        }
+    }
+    logic::RevealState reveal;   // room-wide Light reveal timer (a Light cast (re)starts it)
 
     // ---- room-doors (bg tile 5 open-door; 2-wide x 4-tall archway grounded on the floor,
     //      matching the hub's archway). Floor-scanned so a row-18-authored door reaches the
@@ -610,7 +637,25 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                                player.body.pos.y + player.body.half_h };
         bolts.update(in.fire_pressed, muzzle, player.facing, lvl.map);
 
-        spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);
+        logic::SpellId fired = spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);
+
+        // ---- M10 Light reveal: a Light cast that ACTUALLY fired (re)starts the room-wide window.
+        //      Detect via the returned fired-spell (NOT a magic delta — the crystal refill mutates
+        //      magic.cur the same frame and would corrupt a before/after inference). Then tick; toggle
+        //      hidden-platform collision+visibility on the timer EDGE (don't rewrite every frame).
+        if(fired == logic::SpellId::Light) reveal.on_cast();
+        reveal.tick();
+        {
+            bool want_shown = reveal.revealed();
+            for(HiddenPlatformInst& hp : hidden_platforms){
+                if(want_shown == hp.shown) continue;            // edge only
+                for(int dx = 0; dx < hp.len && dx < 8; ++dx)
+                    engine::set_collision_tile(hp.tx + dx, hp.ty, want_shown ? 1 : 0);
+                for(int dx = 0; dx < (int)hp.sprites.size(); ++dx)
+                    hp.sprites[dx].set_visible(want_shown);
+                hp.shown = want_shown;
+            }
+        }
 
         // ---- spell resolution (ORDER: gates -> braziers -> enemies -> freeze/melt -> despawn-on-solid) ----
         for(GateInst& gi : gates){
