@@ -4,11 +4,13 @@
 namespace logic {
 enum class Ability : uint8_t { Featherleap=0, Fire, Ice, Glide, Dash, Grapple, Stone, Light };
 
-// Runtime-only game state; NOT persisted directly. Serialize via make_save/load_save (SaveData is the 16-byte SRAM layout).
+// Runtime-only game state; NOT persisted directly. Serialize via make_save/load_save (SaveData is the SRAM layout).
 struct World {
+    static constexpr int STARTING_LIVES = 3; // lives a new game starts with; also the base before spronk bonuses
     uint16_t spronks_freed = 0;  // bit (d-1) = dungeon d's spronk (d in 1..8)
     uint16_t abilities = 0;      // bit (int)Ability
     uint8_t  current_dungeon = 0; // 0 = hub
+    uint8_t  lives = STARTING_LIVES; // current lives (persistent); max is derived via max_lives()
     uint32_t latches = 0;        // bit i = global latchable event i triggered (0..31)
     // PRECONDITION: d in 1..8 (bit d-1). Never call with current_dungeon==0 (the hub) —
     // (1u << -1) is undefined behavior.
@@ -37,6 +39,18 @@ static constexpr int BASE_MAX_HEALTH    = 100;
 static constexpr int HEART_CONTAINER_BONUS = 25;
 inline int max_health_for(const World& w){
     return BASE_MAX_HEALTH + HEART_CONTAINER_BONUS * w.heart_container_count();
+}
+
+// Lives helpers — mirror max_health_for pattern.
+// max_lives: 3 base + 1 per freed spronk (each rescued spronk grants +1 permanent max).
+inline int spronk_count(const World& w){ return __builtin_popcount((unsigned)w.spronks_freed); }
+inline int max_lives(const World& w){ return World::STARTING_LIVES + spronk_count(w); }
+inline void refill_lives(World& w){ w.lives = (uint8_t)max_lives(w); }
+inline void lose_life(World& w){ if(w.lives > 0) --w.lives; }
+// Boot safety: loaded save must never have lives==0 (instant game-over) or lives>max.
+inline void clamp_lives_on_load(World& w){
+    int m = max_lives(w);
+    if(w.lives == 0 || w.lives > (uint8_t)m) w.lives = (uint8_t)m;
 }
 
 // v3 SaveData layout (16 bytes, naturally aligned, no padding):
