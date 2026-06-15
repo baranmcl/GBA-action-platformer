@@ -15,6 +15,7 @@ int main()
     logic::World world;
     if(!engine::read_world(world))
         world = logic::World{}; // fresh game on empty/corrupt SRAM
+    logic::clamp_lives_on_load(world); // never boot into an instant Game Over (fresh World already has lives=3)
 
     game::run_title(world); // START -> enter the hub
 
@@ -39,5 +40,9 @@ int main()
         world.current_dungeon = 0;                    // back in the hub before saving
         if(dr == game::DungeonResult::Cleared)
             engine::write_world(world);               // persist earned spronk/ability
+        else if(dr == game::DungeonResult::QuitToTitle)
+            game::run_title(world);                   // Game Over -> Quit to title; run_dungeon already
+                                                      // refilled + persisted lives, so no write here.
+        // loop re-enters run_hub either way (Quit/QuitToTitle both resume the hub)
     }
 }
