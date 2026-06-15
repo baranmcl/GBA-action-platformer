@@ -808,6 +808,8 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             logic::try_free_spronk(player.body, cage, world, d);
             if(world.spronk_freed(d) && !was){
                 if(spronk) spronk->set_visible(false);
+                logic::refill_lives(world);   // freeing the spronk grants +1 max (via spronks_freed) AND refills NOW (on pickup, not on exit)
+                engine::write_world(world);   // persist the new max + refilled lives immediately
             }
         }
 
@@ -892,8 +894,7 @@ DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world
         engine::fade_out(16);   // one fade-out per room exit; next play_room fades in
         switch(out.kind){
             case RoomOutcome::ExitDungeon:
-                logic::refill_lives(world);   // cleared: spronk freed in play_room (max grew) -> top up; main persists on Cleared
-                return DungeonResult::Cleared;
+                return DungeonResult::Cleared;   // lives already refilled on spronk-free (in play_room); main persists on Cleared
             case RoomOutcome::Quit:        return DungeonResult::Quit;
             case RoomOutcome::Restart:
                 ps.health.cur = ps.health.max;   // anti-soft-lock: refill vitals, replay same room
@@ -907,11 +908,11 @@ DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world
                 game::GameOverChoice c = game::run_game_over(world);
                 logic::refill_lives(world);   // both choices refill to max
                 engine::write_world(world);   // persist the refill — the save never holds lives==0
+                ps.health.cur = ps.health.max;   // refill vitals for BOTH choices — never return to the
+                ps.magic.cur  = ps.magic.max;    // hub/title at 0 HP (the empty-health-bar bug)
                 if(c == game::GameOverChoice::QuitToTitle) return DungeonResult::QuitToTitle;
-                // Continue: restart THIS dungeon from the start room, vitals refilled like Restart.
+                // Continue: restart THIS dungeon from the start room (vitals already refilled above).
                 cur_room = dungeon.start_room; cur_entrance = 0;
-                ps.health.cur = ps.health.max;   // mirror the Restart case verbatim
-                ps.magic.cur  = ps.magic.max;
                 break;   // loop re-enters play_room at the start room
             }
         }
