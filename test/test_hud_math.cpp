@@ -45,3 +45,42 @@ TEST(hud_scales_to_two_containers){
     CHECK_EQ(bar_pixels(150,max_health_for(w),PIPS), PIPS);
     CHECK_EQ(bar_pixels(75, max_health_for(w),PIPS), 5);
 }
+
+// --- Variable-length health bar: the bar's TOTAL pip count scales with MAX, so a heart
+// container makes it VISIBLY longer (ratio bars rendered 100/100 and 125/125 identically). ---
+TEST(health_bar_base_length){
+    CHECK_EQ(health_total_pips(100), 10);            // base cap == original 10-pip length
+}
+TEST(health_bar_grows_with_max){
+    // The key bug fix: a bigger MAX yields MORE total pips (a longer bar), not the same length.
+    CHECK_EQ(health_total_pips(125), 13);            // +25 max -> +3 pips (ceil(125/10))
+    CHECK_EQ(health_total_pips(150), 15);
+    CHECK(health_total_pips(125) > health_total_pips(100));
+    CHECK(health_total_pips(150) > health_total_pips(125));
+}
+TEST(health_bar_full_at_longer_length){
+    // 125/125 is full at the LONGER length (13 lit), vs 100/100 full at 10 lit -> visibly longer.
+    CHECK_EQ(health_fill_pips(125,125), 13);
+    CHECK_EQ(health_fill_pips(100,100), 10);
+    CHECK(health_fill_pips(125,125) > health_fill_pips(100,100));
+}
+TEST(health_bar_partial_at_longer_length){
+    // 100/125 is partially filled on the 13-pip bar (10 of 13 lit) -> not full, shows headroom.
+    CHECK_EQ(health_fill_pips(100,125), 10);
+    CHECK(health_fill_pips(100,125) < health_total_pips(125));
+}
+TEST(health_bar_fill_never_exceeds_total){
+    CHECK_EQ(health_fill_pips(999,125), 13);         // clamps to the bar's length
+    CHECK_EQ(health_fill_pips(150,150), 15);
+}
+TEST(health_bar_zero_and_caps){
+    CHECK_EQ(health_fill_pips(0,125), 0);            // empty
+    CHECK_EQ(health_total_pips(0), 0);               // safe at max<=0
+    CHECK(health_total_pips(10000) <= MAX_HEALTH_PIPS);  // capped to fit HUD screen space
+}
+TEST(health_bar_ties_to_containers){
+    World w; w.collect_heart_container(0);
+    CHECK_EQ(health_total_pips(max_health_for(w)), 13);          // 125 cap -> 13-pip bar
+    CHECK_EQ(health_fill_pips(125, max_health_for(w)), 13);      // full at the longer length
+    CHECK_EQ(health_fill_pips(100, max_health_for(w)), 10);      // partial on the longer bar
+}

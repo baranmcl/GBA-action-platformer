@@ -32,6 +32,7 @@
 #include "logic/pushable_block.h"
 #include "logic/puzzle.h"
 #include "logic/gates.h"
+#include "logic/stone_impact.h" // loose_platform_in_shockwave (pound shockwave radius)
 #include "logic/room_graph.h"   // find_entrance, room_door_at
 #include "engine/input.h"
 #include "engine/spell_input.h"
@@ -70,6 +71,17 @@ namespace
             if(map.is_solid(tx, y) || map.is_oneway(tx, y)) return y;   // standable: solid or one-way platform
         return start_ty + 1;
     }
+    // M8 Stone: a cracked FLOOR (NOT a vertical wall gate). Solid until a pound smashes it.
+    struct CrackedFloorInst { int tx, ty, latch_id; bool broken = false; };
+    // M8 Stone: a breakable solid boulder (NOT pushable). Solid tile + sprite; removed on a pound.
+    struct BoulderInst { int tx, ty; bn::optional<bn::sprite_ptr> sprite; bool broken = false; };
+    // M8 Stone: a horizontal run of `len` tiles, suspended, that DROPS straight down (drop-to-rest,
+    // no momentum) when a pound's shockwave lands within Chebyshev distance <=6. Collision tiles + sprites.
+    struct LoosePlatformInst {
+        int tx, ty, len, cur_ty;
+        bool falling = false, fallen = false;
+        bn::vector<bn::sprite_ptr, 8> sprites;   // one per tile in the run
+    };
     struct ShrineInst { logic::AbilityPickup pk; logic::Body body; bn::optional<bn::sprite_ptr> sprite; };
     struct HeartInst  { logic::HeartContainerSpawn hc; logic::Body body; bn::optional<bn::sprite_ptr> sprite; bool collected = false; };
     // src_tx/ty: plate or button tile to test; group: brazier group (Braziers kind)
@@ -103,8 +115,9 @@ namespace
     }
 }
 
-static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, logic::World& world, logic::PlayerState& ps, logic::SpellState& spell)
+static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, logic::World& world, logic::PlayerState& ps)
 {
+    logic::SpellState& spell = ps.spell;   // selected tool lives in PlayerState -> persists across rooms/hub/scenes
     const int d = world.current_dungeon;
     bn::bg_palettes::set_transparent_color(bn::color(8, 8, 24));
 
@@ -139,6 +152,12 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     logic::Meter& health = ps.health;   // persist across hub <-> dungeon (no reset on entry)
     logic::Meter& magic  = ps.magic;
     int invuln = 0;
+    // Post-respawn grace: i-frames granted on death so a player who died in a sub-floor
+    // hazard pit cannot be re-damaged before regaining control. MUST exceed the hazard
+    // re-arm (invuln=45 per hit) so even an authored-unsafe spawn yields real control
+    // frames instead of an unbreakable every-frame death loop (the "stuck at the bottom"
+    // report). The entrance is authored safe, but this guarantees robustness regardless.
+    constexpr int RESPAWN_IFRAMES = 60;
 
     engine::Avatar avatar(player, lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::BoltPool bolts(lvl.view.map_px_w, lvl.view.map_px_h, cam);
@@ -172,6 +191,15 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     };
     refresh_spell_icon();
 
+    // ---- pound VFX (placeholder): a brief dust/impact dot (bolt sprite reused, like the vine VFX)
+    //      shown for a few frames at the impact point on each pound landing, + a tiny camera nudge. ----
+    bn::sprite_ptr pound_dust = bn::sprite_items::bolt.create_sprite(0, 0);
+    pound_dust.set_camera(cam);
+    pound_dust.set_visible(false);
+    pound_dust.set_scale(1.5);   // squashed puff (placeholder)
+    int pound_vfx_t = 0;         // frames remaining the dust is shown
+    int pound_shake_t = 0;       // frames remaining of camera nudge
+
     // ---- cage / spronk ----
     logic::Body cage;
     bn::optional<bn::sprite_ptr> spronk;
@@ -201,9 +229,24 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     }
 
     // ---- gates (vine/ice obstacle; gap geometry) ----
+    // M8: CrackedFloor is a horizontal FLOOR, NOT a full-column vertical wall — it is SKIPPED here
+    // and collected into cracked_floors below (made solid as a single floor tile, not a column).
     bn::vector<GateInst, 24> gates;
+    bn::vector<CrackedFloorInst, 16> cracked_floors;
     for(int i = 0; i < level.gate_count && i < 24; ++i){
         const logic::GateSpawn& g = level.gates[i];
+        if(g.type == logic::GateType::CrackedFloor){
+            // A cracked floor is a single SOLID floor tile the player walks on; only a pound breaks it.
+            // The compiler emits content symbols on collision tile 0, so make it solid here + render bg 11.
+            // If already latched-open (smashed on a prior visit and persisted), leave it broken/empty.
+            bool latched_open = (g.latch_id >= 0) && world.latched(g.latch_id);
+            cracked_floors.push_back(CrackedFloorInst{ g.tx, g.ty, g.latch_id, latched_open });
+            if(!latched_open){
+                engine::set_collision_tile(g.tx, g.ty, 1);
+                engine::set_level_tile(lvl.view, g.tx, g.ty, logic::gate_info(logic::GateType::CrackedFloor).bg_tile); // 11
+            }
+            continue;
+        }
         logic::Body gb; gb.half_w = fx(8); gb.half_h = fx((level.h - 3) * 4); // full-column body
         gb.pos = { fx(g.tx * 8), fx(8) };
         gates.push_back(GateInst{ g, gb, false });
@@ -240,7 +283,13 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         HeartInst& hi = hearts.back();
         hi.sprite = bn::sprite_items::heart_container.create_sprite(0, 0);
         hi.sprite->set_camera(cam);
-        hi.sprite->set_position(wx(hc.tx * 8 + 8), wy(hc.ty * 8 + 8));
+        // Ground the 16x16 sprite on the FIRST SOLID tile below the authored row (like the
+        // cage/exit/room-doors), so its BOTTOM rests on the floor surface. M7 hard-coded a
+        // tile-centre position assuming a row-18 floor-2-below layout; in D7's tight alcove the
+        // floor is only 1 row below, so that sank the sprite INTO the platform. Floor surface is
+        // at fr*8; sprite half-height is 8, so centre = fr*8 - 8.
+        int hc_fr = floor_row_below(lvl.map, hc.tx, hc.ty);
+        hi.sprite->set_position(wx(hc.tx * 8 + 8), wy(hc_fr * 8 - 8));
     }
 
     // ---- pushable blocks (solid collision cell + 8x8 sprite) ----
@@ -254,14 +303,44 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         bi.sprite->set_camera(cam);
     }
 
+    // ---- boulders (M8 Stone: breakable solid; like a block but NOT pushable; pound removes it) ----
+    bn::vector<BoulderInst, 8> boulders;
+    for(int i = 0; i < level.boulder_count && i < 8; ++i){
+        const logic::BoulderSpawn& b = level.boulders[i];
+        boulders.push_back(BoulderInst{ b.tx, b.ty, {}, false });
+        BoulderInst& bo = boulders.back();
+        engine::set_collision_tile(b.tx, b.ty, 1);                // solid; bg stays blank, sprite shows it
+        bo.sprite = bn::sprite_items::block.create_sprite(0, 0);  // placeholder art (reuse block)
+        bo.sprite->set_camera(cam);
+        bo.sprite->set_position(wx(b.tx * 8 + 4), wy(b.ty * 8 + 4));
+    }
+
+    // ---- loose platforms (M8 Stone: drop straight down on a nearby pound shockwave) ----
+    bn::vector<LoosePlatformInst, 8> loose_platforms;
+    for(int i = 0; i < level.loose_platform_count && i < 8; ++i){
+        const logic::LoosePlatformSpawn& lp = level.loose_platforms[i];
+        loose_platforms.push_back(LoosePlatformInst{ lp.tx, lp.ty, lp.len, lp.ty, false, false, {} });
+        LoosePlatformInst& li = loose_platforms.back();
+        for(int dx = 0; dx < lp.len && dx < 8; ++dx){
+            engine::set_collision_tile(lp.tx + dx, lp.ty, 1);     // solid run; bg blank, sprites show it
+            li.sprites.push_back(bn::sprite_items::block.create_sprite(0, 0));  // placeholder art
+            li.sprites.back().set_camera(cam);
+            li.sprites.back().set_position(wx((lp.tx + dx) * 8 + 4), wy(lp.ty * 8 + 4));
+        }
+    }
+
     // ---- room-doors (bg tile 5 open-door; 2-wide x 4-tall archway grounded on the floor,
     //      matching the hub's archway). Floor-scanned so a row-18-authored door reaches the
     //      floor (row 20) instead of floating. Collision unchanged (door stays walkable). ----
     for(int i = 0; i < level.room_door_count && i < 8; ++i){
         const logic::RoomDoorSpawn& rd = level.room_doors[i];
         int fr = floor_row_below(lvl.map, rd.tx, rd.ty);
+        // target_room == -1 is the exit-to-hub door: render with a DISTINCT bg tile (26, hub portal)
+        // so it reads differently from a normal room-door (tile 5) and the dungeon goal/exit (tile 6).
+        // (13 is lava, so 26 is the next free strip slot — see make_placeholder_art.py gen_tiles.)
+        int door_bg = (rd.target_room == -1) ? 26 : 5;
         for(int dy = 0; dy < 4; ++dy) for(int dx = 0; dx < 2; ++dx)
-            engine::set_level_tile(lvl.view, rd.tx + dx, fr - 1 - dy, 5);
+            engine::set_level_tile(lvl.view, rd.tx + dx, fr - 1 - dy, door_bg);
     }
     // ---- exit marker (bg tile 6 door-locked = distinct closed door = dungeon goal;
     //      same 2-wide x 4-tall grounded archway. room-doors use tile 5 so they're distinct.
@@ -288,6 +367,9 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     for(int i = 0; i < level.plate_count && i < 16; ++i){
         const logic::PlateSpawn& p = level.plates[i];
         engine::set_level_tile(lvl.view, p.tx, p.ty, 17);
+        // M8: a HEAVY plate trips ONLY on a Stone pound (resolved in the just_landed() block, NOT here).
+        // Skip it from the normal step/block trigger loop so it never trips on a footstep or pushed block.
+        if(p.heavy) continue;
         logic::Trigger t = logic::Trigger::plate(); t.target_tx = p.target_tx; t.target_ty = p.target_ty;
         triggers.push_back(TriggerInst{ t, p.tx, p.ty, -1, false });
     }
@@ -322,6 +404,11 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         if(bn::keypad::start_pressed())  { return RoomOutcome{ RoomOutcome::Restart }; }  // anti-soft-lock level reset
         if(bn::keypad::up_pressed()){
             if(const logic::RoomDoorSpawn* dr = logic::room_door_at(level, player.body)){
+                // target_room == -1 is the sentinel "exit-to-hub" door: a diegetic Up-press
+                // equivalent of SELECT=quit. Return Quit so run_dungeon returns DungeonResult::Quit
+                // (NOT Cleared) -> the hub loop resumes WITHOUT marking the dungeon cleared, and the
+                // dungeon stays re-enterable.
+                if(dr->target_room == -1) return RoomOutcome{ RoomOutcome::Quit };
                 return RoomOutcome{ RoomOutcome::GoToRoom, dr->target_room, dr->target_entrance };
             }
         }
@@ -331,6 +418,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         player.abilities.glide       = world.has(logic::Ability::Glide);
         player.abilities.dash        = world.has(logic::Ability::Dash);
         player.abilities.grapple     = world.has(logic::Ability::Grapple);
+        player.abilities.stone       = world.has(logic::Ability::Stone);
         // Read spell intent + cycle FIRST so the selection is current for the grapple/cast branch:
         engine::SpellIntent si = engine::read_spell_intent();
         if(si.cycle) spell.cycle(world);
@@ -407,6 +495,113 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             miss_vine_dir = player.facing;
         }
 
+        // ---- M8 Stone pound impact resolution (on the one frame the pound lands) ----
+        // Order: cracked-floor smash (may re-arm to chain through stacked floors) -> heavy switch ->
+        // boulder break -> loose-platform shockwave. Crush is in the enemy loop below. The pound is
+        // armed via player.stone (logic); the scene resolves WHAT it hits, mirroring dash->CrackedWall.
+        if(player.stone.just_landed()){
+            int impact_cx = px2t(player.body.pos.x + player.body.half_w);                                  // centre column
+            // Two distinct rows (the collision resolver leaves the body resting just ABOVE the floor):
+            //  - impact_fy: the body's lowest OCCUPIED tile (matches the plate-trip convention, ~500-505);
+            //    a plate/heavy-plate marker is a non-solid tile the body stands ON, so we match this row.
+            //  - impact_floor: the SOLID tile directly under the feet (matches the on_ground probe,
+            //    collision.cpp:75); cracked floors + boulders are SOLID tiles the player lands ON TOP of,
+            //    so they live at this row, not impact_fy.
+            int impact_fy    = px2t(player.body.pos.y + player.body.half_h + player.body.half_h - fx(1));
+            int impact_floor = px2t(player.body.pos.y + player.body.half_h + player.body.half_h);
+            // Pound VFX (placeholder): puff of dust at the impacted floor + a brief camera shake.
+            pound_dust.set_position(wx(impact_cx * 8 + 4), wy(impact_floor * 8 + 4));
+            pound_dust.set_visible(true);
+            pound_vfx_t = 8;
+            pound_shake_t = 6;
+            // 1. CrackedFloor smash + continue the plunge. The landed tile is solid; if it is an unbroken
+            //    cracked floor, break the WHOLE contiguous cracked-floor run at that row and RE-ARM the
+            //    pound so the next frame plunges into the area below. Re-arm ONLY on a cracked tile, so one
+            //    pound chains through STACKED cracked floors and naturally ends on the first non-cracked solid.
+            bool smashed = false;
+            for(CrackedFloorInst& cf : cracked_floors){
+                if(cf.broken || cf.tx != impact_cx || cf.ty != impact_floor) continue;
+                // Break the contiguous run of cracked-floor tiles at this row (left + right of impact).
+                for(CrackedFloorInst& run : cracked_floors){
+                    if(run.broken || run.ty != cf.ty) continue;
+                    // a tile is in the run if it connects to impact_cx via adjacent cracked tiles at this row
+                    // (simple: break any same-row cracked tile within the maximal contiguous span)
+                    bool contiguous = true;
+                    int lo = run.tx < impact_cx ? run.tx : impact_cx;
+                    int hi = run.tx < impact_cx ? impact_cx : run.tx;
+                    for(int x = lo; x <= hi && contiguous; ++x){
+                        bool found = false;
+                        for(CrackedFloorInst& q : cracked_floors)
+                            if(!q.broken && q.ty == cf.ty && q.tx == x){ found = true; break; }
+                        if(!found) contiguous = false;
+                    }
+                    if(!contiguous) continue;
+                    run.broken = true;
+                    engine::set_collision_tile(run.tx, run.ty, 0);
+                    engine::set_level_tile(lvl.view, run.tx, run.ty, 0);
+                    persist_latch(world, run.latch_id);
+                }
+                smashed = true;
+                break;
+            }
+            if(smashed) player.stone.start();   // re-arm: plunge through to the next floor below
+
+            // 2. Heavy switch: a heavy plate trips ONLY on a pound. Fire its gate target (open_column)
+            //    when the player's feet/centre land on the plate tile. (Normal plates are handled in the
+            //    trigger loop below, which now SKIPS heavy plates so they never trip on a step/block.)
+            for(int i = 0; i < level.plate_count && i < 16; ++i){
+                const logic::PlateSpawn& p = level.plates[i];
+                if(!p.heavy) continue;
+                if(impact_cx == p.tx && impact_fy == p.ty){
+                    open_column(lvl.view, p.target_tx, level.h);
+                    // Heavy plates may carry a latch via a co-located latched gate target; persist not
+                    // wired through PlateSpawn (no latch_id field), so the open_column holds for the visit.
+                }
+            }
+
+            // 3. Boulder break: if a boulder is the tile directly below the player's feet (or the landed
+            //    tile itself), remove it so the path clears. (Boulders rebuild on room re-entry — fine.)
+            for(BoulderInst& bo : boulders){
+                if(bo.broken) continue;
+                // The boulder the player landed ON TOP of is the solid tile under the feet (impact_floor).
+                bool below = (bo.tx == impact_cx && bo.ty == impact_floor);
+                if(below){
+                    bo.broken = true;
+                    engine::set_collision_tile(bo.tx, bo.ty, 0);
+                    if(bo.sprite) bo.sprite->set_visible(false);
+                }
+            }
+
+            // 4. Loose-platform shockwave: any not-yet-falling loose platform whose run is within
+            //    Chebyshev distance <=6 of the impact begins falling (drop-to-rest; see step loop below).
+            for(LoosePlatformInst& li : loose_platforms){
+                if(li.falling || li.fallen) continue;
+                if(logic::loose_platform_in_shockwave(li.tx, li.cur_ty, li.len, impact_cx, impact_floor))
+                    li.falling = true;
+            }
+        }
+
+        // ---- loose platforms: drop-to-rest one tile/frame while falling (solid-grid test only) ----
+        // The fall test considers ONLY the collision grid; the player is not a collision tile, so a
+        // platform never rests on the player (content guarantees the player isn't under a dropping run).
+        for(LoosePlatformInst& li : loose_platforms){
+            if(!li.falling) continue;
+            bool clear_below = true;
+            for(int dx = 0; dx < li.len; ++dx)
+                if(lvl.map.is_solid(li.tx + dx, li.cur_ty + 1)){ clear_below = false; break; }
+            if(clear_below){
+                for(int dx = 0; dx < li.len; ++dx){
+                    engine::set_collision_tile(li.tx + dx, li.cur_ty, 0);       // clear old row
+                    engine::set_collision_tile(li.tx + dx, li.cur_ty + 1, 1);   // set new row solid
+                }
+                ++li.cur_ty;
+                for(int dx = 0; dx < (int)li.sprites.size(); ++dx)
+                    li.sprites[dx].set_position(wx((li.tx + dx) * 8 + 4), wy(li.cur_ty * 8 + 4));
+            } else {
+                li.falling = false; li.fallen = true;   // rest; drop-to-rest, no bounce
+            }
+        }
+
         logic::Vec2 muzzle = { player.body.pos.x + player.body.half_w,
                                player.body.pos.y + player.body.half_h };
         bolts.update(in.fire_pressed, muzzle, player.facing, lvl.map);
@@ -443,7 +638,11 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             int ex = inst.e.body.pos.x.to_int() + inst.e.body.half_w.to_int();
             int ey = inst.e.body.pos.y.to_int() + inst.e.body.half_h.to_int();
             inst.sprite->set_position(ex - hw, ey - hh);
-            if(bolts.consume_hit(inst.e.body)){
+            if(player.stone.active() && logic::aabb_overlap(player.body, inst.e.body)){
+                // M8: a pound CRUSHES any enemy on contact (including fire_immune), refilling magic
+                // like a bolt-kill. Guarded by stone.active() (pound i-frames), parallel to dash i-frames.
+                inst.e.kill(); magic.heal(25); inst.sprite->set_visible(false);
+            } else if(bolts.consume_hit(inst.e.body)){
                 inst.e.kill(); magic.heal(25); inst.sprite->set_visible(false);
             } else if(spells.consume_hit(inst.e.body, logic::SpellId::Fire)){
                 if(!inst.e.fire_immune){ inst.e.kill(); inst.sprite->set_visible(false); } // no magic refill from fire
@@ -547,7 +746,17 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         else avatar.set_visible(true);
         if(health.is_empty()){
             player.body.pos = spawn_pos; player.body.vel = { fx(0), fx(0) };
-            health.cur = health.max; invuln = 0;
+            health.cur = health.max;
+            invuln = RESPAWN_IFRAMES;   // grace window (NOT 0): never re-die before regaining control
+            // Clear transient movement states so a death mid-dash / mid-pound / mid-grapple doesn't
+            // carry velocity or i-frame state into the respawn (which could re-plunge into the pit).
+            player.dash = logic::DashState{};
+            player.grapple = logic::GrappleState{};
+            player.stone = logic::StoneState{};
+            player.body.on_ground = false;
+            // Re-sync the avatar to the respawn position THIS frame so the sprite doesn't linger
+            // one frame at the death spot (cosmetic ghost in the pit).
+            avatar.sync(player);
             // Reset pushable blocks to their authored start so a block shoved into a dead corner
             // (a soft-lock) is recoverable by dying. (Plates re-evaluate next frame; latched
             // button/brazier gates stay solved.)
@@ -564,7 +773,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         for(ShrineInst& si2 : shrines){
             if(!world.has(si2.pk.ability) && logic::aabb_overlap(player.body, si2.body)){
                 world.grant(si2.pk.ability);
-                spell.refresh(world);
+                spell.ensure_valid(world);   // auto-select the new ability ONLY if nothing valid was selected; never clobber a cycled choice
                 if(si2.sprite) si2.sprite->set_visible(false);
             }
         }
@@ -643,9 +852,12 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             for(int i = 0; i < VINE_SEGS; ++i) vine_segs[i].set_visible(false);
         }
 
+        // ---- pound VFX tick (placeholder): fade out the dust; apply a tiny vertical camera shake ----
+        if(pound_vfx_t > 0){ if(--pound_vfx_t == 0) pound_dust.set_visible(false); }
         hud.update(health, magic);
         int cx = player.body.pos.x.to_int() + player.body.half_w.to_int();
         int cy = player.body.pos.y.to_int() + player.body.half_h.to_int();
+        if(pound_shake_t > 0){ cy += (pound_shake_t % 2 == 0) ? 2 : -2; --pound_shake_t; }  // 2px jitter
         set_clamped_cam(cx, cy);
         if(fade_in_t > 0) engine::set_fade(--fade_in_t);
         bn::core::update();
@@ -656,13 +868,17 @@ DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world
 {
     int cur_room = dungeon.start_room;
     int cur_entrance = 0;
+    // Remember which dungeon this is so the hub can spawn the player at the matching door on return.
+    // main() sets world.current_dungeon = n BEFORE calling run_dungeon; capturing it here persists the
+    // number in PlayerState even after the scene resets world.current_dungeon to 0 on exit.
+    ps.last_dungeon = world.current_dungeon;
     // Sync the max-HP cap to the collected heart containers (PlayerState defaults to 100/100, but a
     // continued game may have upgrades). Only raise the CAP here; the pickup itself refills to full.
     ps.health.max = logic::max_health_for(world);
     if(ps.health.cur > ps.health.max) ps.health.cur = ps.health.max;
-    logic::SpellState spell; spell.refresh(world);  // selected spell persists across room transitions
+    ps.spell.ensure_valid(world);  // selected tool lives in PlayerState; init a default without clobbering a carried-in choice (persists across rooms, hub, hub<->dungeon)
     while(true){
-        RoomOutcome out = play_room(*dungeon.rooms[cur_room], cur_entrance, world, ps, spell);
+        RoomOutcome out = play_room(*dungeon.rooms[cur_room], cur_entrance, world, ps);
         engine::fade_out(16);   // one fade-out per room exit; next play_room fades in
         switch(out.kind){
             case RoomOutcome::ExitDungeon: return DungeonResult::Cleared;

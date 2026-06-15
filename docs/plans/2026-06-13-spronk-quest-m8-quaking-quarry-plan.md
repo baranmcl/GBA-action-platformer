@@ -63,20 +63,37 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started.
+**Overall:** 4/4 phases shipped + an extensive QA-driven polish pass (7 emulator rounds). 312/312 host tests green, purity clean, ROM builds, QA scaffold reverted. Branch `feat/m8-quaking-quarry` ready for final review + merge.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 1 — Pure logic: StoneState + input/ability/data | ⬜ Not started | — | — |
-| 2 — Level compiler: cracked-floor/boulder/heavy-switch/loose-platform symbols | ⬜ Not started | — | — |
-| 3 — Engine/scene wiring (pound input, impact resolution, falling terrain last, VFX) | ⬜ Not started | — | — |
-| 4 — Content: Quaking Quarry 3 rooms + hub Door 7 + no-soft-lock invariants + QA | ⬜ Not started | — | — |
+| 1 — Pure logic: StoneState + input/ability/data | ✅ Shipped | 17aaf60, fb2bd32, 2db33ee, 6fc100c | 254/254; Down+A pound, grapple-wins, no-tunnel |
+| 2 — Level compiler: cracked-floor/boulder/heavy-switch/loose-platform symbols | ✅ Shipped | 54a4554 (k gate), 612cac9 (heavy plate), a1925bd (boulder+loose-platform), 10ce2d3 (header regen) | — |
+| 3 — Engine/scene wiring (pound input, impact resolution, falling terrain last, VFX) | ✅ Shipped | e83c2f3, b24c8fa, e80de4e, aa4a8ce, 13b9fa6 (impact-row fix) | 261/261 host tests; ROM fixed; purity OK |
+| 4 — Content: Quaking Quarry 3 rooms + hub Door 7 + no-soft-lock invariants + QA | ✅ Shipped | f67aff8 (rooms), cf27be0 (Door 7), 55dde58 (invariants) + QA reworks below | 7 emulator QA rounds passed; all D7 mechanics + soft-lock guards verified |
 
-### Deviations
-- _(none yet)_
+### Deviations (QA-driven, beyond the written plan — all user-requested during the 7 emulator rounds)
+- **Soft-lock invariants strengthened to model the 2-wide×4-tall player + pocket exitability** (`de23def`) after QA round 1 hit a real heart-pocket soft-lock the tile-connectivity flood-fill missed; added `requires_pound`/`requires_freeze`/`exit_reachable`/`no_one_way_traps`/`hub_exit_reachable` invariants (each verified RED on a broken layout).
+- **Room reworks:** D7 room0 reworked twice (`39b089c`, `279e6e3`, `70992ec`) — poundable heavy switch gating the Room-1 door, visible dark-veil gate (art tile 12), meaningful+reversible cracked-floor descent, hub-return door, doors grounded + gate/door/entrance spacing (no re-entry glitch). Room1 heart now pound-only + 2-wide alcove; room2 freeze-required + exit reachable (`993caf3`). Loose-platform bridges an un-jumpable spike gap (`6d4cd68`).
+- **Heart container fixes** (`8ef5bad`, `5acc2e5`): sprite grounds to the floor below it (alcove placement); health-bar length scales with max HP so containers are visible.
+- **Spell/tool persistence** (`d13b564`): hoisted the selection into `PlayerState.spell` + `SpellState::ensure_valid` so it persists across rooms, the hub, AND hub↔dungeon; a shrine pickup no longer resets it.
+- **Exit-to-hub door** (`54035ac`): new generic `Q` door (`target_room=-1` → returns to hub, re-enterable) + portal art (tile 26); added to D7 (`279e6e3`) and retrofitted to D1–D6 (`237c625`).
+- **Death/respawn fix** (`2bea529`): 60-frame post-respawn i-frames + transient-state clear — fixes the death-loop in sub-floor hazard pits across all dungeons.
+- **Hub reorg** (`78769f3`, `44a8f2f`): evenly-spaced doors, removed the vestigial gate wall, and spawn-at-the-door-you-just-exited (`PlayerState.last_dungeon`).
+- **Hub cleanup** (`2f952a2`): removed the M7 grapple anchors + platforms.
+- **Deferred:** a **Lives + Game Over** system was proposed by the user; advised + agreed to scope it as its own milestone (M9) rather than expand M8.
+- **Compiler latch for `k` (Task 4.1):** the `k` cracked-floor symbol gained an optional
+  `latch_id` via a JSON `cracked_floors` list (scan-order indexed) so Room 1's shortcut can
+  persist. Phases 1–2 were frozen, but this is a Phase-4-local compiler addition (the GateSpawn
+  already carried `latch_id`; the scene already calls `persist_latch` for CrackedFloor — only the
+  compiler emit was missing). All existing level headers regenerated with the defaulted `,-1`
+  gate latch_id (no behavior change), committed within f67aff8.
+- **Hub widened 48→52 (Task 4.2):** no room remained for a 7th 2-wide archway at the right border,
+  so the hub grew by 4 interior columns (gate wall / grapple anchors / platforms preserved).
 
 ### Discoveries
-- _(none yet)_
+- **Heavy plates have no `latch_id`** (Phase 3, `scene_dungeon.cpp` heavy-plate handler): a heavy switch's `open_column` holds only for the current visit — NOT persisted to SRAM. So the spec §4 "latched shortcut" must NOT be built from a heavy switch alone. **Resolution (Phase 4 content):** build the persistent latched shortcut from a **latched `CrackedFloor`** instead — the pound-smash handler already calls `persist_latch(world, latch_id)`, and a CrackedFloor whose latch is set spawns pre-broken (open) on re-entry. Heavy switches are for in-visit gates only. (Avoids reopening the frozen Phase 1-2 to add a plate `latch_id`.)
+- **Impact-tile convention** (Phase 3, fixed in `13b9fa6`): cracked-floor/boulder/loose-platform use the solid tile under the player's feet (`px_to_tile(feet)`); heavy plates use the body's occupied tile (`px_to_tile(feet-1)`), matching the existing plate convention. Future scene work touching pound impact must respect this split.
 
 ---
 
@@ -222,7 +239,7 @@ Add the data the content + scene need (mirror the existing nullable-array+count 
 
 ## Phase 2 — Level compiler: new symbols
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED — 2026-06-13. Commits: 54a4554 ('k' CrackedFloor gate), 612cac9 (heavy plate flag), a1925bd (boulder 'O' + loose-platform ':'), 10ce2d3 (header regen). 254/254 host tests pass.
 
 **BEFORE starting:** read `tools/build_level.py` — the `TILE` map, the `CONTENT` set, the per-symbol entity-collection loop, the JSON sidecar mapping (study how `=`/plates, `B`/`P` blocks, and `G`/gates with `latch_id` are parsed + emitted), and `emit_header`. Read `tools/test_build_level.py` for the test style.
 
@@ -264,7 +281,7 @@ Add the data the content + scene need (mirror the existing nullable-array+count 
 
 ## Phase 3 — Engine/scene wiring (pound input, impact resolution, falling terrain LAST, VFX)
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED — 2026-06-13. Commits: e83c2f3 (3.1 input+ability flag), b24c8fa (3.2 cracked-floor/heavy/crush/boulder), e80de4e (3.3 loose platforms), aa4a8ce (3.4 VFX), 13b9fa6 (impact-row correctness fix — cracked floor/boulder match the SOLID tile under the feet, distinct from the plate-trip occupied-tile row). 261/261 host tests; ROM fixed; purity OK. New pure helper `include/logic/stone_impact.h` (`loose_platform_in_shockwave`, Chebyshev radius 6) with `test/test_stone_impact.cpp`. No existing logic-layer file modified.
 
 **BEFORE starting:** read `src/game/scene_dungeon.cpp` — specifically the dash→CrackedWall block (`~424-430`: `if(!gi.open && gi.spawn.type==GateType::CrackedWall && player.dash.active() && aabb_overlap(player.body, gi.body)){ gi.open=true; open_column(...); persist_latch(...); }`), the plate resolution (`~500-505`), the enemy bolt/fire/contact block (`~440-453`), `open_column`/`fill_column` (`~89-104`), and `src/engine/input.cpp`. **Do NOT modify `src/logic/`** (Phase 1 is frozen).
 
@@ -324,7 +341,7 @@ Resolve at the player's impact tile(s) on `player.stone.just_landed()`. Mirror t
 
 ## Phase 4 — Content: Quaking Quarry (3 rooms) + hub Door 7 + no-soft-lock invariants + QA
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** 🚧 Tasks 4.1–4.3 SHIPPED (f67aff8, cf27be0, 55dde58) on `feat/m8-quaking-quarry`; 275/275 host tests, ROM fixed, purity OK. Task 4.4 (emulator QA) PENDING.
 
 **BEFORE starting:** read the D6 room files (`tools/levels/dungeon6_room*.txt/.json`) + `include/game/levels/dungeons.h` (the `DUNGEON6_DUNGEON` room set) as the authoring template, and `test/test_dungeon6_level.cpp` for the invariant style. Honor the room/camera constraint (≥30×20, content row 18, two-way doors).
 

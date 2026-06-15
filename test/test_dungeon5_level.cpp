@@ -33,3 +33,28 @@ TEST(d5_combo_carried_power_obstacle){
 TEST(d5_cage_exit_enemy){
   CHECK(DUNGEON5_DATA.has_cage); CHECK(DUNGEON5_DATA.has_exit);
   CHECK(DUNGEON5_DATA.enemy_count >= 1); }
+
+// M8 retrofit: hub-return door (Q) near the spawn — exactly one, grounded on the main bottom floor.
+static int d5_tile(const LevelData& L, int x, int y){ return (int)L.tiles[y*L.w + x]; }
+TEST(d5_has_hub_return_door){
+  const LevelData& L = DUNGEON5_DATA;
+  int hub_doors = 0;
+  for(int i = 0; i < L.room_door_count; ++i)
+    if(L.room_doors[i].target_room == -1) ++hub_doors;
+  CHECK_EQ(hub_doors, 1);
+}
+TEST(d5_hub_door_grounds_on_main_floor){
+  // The Q door's 2-wide archway (cols tx, tx+1) must ground on the main bottom floor (row h-2).
+  const LevelData& L = DUNGEON5_DATA;
+  const int floor_row = L.h - 2;   // row 22 for h=24
+  for(int i = 0; i < L.room_door_count; ++i){
+    if(L.room_doors[i].target_room != -1) continue;
+    for(int dx = 0; dx < 2; ++dx){
+      int col = L.room_doors[i].tx + dx;
+      int fr = -1;
+      for(int y = L.room_doors[i].ty + 1; y < L.h; ++y)
+        if(d5_tile(L, col, y) == 1){ fr = y; break; }
+      CHECK_EQ(fr, floor_row);
+    }
+  }
+}

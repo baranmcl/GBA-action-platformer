@@ -93,7 +93,7 @@ class TestBuildLevel(unittest.TestCase):
     def test_vine_and_ice_gates(self):
         txt = "######\n#@VI.#\n######\n"
         lvl = compile_str(txt, {})
-        self.assertEqual(lvl['gates'], [(2, 1, 'Vine'), (3, 1, 'Ice')])
+        self.assertEqual(lvl['gates'], [(2, 1, 'Vine', -1), (3, 1, 'Ice', -1)])
 
     # --- M4 symbols ---
     def test_water_is_tile_4(self):
@@ -104,7 +104,7 @@ class TestBuildLevel(unittest.TestCase):
     def test_water_gate(self):
         txt = "#####\n#@W.#\n#####\n"
         lvl = compile_str(txt, {})
-        self.assertEqual(lvl['gates'], [(2, 1, 'Water')])
+        self.assertEqual(lvl['gates'], [(2, 1, 'Water', -1)])
 
     # --- M5 wind tiles ---
     def test_wind_tiles(self):
@@ -124,7 +124,7 @@ class TestBuildLevel(unittest.TestCase):
     def test_cracked_wall_gate(self):
         txt = "#####\n#@K.#\n#####\n"
         lvl = compile_str(txt, {})
-        self.assertEqual(lvl['gates'], [(2, 1, 'CrackedWall')])
+        self.assertEqual(lvl['gates'], [(2, 1, 'CrackedWall', -1)])
 
     def test_shrine_ability(self):
         txt = "#####\n#@F.#\n#####\n"
@@ -142,7 +142,7 @@ class TestBuildLevel(unittest.TestCase):
             "brazier_groups": [{"total": 1, "target": [5, 5]}],
         })
         self.assertEqual(lvl['blocks'], [(2, 1, False)])
-        self.assertEqual(lvl['plates'], [(3, 1, 6, 1)])
+        self.assertEqual(lvl['plates'], [(3, 1, 6, 1, False)])
         self.assertEqual(lvl['buttons'], [(4, 1, 6, 2)])
         self.assertEqual(lvl['braziers'], [(5, 1, 0)])
         self.assertEqual(lvl['brazier_groups'], [(1, 5, 5, -1)])  # latch_id defaults to -1
@@ -183,6 +183,22 @@ class TestBuildLevel(unittest.TestCase):
         txt = "######\n#@.D.#\n######\n"
         with self.assertRaises(build_level.LevelError):
             compile_str(txt, {})  # room-door with no target metadata
+
+    def test_exit_to_hub_door_symbol(self):
+        # 'Q' compiles to a room-door with the sentinel target_room=-1 (exit to hub),
+        # WITHOUT needing a JSON room_doors entry (hardcoded, like 'K').
+        txt = "######\n#@.Q.#\n######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['room_doors'], [(3, 1, -1, 0)])  # (tx, ty, target_room=-1, target_entrance=0)
+
+    def test_exit_to_hub_door_emit_header(self):
+        # emit_header wires the Q door into the ROOM_DOORS array with target_room=-1.
+        txt = "######\n#@.Q.#\n######\n"
+        lvl = compile_str(txt, {})
+        hdr = build_level.emit_header(lvl, "TESTQ")
+        self.assertIn("TESTQ_ROOM_DOORS", hdr)
+        self.assertIn("{3,1,-1,0}", hdr)
+        self.assertIn("TESTQ_ROOM_DOORS, 1", hdr)
 
     def test_brazier_group_latch_id(self):
         txt = "########\n#@*....#\n########\n"
@@ -271,6 +287,137 @@ class TestBuildLevel(unittest.TestCase):
         # Count must be 0 in the LevelData initialiser
         self.assertIn("TESTHC2_HEART_CONTAINERS, 0", hdr)
         self.assertEqual(lvl['heart_containers'], [])
+
+
+    # --- M8 symbols: Task 2.2 heavy (pound-only) flag on plates ---
+    def test_heavy_plate_flag_true(self):
+        # A plate entry with "heavy": true must produce a plate tuple with heavy=True (5th element)
+        txt = "#######\n#@.=..#\n#######\n"
+        lvl = compile_str(txt, {"plates": [{"target": [3, 4], "heavy": True}]})
+        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, True)])
+
+    def test_heavy_plate_flag_false_by_default(self):
+        # A plate entry without "heavy" defaults to False
+        txt = "#######\n#@.=..#\n#######\n"
+        lvl = compile_str(txt, {"plates": [{"target": [3, 4]}]})
+        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, False)])
+
+    def test_heavy_plate_emit_header_true(self):
+        # emit_header must include the bool in the PlateSpawn initializer
+        txt = "#######\n#@.=..#\n#######\n"
+        lvl = compile_str(txt, {"plates": [{"target": [3, 4], "heavy": True}]})
+        hdr = build_level.emit_header(lvl, "TESTHP")
+        self.assertIn("{3,1,3,4,true}", hdr)
+
+    def test_heavy_plate_emit_header_false(self):
+        # Non-heavy plate must emit false
+        txt = "#######\n#@.=..#\n#######\n"
+        lvl = compile_str(txt, {"plates": [{"target": [3, 4]}]})
+        hdr = build_level.emit_header(lvl, "TESTHPF")
+        self.assertIn("{3,1,3,4,false}", hdr)
+
+    def test_existing_plate_test_still_green(self):
+        # The existing block/plate/button/brazier test data still compiles correctly
+        txt = "########\n#@B=?*.#\n########\n"
+        lvl = compile_str(txt, {
+            "plates": [{"target": [6, 1]}],
+            "buttons": [{"target": [6, 2]}],
+            "braziers": [{"group": 0}],
+            "brazier_groups": [{"total": 1, "target": [5, 5]}],
+        })
+        # plate still at (3,1) targeting (6,1); heavy defaults False (5th field)
+        self.assertEqual(lvl['plates'], [(3, 1, 6, 1, False)])
+
+    # --- M8 symbols: Task 2.3 boulder 'O' + loose-platform ':' ---
+    def test_boulder_symbol(self):
+        # 'O' compiles to a boulder at the right tile position
+        txt = "#######\n#@.O..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['boulders'], [(3, 1)])
+
+    def test_boulder_tile_is_empty(self):
+        # 'O' is a content symbol: collision tile under it must be 0
+        txt = "#######\n#@.O..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['tiles'][lvl['w'] * 1 + 3], 0)
+
+    def test_boulder_emit_header(self):
+        # emit_header includes BOULDERS array and wires boulder_count into LevelData
+        txt = "#######\n#@.O..#\n#######\n"
+        lvl = compile_str(txt, {})
+        hdr = build_level.emit_header(lvl, "TESTBO")
+        self.assertIn("TESTBO_BOULDERS", hdr)
+        self.assertIn("{3,1}", hdr)  # BoulderSpawn {tx, ty}
+        self.assertIn("TESTBO_BOULDERS, 1", hdr)  # count in LevelData
+
+    def test_boulder_absent_still_compiles(self):
+        # Level without 'O': null dummy array + count 0 in LevelData
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4]}]})
+        hdr = build_level.emit_header(lvl, "TESTBO2")
+        self.assertIn("TESTBO2_BOULDERS", hdr)
+        self.assertIn("TESTBO2_BOULDERS, 0", hdr)
+        self.assertEqual(lvl['boulders'], [])
+
+    def test_loose_platform_symbol_with_json_len(self):
+        # ':' with JSON loose_platforms entry emits LoosePlatformSpawn(tx, ty, len)
+        txt = "#######\n#@.:.:#\n#######\n"
+        lvl = compile_str(txt, {"loose_platforms": [{"len": 3}, {"len": 2}]})
+        self.assertEqual(lvl['loose_platforms'], [(3, 1, 3), (5, 1, 2)])
+
+    def test_loose_platform_default_len_1(self):
+        # ':' without JSON entry defaults to len=1
+        txt = "#######\n#@.:..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['loose_platforms'], [(3, 1, 1)])
+
+    def test_loose_platform_tile_is_empty(self):
+        # ':' is a content symbol: collision tile must be 0
+        txt = "#######\n#@.:..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['tiles'][lvl['w'] * 1 + 3], 0)
+
+    def test_loose_platform_emit_header(self):
+        # emit_header includes LOOSE_PLATFORMS array and wires count into LevelData
+        txt = "#######\n#@.:..#\n#######\n"
+        lvl = compile_str(txt, {"loose_platforms": [{"len": 4}]})
+        hdr = build_level.emit_header(lvl, "TESTLP")
+        self.assertIn("TESTLP_LOOSE_PLATFORMS", hdr)
+        self.assertIn("{3,1,4}", hdr)  # LoosePlatformSpawn {tx, ty, len}
+        self.assertIn("TESTLP_LOOSE_PLATFORMS, 1", hdr)
+
+    def test_loose_platform_absent_still_compiles(self):
+        # Level without ':': dummy array + count 0
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4]}]})
+        hdr = build_level.emit_header(lvl, "TESTLP2")
+        self.assertIn("TESTLP2_LOOSE_PLATFORMS", hdr)
+        self.assertIn("TESTLP2_LOOSE_PLATFORMS, 0", hdr)
+        self.assertEqual(lvl['loose_platforms'], [])
+
+    # --- M8 symbols: Task 2.1 CrackedFloor gate 'k' ---
+    def test_cracked_floor_gate(self):
+        # 'k' compiles to a gate with GateType::CrackedFloor
+        txt = "#####\n#@k.#\n#####\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['gates'], [(2, 1, 'CrackedFloor', -1)])
+
+    def test_cracked_floor_gate_tile_is_empty(self):
+        # 'k' is a content symbol: collision tile under it must be 0 (empty)
+        txt = "#####\n#@k.#\n#####\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['tiles'][lvl['w'] * 1 + 2], 0)
+
+    def test_cracked_floor_latch_id(self):
+        # A 'k' with a JSON cracked_floors latch_id carries it through to the gate tuple (the
+        # SRAM-persisted Stone shortcut). Scan-order indexed like entrances/loose_platforms.
+        txt = "######\n#@kk.#\n######\n"
+        lvl = compile_str(txt, {"cracked_floors": [{"latch_id": 1}]})
+        self.assertEqual(lvl['gates'], [(2, 1, 'CrackedFloor', 1), (3, 1, 'CrackedFloor', -1)])
+
+    def test_level_without_k_still_compiles(self):
+        # A level with no 'k' still compiles with an empty gates list
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4]}]})
+        cracked_floor_gates = [g for g in lvl['gates'] if g[2] == 'CrackedFloor']
+        self.assertEqual(cracked_floor_gates, [])
 
 
 if __name__ == '__main__':

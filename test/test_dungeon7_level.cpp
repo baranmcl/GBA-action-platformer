@@ -1,0 +1,887 @@
+#include "test_framework.h"
+#include "game/levels/dungeons.h"
+#include "game/levels/dungeon7_room0.h"
+#include "game/levels/dungeon7_room1.h"
+#include "game/levels/dungeon7_room2.h"
+#include <vector>
+#include <queue>
+#include <cstdio>
+using namespace logic;
+
+// Quaking Quarry (Dungeon 7) — the Stone ground-pound descent dungeon (M8).
+// Standard structural invariants (D6 style) PLUS first-class no-soft-lock invariants that each
+// FAIL on a deliberately-broken layout (verified during authoring; see the report). All assert
+// against the COMPILED DUNGEON7_ROOM* tile/entity data.
+
+static const LevelData* const D7_ROOMS[] = {
+    &DUNGEON7_ROOM0_DATA, &DUNGEON7_ROOM1_DATA, &DUNGEON7_ROOM2_DATA };
+static constexpr int D7_N = 3;
+static constexpr int CLIMB = 6;   // Featherleap double-jump reaches ~6-7 tiles; the escapable-wall bound.
+
+// ---------------------------------------------------------------------------
+// Tile classification. CRITICAL: 'k' (CrackedFloor), 'O' (boulder), ':' (loose platform) are CONTENT
+// symbols, so the COMPILED tiles[] holds Empty(0) at their positions — the SCENE makes them solid at
+// runtime. So the flood-fill must treat them as SOLID (the player walks on them / they block) from the
+// gate/boulder/loose-platform arrays, NOT from tiles[]. Hazards (Lava/Water/Spikes) are non-solid.
+// ---------------------------------------------------------------------------
+// PLAYER GEOMETRY: the Laurel body is half_w=8px (2 tiles wide) x half_h=16px (4 tiles tall) — see
+// scene_dungeon.cpp player.body. The flood-fill MODELS this 2-wide x 4-tall body: a foot-anchor is
+// (x = left body column, y = the FEET row). The body occupies columns x..x+1 and rows y-3..y. This is
+// what makes a 1-wide gap in a wall IMPASSABLE (the 2-wide body can't fit) — the bug QA round 1 hit.
+static constexpr int PW = 2;   // player width in tiles
+static constexpr int PH = 4;   // player height in tiles
+
+struct Grid {
+    int w, h;
+    std::vector<uint8_t> solid;   // 1 = blocks (Solid/IcePlatform/cracked/boulder/loose), 0 = passable
+    std::vector<uint8_t> hazard;  // 1 = Lava/Water/Spikes (passable but deadly)
+
+    bool blk(int x, int y) const {
+        if(x < 0 || y < 0 || x >= w || y >= h) return true;   // OOB is solid
+        return solid[y*w + x] != 0;
+    }
+    bool haz(int x, int y) const {
+        if(x < 0 || y < 0 || x >= w || y >= h) return false;
+        return hazard[y*w + x] != 0;
+    }
+    bool cell_clear(int x, int y) const { return !blk(x,y) && !haz(x,y); }
+
+    // The 2-wide x 4-tall body fits with feet on row y (body cols x..x+1, rows y-3..y all clear).
+    bool fits(int x, int y) const {
+        if(x < 0 || x+PW-1 >= w || y-PH+1 < 0 || y >= h) return false;
+        for(int cx = x; cx < x+PW; ++cx)
+            for(int cy = y-PH+1; cy <= y; ++cy)
+                if(!cell_clear(cx, cy)) return false;
+        return true;
+    }
+    // standable: the body fits AND there is solid support directly below the feet (either foot column).
+    bool standable(int x, int y) const {
+        return fits(x, y) && (blk(x, y+1) || blk(x+PW-1, y+1));
+    }
+};
+
+// Build the static grid for a room. opt_drop_boulder / opt_drop_loose let invariants simulate a
+// boulder removed or a loose platform dropped to its rest row.
+static Grid build_grid(const LevelData& L,
+                       int remove_boulder = -1,            // index into L.boulders to remove (clear its tile)
+                       int drop_loose = -1)                // index into L.loose_platforms to drop to rest row
+{
+    Grid g; g.w = L.w; g.h = L.h;
+    g.solid.assign(L.w*L.h, 0);
+    g.hazard.assign(L.w*L.h, 0);
+    for(int y = 0; y < L.h; ++y) for(int x = 0; x < L.w; ++x){
+        TileKind k = (TileKind)L.tiles[y*L.w + x];
+        if(k == TileKind::Solid || k == TileKind::IcePlatform) g.solid[y*L.w + x] = 1;
+        if(k == TileKind::Lava || k == TileKind::Water || k == TileKind::Spikes) g.hazard[y*L.w + x] = 1;
+    }
+    // cracked floors are solid (walked-on) until pounded
+    for(int i = 0; i < L.gate_count; ++i)
+        if(L.gates[i].type == GateType::CrackedFloor)
+            g.solid[L.gates[i].ty*L.w + L.gates[i].tx] = 1;
+    // boulders are solid
+    for(int i = 0; i < L.boulder_count; ++i)
+        if(i != remove_boulder)
+            g.solid[L.boulders[i].ty*L.w + L.boulders[i].tx] = 1;
+    // loose platforms: a solid run of `len` tiles. If drop_loose==i, place at its REST row (drop
+    // straight down to the first row whose tiles-below are all solid); else at its authored row.
+    for(int i = 0; i < L.loose_platform_count; ++i){
+        const LoosePlatformSpawn& lp = L.loose_platforms[i];
+        int ty = lp.ty;
+        if(i == drop_loose){
+            // drop straight down until the row directly below every tile of the run is solid.
+            while(ty + 1 < L.h){
+                bool rest = false;
+                for(int dx = 0; dx < lp.len; ++dx)
+                    if(g.solid[(ty+1)*L.w + (lp.tx+dx)]) rest = true;
+                if(rest) break;
+                ++ty;
+            }
+        }
+        for(int dx = 0; dx < lp.len; ++dx) g.solid[ty*L.w + (lp.tx+dx)] = 1;
+    }
+    return g;
+}
+
+// Build the "fully Stone-cleared" grid: every boulder broken + every cracked floor smashed + every
+// loose platform dropped to its rest row. Models the frontier a player WITH the Stone pound can reach
+// after performing the Stone interactions (smash lids, break boulders, drop platforms to bridge gaps).
+static Grid build_grid_stone_cleared(const LevelData& L){
+    Grid g = build_grid(L);
+    for(int i=0;i<L.boulder_count;++i)      g.solid[L.boulders[i].ty*L.w + L.boulders[i].tx] = 0;
+    for(int i=0;i<L.gate_count;++i)
+        if(L.gates[i].type==GateType::CrackedFloor)
+            g.solid[L.gates[i].ty*L.w + L.gates[i].tx] = 0;
+    for(int i=0;i<L.loose_platform_count;++i){
+        const LoosePlatformSpawn& lp = L.loose_platforms[i];
+        for(int dx=0;dx<lp.len;++dx) g.solid[lp.ty*L.w + (lp.tx+dx)] = 0;   // clear authored row
+        int ty = lp.ty;
+        while(ty+1 < L.h){
+            bool rest=false;
+            for(int dx=0;dx<lp.len;++dx) if(g.solid[(ty+1)*L.w + (lp.tx+dx)]) rest=true;
+            if(rest) break;
+            ++ty;
+        }
+        for(int dx=0;dx<lp.len;++dx) g.solid[ty*L.w + (lp.tx+dx)] = 1;       // set rest row solid
+    }
+    return g;
+}
+
+// Build the "full traversal kit MINUS the Stone pound" grid: boulders broken + loose platforms dropped
+// to their rest rows (so the player can cross the room with Stone's boulder-break/loose-drop), but every
+// CrackedFloor RE-SOLIDIFIED (the pound-through is NOT used). This is the faithful BASE-movement notion
+// for the heart gate: the heart must be UNREACHABLE even when the player can fully traverse the room and
+// stand on the deck above the alcove — only pounding through the 2-wide cracked ceiling drops them in.
+static Grid build_grid_no_pound(const LevelData& L){
+    Grid g = build_grid_stone_cleared(L);             // boulders broken + loose dropped (full traversal)
+    for(int i=0;i<L.gate_count;++i)                    // ...but cracked floors stay SOLID (no pound)
+        if(L.gates[i].type==GateType::CrackedFloor)
+            g.solid[L.gates[i].ty*L.w + L.gates[i].tx] = 1;
+    return g;
+}
+
+// Freeze every Water tile in-place: the Ice spell turns a water run into a standable IcePlatform-like
+// bridge. Models the FULL-path notion for water-gated beats (water becomes solid/standable, no longer a
+// hazard). Mutates the passed grid. BASE movement (no freeze) leaves water a non-standable hazard.
+static void freeze_water(const LevelData& L, Grid& g){
+    for(int y=0;y<L.h;++y) for(int x=0;x<L.w;++x){
+        if((TileKind)L.tiles[y*L.w + x] == TileKind::Water){
+            g.hazard[y*L.w + x] = 0;
+            g.solid [y*L.w + x] = 1;   // frozen surface is standable
+        }
+    }
+}
+
+// Mark every DarkVeil gate tile SOLID — its CLOSED state (a solid wall only the heavy switch opens via
+// open_column; not bypassable by any owned ability). build_grid() leaves DarkVeil passable, so the
+// gating/re-entry invariants must add it explicitly.
+static void close_dark_veil(const LevelData& L, Grid& g){
+    for(int i=0;i<L.gate_count;++i)
+        if(L.gates[i].type==GateType::DarkVeil)
+            g.solid[L.gates[i].ty*L.w + L.gates[i].tx] = 1;
+}
+// Simulate the heavy switch firing open_column(tx): clear collision at columns tx and tx+1 for the
+// full interior height (mirrors scene_dungeon.cpp open_column, rows 1..h-3). Opens the DarkVeil gate.
+static void open_heavy_gate(const LevelData& L, Grid& g, int tx){
+    for(int ty=1; ty<L.h-2; ++ty) for(int dx=0; dx<2; ++dx){
+        int x = tx+dx; if(x<0||x>=L.w) continue;
+        g.solid[ty*L.w + x] = 0;
+    }
+}
+
+// Snap a (sx, foot-row sy) start to the nearest standable 2-wide foot-anchor at/below it.
+static bool snap_start(const Grid& g, int& sx, int& sy){
+    // entrances/spawns are authored on the content row (18); the feet rest on row 19. Try the column
+    // as the LEFT body column first, then shifted one left (so the 2-wide body straddles the tile).
+    for(int lx : { sx, sx-1 }){
+        int y = sy;
+        while(y < g.h){
+            if(g.standable(lx, y)){ sx = lx; sy = y; return true; }
+            // fall further down this column
+            if(g.fits(lx, y) && !(g.blk(lx,y+1)||g.blk(lx+PW-1,y+1))) { ++y; continue; }
+            ++y;
+        }
+    }
+    return false;
+}
+
+// Bounded reachability flood-fill over 2-wide x 4-tall STANDABLE foot-anchors (x = left body column,
+// y = feet row). A move shifts the footprint one column left/right then settles vertically:
+//   * step across to a same-or-near-height standable anchor,
+//   * climb up to <= CLIMB rows (double-jump) to a higher anchor (needs head clearance),
+//   * drop down (any depth) to the first standable anchor.
+// The leading column must be clear for the body height during the shift (so 1-wide holes don't pass).
+// Result keys reached anchors at index (y*w + x).
+static std::vector<uint8_t> reachable(const Grid& g, int sx, int sy){
+    std::vector<uint8_t> seen(g.w*g.h, 0);
+    if(!snap_start(g, sx, sy)) return seen;
+    std::queue<std::pair<int,int>> q;
+    auto push = [&](int x, int y){
+        if(x<0||y<0||x>=g.w||y>=g.h) return;
+        if(!g.standable(x,y) || seen[y*g.w+x]) return;
+        seen[y*g.w+x] = 1; q.push({x,y});
+    };
+    push(sx, sy);
+    while(!q.empty()){
+        auto [x,y] = q.front(); q.pop();
+        // Straight-up climb in the SAME column (a player-width vertical shaft): rise <= CLIMB rows to a
+        // higher standable anchor at the same footprint. Needed for 2-wide shafts where no lateral
+        // move is possible (walls flush on both sides), e.g. climbing out of a 2-wide heart pit.
+        for(int up = 1; up <= CLIMB; ++up){
+            int ny = y - up;
+            if(ny - PH + 1 < 0) break;
+            if(!g.fits(x, ny)) break;             // a ceiling/ledge blocks rising further
+            if(g.standable(x, ny)) push(x, ny);
+        }
+        for(int dir = -1; dir <= 1; dir += 2){
+            int nx = x + dir;                     // new LEFT body column after the shift
+            // Climb up onto an adjacent LEDGE (the realistic motion: jump straight up in your own
+            // column to the apex height, then nudge sideways onto the ledge at that height). Allowed
+            // when the player can rise in their OWN column to row ny (fits(x,ny)) AND the destination
+            // footprint is a standable anchor (standable(nx,ny)), for any ny in [y-CLIMB, y-1]. This
+            // does NOT require the destination column to be clear at the intermediate rows (the ledge
+            // tile itself is below the landing), so climbing ONTO a ledge works.
+            for(int up = 1; up <= CLIMB; ++up){
+                int ny = y - up;
+                if(ny - PH + 1 < 0) break;
+                if(!g.fits(x, ny)) break;         // can't rise this high in our own column (ceiling)
+                if(g.standable(nx, ny)) push(nx, ny);
+            }
+            // Step across / drop: from the current foot row, the body must be able to slide into the
+            // new footprint at row y (same height) — require fits(nx,y) — then fall to the first anchor.
+            if(g.fits(nx, y)){
+                int ny = y;
+                while(ny+1 < g.h && g.fits(nx, ny+1) && !(g.blk(nx,ny+1)||g.blk(nx+PW-1,ny+1))) ++ny;
+                if(g.standable(nx, ny)) push(nx, ny);
+                else if(g.standable(nx, y)) push(nx, y);
+            }
+        }
+    }
+    return seen;
+}
+
+// True if a reached 2-wide foot-anchor stands AT a target (door/cage/exit). The SPRITE sits on the
+// content row (18); the player stands with feet on the floor row (ty+1) and a 2-wide footprint whose
+// left column is tx-1 or tx (the body straddles/covers the sprite tile).
+static bool stands_at(const LevelData& L, const std::vector<uint8_t>& seen, int tx, int ty){
+    for(int dy = 0; dy <= 1; ++dy){            // sprite row, or the feet row just below it
+        int fy = ty + dy;
+        if(fy < 0 || fy >= L.h) continue;
+        for(int lx = tx-PW+1; lx <= tx; ++lx)  // any 2-wide footprint covering column tx
+            if(lx >= 0 && lx < L.w && seen[fy*L.w + lx]) return true;
+    }
+    return false;
+}
+static bool reaches_forward_exit(const LevelData& L, const std::vector<uint8_t>& seen){
+    for(int i = 0; i < L.room_door_count; ++i)
+        if(stands_at(L, seen, L.room_doors[i].tx, L.room_doors[i].ty)) return true;
+    if(L.has_cage && stands_at(L, seen, L.cage_tx, L.cage_ty)) return true;
+    if(L.has_exit && stands_at(L, seen, L.exit_tx, L.exit_ty)) return true;
+    return false;
+}
+
+// Scan straight DOWN from a cracked floor through any stacked cracked floors to the first
+// NON-cracked solid tile; return that landing row (or -1 if none / OOB).
+static bool is_cracked(const LevelData& L, int tx, int ty){
+    for(int i = 0; i < L.gate_count; ++i)
+        if(L.gates[i].type == GateType::CrackedFloor && L.gates[i].tx==tx && L.gates[i].ty==ty) return true;
+    return false;
+}
+static int pound_landing_row(const LevelData& L, const Grid& g, int tx, int ty){
+    // start at the cracked floor; the pound smashes it and every stacked cracked tile below, landing
+    // on the first NON-cracked solid tile. The landing STANDABLE row is one above that solid tile.
+    int y = ty;
+    while(y+1 < L.h){
+        int below = y+1;
+        if(is_cracked(L, tx, below)){ y = below; continue; }   // chain through stacked cracked floors
+        if(g.solid[below*L.w + tx] && !is_cracked(L, tx, below)) return y;  // land standing on row y
+        if(!g.solid[below*L.w + tx]) { ++y; continue; }        // empty -> keep falling
+        return y;
+    }
+    return -1;
+}
+
+// ===========================================================================
+// Standard structural invariants (D6 style)
+// ===========================================================================
+static bool d7_solid(const LevelData& L, int tx, int ty){
+    if(tx<0||ty<0||tx>=L.w||ty>=L.h) return true;
+    return (int)L.tiles[ty*L.w + tx] == (int)TileKind::Solid;
+}
+
+TEST(d7_dungeon_table){
+    CHECK_EQ(DUNGEON7_DUNGEON.room_count, 3);
+    CHECK_EQ(DUNGEON7_DUNGEON.start_room, 0);
+    CHECK(DUNGEON7_DUNGEON.rooms[0] == &DUNGEON7_ROOM0_DATA);
+    CHECK(DUNGEON7_DUNGEON.rooms[2] == &DUNGEON7_ROOM2_DATA);
+}
+
+TEST(d7_rooms_min_size){
+    for(int r = 0; r < D7_N; ++r){ CHECK(D7_ROOMS[r]->w >= 30); CHECK(D7_ROOMS[r]->h >= 22); }
+}
+
+TEST(d7_rooms_solid_border){
+    for(int r = 0; r < D7_N; ++r){
+        const LevelData& L = *D7_ROOMS[r];
+        for(int x = 0; x < L.w; ++x){ CHECK_EQ((int)L.tiles[x],1); CHECK_EQ((int)L.tiles[(L.h-1)*L.w+x],1); }
+        for(int y = 0; y < L.h; ++y){ CHECK_EQ((int)L.tiles[y*L.w],1); CHECK_EQ((int)L.tiles[y*L.w+(L.w-1)],1); }
+    }
+}
+
+TEST(d7_one_stone_shrine){
+    int shrines = 0; bool stone = false;
+    for(int r = 0; r < D7_N; ++r){
+        const LevelData& L = *D7_ROOMS[r];
+        for(int i = 0; i < L.pickup_count; ++i){ ++shrines; if(L.pickups[i].ability==Ability::Stone) stone=true; }
+    }
+    CHECK_EQ(shrines, 1); CHECK(stone);
+}
+
+TEST(d7_one_spronk_one_exit_grounded){
+    int cages=0, exits=0;
+    for(int r = 0; r < D7_N; ++r){
+        const LevelData& L = *D7_ROOMS[r];
+        if(L.has_cage){ ++cages; CHECK_EQ(L.cage_ty,18); CHECK(d7_solid(L,L.cage_tx,20)); }
+        if(L.has_exit){ ++exits; CHECK_EQ(L.exit_ty,18); CHECK(d7_solid(L,L.exit_tx,20)); }
+    }
+    CHECK_EQ(cages,1); CHECK_EQ(exits,1);
+}
+
+TEST(d7_floor_content_on_row_18){
+    // Floor-bound content (spawn/enemy/shrine) grounds on content row 18 (feet land on the row-20
+    // floor). NOTE: heart containers are EXEMPT — the engine places a heart via a static overlap body
+    // at its exact tile (no floor-scan), so a heart may legitimately sit on a raised ledge (D7's heart
+    // is on a Stone-gated mezzanine ledge). Its grounding + Stone-gating is covered by the heart-alcove
+    // invariant; here we only require it has solid directly below so it doesn't float.
+    for(int r = 0; r < D7_N; ++r){
+        const LevelData& L = *D7_ROOMS[r];
+        CHECK_EQ(L.spawn_ty, 18);
+        for(int i=0;i<L.enemy_count;++i)  CHECK_EQ((int)L.enemies[i].ty,18);
+        for(int i=0;i<L.pickup_count;++i) CHECK_EQ((int)L.pickups[i].ty,18);
+        for(int i=0;i<L.heart_container_count;++i){
+            const HeartContainerSpawn& hc = L.heart_containers[i];
+            CHECK(hc.ty+1 < L.h && (int)L.tiles[(hc.ty+1)*L.w + hc.tx] == (int)TileKind::Solid); // solid below
+        }
+    }
+}
+
+TEST(d7_room_doors_resolve_and_two_way){
+    // Every room-door target resolves to an existing entrance; the hub-room (0) branches to 1 and 2,
+    // and each branch returns to a DISTINCT entrance in room 0 (co-located return entrance pattern).
+    for(int r = 0; r < D7_N; ++r){
+        const LevelData& L = *D7_ROOMS[r];
+        for(int i = 0; i < L.room_door_count; ++i){
+            const RoomDoorSpawn& d = L.room_doors[i];
+            if(d.target_room < 0) continue;   // hub-exit door (Q, target_room=-1): returns to the hub,
+                                              // re-enterable; it needs no in-room return entrance.
+            CHECK(d.target_room>=0 && d.target_room<D7_N);
+            const LevelData& T = *D7_ROOMS[d.target_room];
+            bool found=false; for(int e=0;e<T.entrance_count;++e) if(T.entrances[e].id==d.target_entrance) found=true;
+            CHECK(found);
+            // Two-way return entrance. Normally co-located: a same-row entrance within 1..2 tiles of
+            // the door. EXCEPTION for a GATE-GUARDED door: a door sealed behind a 2-wide DarkVeil fill
+            // (cols gate..gate+1) CANNOT have its return entrance within 2 tiles on the SAFE side — the
+            // entrance must clear the gate fill (and not float its archway on it), so it sits just beyond
+            // the gate with a DarkVeil column strictly between it and the door. That paired-across-the-gate
+            // entrance is the legitimate return spot (the player teleports to the safe side on return).
+            auto darkveil_between=[&](int a,int b){     // a DarkVeil gate column strictly between cols a,b
+                int lo=a<b?a:b, hi=a<b?b:a;
+                for(int gi=0; gi<L.gate_count; ++gi)
+                    if(L.gates[gi].type==GateType::DarkVeil && L.gates[gi].tx>lo && L.gates[gi].tx<hi) return true;
+                return false;
+            };
+            bool near=false;
+            for(int e=0;e<L.entrance_count;++e){
+                const EntranceSpawn& n=L.entrances[e];
+                if(n.ty!=d.ty) continue;
+                int dx=n.tx-d.tx; if(dx<0) dx=-dx;
+                if(dx>=1 && dx<=2) near=true;                                   // co-located (ungated door)
+                else if(dx>=1 && darkveil_between(n.tx,d.tx)) near=true;        // paired across a DarkVeil gate
+            }
+            CHECK(near);
+        }
+    }
+    // explicit two-way wiring (room0 hubs to 1 and 2; each returns to a distinct room0 entrance)
+    auto has_door=[&](const LevelData& L,int tr,int te){
+        for(int i=0;i<L.room_door_count;++i)
+            if(L.room_doors[i].target_room==tr && L.room_doors[i].target_entrance==te) return true;
+        return false;
+    };
+    auto has_ent=[&](const LevelData& L,int id){
+        for(int i=0;i<L.entrance_count;++i) if(L.entrances[i].id==id) return true;
+        return false;
+    };
+    CHECK(has_door(DUNGEON7_ROOM0_DATA,1,0)); CHECK(has_door(DUNGEON7_ROOM0_DATA,2,0));
+    CHECK(has_door(DUNGEON7_ROOM1_DATA,0,1)); CHECK(has_ent(DUNGEON7_ROOM1_DATA,0));
+    CHECK(has_door(DUNGEON7_ROOM2_DATA,0,2)); CHECK(has_ent(DUNGEON7_ROOM2_DATA,0));
+    CHECK(has_ent(DUNGEON7_ROOM0_DATA,1)); CHECK(has_ent(DUNGEON7_ROOM0_DATA,2));
+}
+
+TEST(d7_has_latched_shortcut){
+    // >=1 CrackedFloor gate carries a latch_id >= 0 (the SRAM-persisted Stone shortcut, room 1).
+    int latched = 0;
+    for(int r = 0; r < D7_N; ++r){ const LevelData& L = *D7_ROOMS[r];
+        for(int i=0;i<L.gate_count;++i)
+            if(L.gates[i].type==GateType::CrackedFloor && L.gates[i].latch_id>=0) ++latched; }
+    CHECK(latched >= 1);
+}
+
+TEST(d7_every_cracked_floor_reachable_via_grid){
+    // Every cracked floor's TILE is part of the static blocking grid (a walkable surface), i.e. it has
+    // clear air directly above it so a pound can land on it.
+    for(int r = 0; r < D7_N; ++r){
+        const LevelData& L = *D7_ROOMS[r]; Grid g = build_grid(L);
+        for(int i=0;i<L.gate_count;++i){ if(L.gates[i].type!=GateType::CrackedFloor) continue;
+            int tx=L.gates[i].tx, ty=L.gates[i].ty;
+            CHECK(g.solid[ty*L.w+tx]);            // the cracked tile blocks (walkable)
+            CHECK(!g.blk(tx, ty-1));              // clear air directly above (a pound can land here)
+        }
+    }
+}
+
+// ===========================================================================
+// NO-SOFT-LOCK INVARIANTS (first-class). Each is verified to FAIL on a broken layout.
+// ===========================================================================
+
+// 1. Every cracked-floor drop has a forward exit reachable from the true landing tile.
+TEST(d7_every_cracked_floor_drop_has_forward_exit){
+    int checked = 0;
+    for(int r = 0; r < D7_N; ++r){
+        const LevelData& L = *D7_ROOMS[r]; Grid g = build_grid(L);
+        for(int i=0;i<L.gate_count;++i){ if(L.gates[i].type!=GateType::CrackedFloor) continue;
+            int tx=L.gates[i].tx, ty=L.gates[i].ty;
+            int land = pound_landing_row(L, g, tx, ty);
+            CHECK(land >= 0);                              // the plunge ends on real ground
+            if(land < 0) continue;
+            // Flood from the landing on the player's achievable frontier: Stone-cleared (all cracked
+            // smashed + boulders broken + loose platforms dropped to bridge gaps). Require a forward exit.
+            Grid gp = build_grid_stone_cleared(L);
+            std::vector<uint8_t> seen = reachable(gp, tx, land);
+            bool ok = reaches_forward_exit(L, seen);
+            CHECK(ok);
+            ++checked;
+            std::printf("  [drop-exit] room %d k(%d,%d) lands row %d -> forward-exit %s\n",
+                        r, tx, ty, land, ok?"reached":"MISSING");
+        }
+    }
+    CHECK(checked >= 1);    // non-vacuity: we actually checked some drops
+}
+
+// 2. No pound lands in (or plunges through) a hazard.
+TEST(d7_no_pound_lands_in_hazard){
+    int checked = 0;
+    for(int r = 0; r < D7_N; ++r){
+        const LevelData& L = *D7_ROOMS[r]; Grid g = build_grid(L);
+        for(int i=0;i<L.gate_count;++i){ if(L.gates[i].type!=GateType::CrackedFloor) continue;
+            int tx=L.gates[i].tx, ty=L.gates[i].ty;
+            int land = pound_landing_row(L, g, tx, ty);
+            // scan every traversed tile from the cracked floor down to (and including) the landing tile.
+            for(int y=ty; y<=(land<0? L.h-1 : land+1); ++y){
+                bool hz = g.haz(tx,y);
+                CHECK(!hz);
+                if(hz) std::printf("  [hazard] room %d k(%d,%d) plunge hits hazard at (%d,%d)\n", r,tx,ty,tx,y);
+            }
+            ++checked;
+        }
+    }
+    CHECK(checked >= 1);
+}
+
+// 3. Manipulable objects (boulders, loose platforms) cannot strand the player.
+TEST(d7_manipulable_objects_cannot_strand){
+    int covered = 0;
+    for(int r = 0; r < D7_N; ++r){
+        const LevelData& L = *D7_ROOMS[r];
+        // boulders: after removing each (pounded away), a forward exit stays reachable from the entrance,
+        // and its tile does not overlap a door/cage/exit.
+        for(int b=0;b<L.boulder_count;++b){
+            Grid g = build_grid(L, /*remove_boulder*/b);
+            // start the flood from the room's first entrance (fallback: spawn).
+            int sx = L.entrance_count? L.entrances[0].tx : L.spawn_tx;
+            int sy = L.entrance_count? L.entrances[0].ty : L.spawn_ty;
+            std::vector<uint8_t> seen = reachable(g, sx, sy);
+            bool ok = reaches_forward_exit(L, seen);
+            CHECK(ok);
+            std::printf("  [boulder] room %d O(%d,%d) removed -> forward-exit %s\n",
+                        r, L.boulders[b].tx, L.boulders[b].ty, ok?"reached":"MISSING");
+            ++covered;
+        }
+        // loose platforms: after dropping each to its rest row, a forward exit stays reachable AND the
+        // rest tiles don't overlap a door/cage/exit (no sealing the goal).
+        for(int p=0;p<L.loose_platform_count;++p){
+            Grid g = build_grid(L, -1, /*drop_loose*/p);
+            int sx = L.entrance_count? L.entrances[0].tx : L.spawn_tx;
+            int sy = L.entrance_count? L.entrances[0].ty : L.spawn_ty;
+            std::vector<uint8_t> seen = reachable(g, sx, sy);
+            bool ok = reaches_forward_exit(L, seen);
+            CHECK(ok);
+            // compute the rest row and assert none of its tiles is a door/cage/exit tile.
+            const LoosePlatformSpawn& lp = L.loose_platforms[p];
+            // recompute the rest row (mirror build_grid's drop) on a boulder-less static grid
+            Grid base = build_grid(L);
+            int ty = lp.ty;
+            while(ty+1 < L.h){
+                bool rest=false;
+                for(int dx=0;dx<lp.len;++dx) if(base.solid[(ty+1)*L.w+(lp.tx+dx)]) rest=true;
+                if(rest) break;
+                ++ty;
+            }
+            for(int dx=0; dx<lp.len; ++dx){ int x=lp.tx+dx;
+                for(int i=0;i<L.room_door_count;++i) CHECK(!(L.room_doors[i].tx==x && L.room_doors[i].ty==ty));
+                if(L.has_cage) CHECK(!(L.cage_tx==x && L.cage_ty==ty));
+                if(L.has_exit) CHECK(!(L.exit_tx==x && L.exit_ty==ty));
+            }
+            std::printf("  [loose] room %d :(%d,%d,len%d) rests row %d -> forward-exit %s\n",
+                        r, lp.tx, lp.ty, lp.len, ty, ok?"reached":"MISSING");
+            ++covered;
+        }
+        // heavy switches: each targets a column that a gate occupies (it OPENS a gate, never seals one).
+        for(int i=0;i<L.plate_count;++i){ if(!L.plates[i].heavy) continue;
+            bool targets_gate=false;
+            for(int gi=0; gi<L.gate_count; ++gi)
+                if(L.gates[gi].tx==L.plates[i].target_tx) targets_gate=true;
+            CHECK(targets_gate);
+            std::printf("  [heavy] room %d plate(%d,%d) -> opens gate col %d : %s\n",
+                        r, L.plates[i].tx, L.plates[i].ty, L.plates[i].target_tx, targets_gate?"yes":"NO");
+            ++covered;
+        }
+    }
+    std::printf("  [objects] covered %d manipulable outcomes\n", covered);
+    CHECK(covered >= 1);
+}
+
+// 4. No pound deposits the player in an inescapable pit. Every cracked-floor landing is either
+//    climbable out (<=CLIMB wall) OR reaches a forward exit OR is the intended terminal (the spronk).
+TEST(d7_no_pound_pit_traps){
+    int checked = 0;
+    for(int r = 0; r < D7_N; ++r){
+        const LevelData& L = *D7_ROOMS[r]; Grid g = build_grid(L);
+        for(int i=0;i<L.gate_count;++i){ if(L.gates[i].type!=GateType::CrackedFloor) continue;
+            int tx=L.gates[i].tx, ty=L.gates[i].ty;
+            int land = pound_landing_row(L, g, tx, ty);
+            CHECK(land>=0); if(land<0) continue;
+            Grid gp = build_grid_stone_cleared(L);
+            std::vector<uint8_t> seen = reachable(gp, tx, land);
+            bool exit_ok = reaches_forward_exit(L, seen);
+            // terminal: the landing reaches the cage/exit -> intended end (handled by exit_ok via cage/exit).
+            // climbable: from the landing, is there ANY route out of the immediate pit (reached set > the
+            //   landing column alone, i.e. the player can leave the landing column)?
+            int reached_cells = 0; for(uint8_t v : seen) reached_cells += v;
+            bool can_leave = reached_cells > 1;
+            CHECK(exit_ok || can_leave);
+            ++checked;
+            if(!(exit_ok || can_leave))
+                std::printf("  [pit] room %d k(%d,%d) land row %d is an INESCAPABLE pit\n", r,tx,ty,land);
+        }
+    }
+    CHECK(checked >= 1);
+}
+
+// 5. Magic-gated beats have a magic source (enemy 'o') in the same room or an earlier (lower-index)
+//    room along the path from start. Room 2's Ice water-gap is funded by room 0 and/or room 2 enemies.
+TEST(d7_magic_beats_have_a_source_before_them){
+    auto room_has_water = [](const LevelData& L)->bool{
+        for(int i=0;i<L.w*L.h;++i) if((TileKind)L.tiles[i]==TileKind::Water) return true;
+        return false;
+    };
+    int beats = 0;
+    for(int r = 0; r < D7_N; ++r){
+        const LevelData& L = *D7_ROOMS[r];
+        if(!room_has_water(L)) continue;
+        ++beats;
+        // a magic source in this room OR any lower-index room (rooms are reached from room 0).
+        bool source = false;
+        for(int rr = 0; rr <= r; ++rr) if(D7_ROOMS[rr]->enemy_count >= 1) source = true;
+        CHECK(source);
+        std::printf("  [magic] room %d has a Water beat; magic source <= room %d: %s\n", r, r, source?"yes":"NO");
+    }
+    std::printf("  [magic] %d magic-gated beats checked\n", beats);
+    CHECK(beats >= 1);
+}
+
+// 6. Heart-container alcoves are REACHABLE (with the Stone kit) AND RETURNABLE (the player can grab H
+//    and LEAVE) — the soft-lock QA round 1 hit (a 1-wide entry the 2-wide body couldn't fit + a sealed
+//    well with no exit). With the 2-wide model + one-way-drop reachability, a sealed/1-wide alcove fails
+//    BOTH halves: it is unreachable (1-wide) and/or un-returnable (sealed well).
+TEST(d7_heart_alcove_reachable_and_returnable){
+    int checked = 0;
+    for(int r = 0; r < D7_N; ++r){
+        const LevelData& L = *D7_ROOMS[r];
+        for(int i=0;i<L.heart_container_count;++i){
+            const HeartContainerSpawn& hc = L.heart_containers[i];
+            Grid g = build_grid_stone_cleared(L);
+            int sx = L.entrance_count? L.entrances[0].tx : L.spawn_tx;
+            int sy = L.entrance_count? L.entrances[0].ty : L.spawn_ty;
+            // (a) reachable from the entrance: a reached anchor must STAND AT the heart tile.
+            std::vector<uint8_t> from_entrance = reachable(g, sx, sy);
+            bool reach = stands_at(L, from_entrance, hc.tx, hc.ty);
+            CHECK(reach);
+            // (b) returnable: flooding FROM the heart standing anchor must reach a forward exit (door).
+            //     Find a standable anchor that stands at the heart, seed reachability there.
+            bool returnable = false;
+            for(int lx = hc.tx-PW+1; lx <= hc.tx && !returnable; ++lx){
+                for(int fy = hc.ty+1; fy >= hc.ty && !returnable; --fy){
+                    if(lx<0||lx>=L.w||fy<0||fy>=L.h) continue;
+                    if(!g.standable(lx, fy)) continue;
+                    std::vector<uint8_t> from_heart = reachable(g, lx, fy);
+                    if(reaches_forward_exit(L, from_heart)) returnable = true;
+                }
+            }
+            CHECK(returnable);
+            std::printf("  [heart] room %d H(%d,%d): reachable=%s returnable=%s\n",
+                        r, hc.tx, hc.ty, reach?"yes":"NO", returnable?"yes":"NO");
+            ++checked;
+        }
+    }
+    std::printf("  [heart] %d heart alcoves checked\n", checked);
+    CHECK(checked >= 1);
+}
+
+// 7. No one-way traps: every region the player can ENTER from the room entrance, they can also LEAVE
+//    (re-reach a forward exit) — UNLESS it is the intended terminal (the spronk chamber: a region that
+//    contains the cage/exit). Concretely: for every cracked-floor LANDING anchor reachable from the
+//    entrance, flooding from that landing must re-reach a forward exit. A deep sealed pit fails this.
+TEST(d7_no_one_way_traps){
+    int checked = 0, terminals = 0;
+    for(int r = 0; r < D7_N; ++r){
+        const LevelData& L = *D7_ROOMS[r];
+        Grid g = build_grid(L);
+        for(int i=0;i<L.gate_count;++i){ if(L.gates[i].type!=GateType::CrackedFloor) continue;
+            int tx=L.gates[i].tx, ty=L.gates[i].ty;
+            int land = pound_landing_row(L, g, tx, ty);
+            if(land < 0) continue;
+            Grid gp = build_grid_stone_cleared(L);
+            // seed reachability from the landing anchor (snap to a 2-wide standable foot there).
+            std::vector<uint8_t> from_land = reachable(gp, tx, land);
+            bool can_leave = reaches_forward_exit(L, from_land);
+            // a landing that itself stands at the cage/exit IS the terminal -> exempt.
+            bool is_terminal = (L.has_cage && stands_at(L, from_land, L.cage_tx, L.cage_ty))
+                            || (L.has_exit && stands_at(L, from_land, L.exit_tx, L.exit_ty));
+            if(is_terminal){ ++terminals; }
+            CHECK(can_leave);   // reaches_forward_exit includes cage/exit, so terminals also pass
+            if(!can_leave)
+                std::printf("  [oneway] room %d k(%d,%d) land row %d -> ONE-WAY TRAP (can't leave)\n",
+                            r,tx,ty,land);
+            ++checked;
+        }
+    }
+    std::printf("  [oneway] %d cracked-floor landings checked (%d terminal)\n", checked, terminals);
+    CHECK(checked >= 1);
+}
+
+// ===========================================================================
+// ROOM-1 / ROOM-2 "REQUIRES-X" GATING INVARIANTS (QA round 2). Each distinguishes BASE movement
+// (jump/double-jump <=CLIMB, cracked floors SOLID, water a non-standable HAZARD — proves the gate)
+// from the FULL path (Stone pound smashes cracked floors; Ice freezes water to a standable bridge).
+// Each was verified to FAIL on a deliberately-broken layout — see the report for what was broken.
+// ===========================================================================
+
+// 10. ROOM 1: the heart MUST require the Stone pound. The heart's alcove is sealed on all sides except
+//     a 2-wide cracked-floor ceiling directly above it; BASE movement (cracked SOLID) cannot reach it
+//     by any jump/double-jump/climb, and the FULL kit (cracked smashed -> a 2-wide drop into the alcove)
+//     can. Break test: open the alcove wall so a double-jump reaches it -> the BASE half goes REACHABLE
+//     (RED). (Verified by deleting a wall tile beside the heart during authoring.)
+TEST(d7_room1_heart_requires_pound){
+    const LevelData& L = DUNGEON7_ROOM1_DATA;
+    CHECK(L.heart_container_count >= 1);
+    int checked = 0;
+    for(int i=0;i<L.heart_container_count;++i){
+        const HeartContainerSpawn& hc = L.heart_containers[i];
+        // (a) FULL-TRAVERSAL-MINUS-POUND: boulders broken + loose dropped (the player CAN cross the room
+        //     with the Stone kit) but cracked floors RE-SOLIDIFIED (the pound-through is NOT used). The
+        //     heart must NOT be in the reachable set — no jump/double-jump/climb reaches the alcove even
+        //     standing on the deck right above it; only pounding the 2-wide cracked ceiling drops you in.
+        Grid base = build_grid_no_pound(L);
+        int sx = L.entrance_count? L.entrances[0].tx : L.spawn_tx;
+        int sy = L.entrance_count? L.entrances[0].ty : L.spawn_ty;
+        std::vector<uint8_t> base_seen = reachable(base, sx, sy);
+        bool base_reach = stands_at(L, base_seen, hc.tx, hc.ty);
+        CHECK(!base_reach);          // GATED: base movement cannot reach the heart.
+
+        // (b) The alcove sits directly under a 2-wide cracked-floor run: there is a CrackedFloor tile in
+        //     the heart's column (or its 2-wide footprint columns) somewhere above it, whose smash drops
+        //     the player into the alcove. Assert a cracked floor sits above the heart in its footprint.
+        bool kk_above = false;
+        for(int gi=0; gi<L.gate_count; ++gi){
+            if(L.gates[gi].type!=GateType::CrackedFloor) continue;
+            if(L.gates[gi].ty < hc.ty &&
+               (L.gates[gi].tx==hc.tx || L.gates[gi].tx==hc.tx+1 || L.gates[gi].tx==hc.tx-1))
+                kk_above = true;
+        }
+        CHECK(kk_above);             // a pound-through ceiling exists above the heart.
+
+        // (c) FULL kit: cracked smashed -> the heart IS reachable from the entrance (the pound drop +
+        //     climb-out path). Reuses the stone-cleared frontier (see d7_heart_alcove_reachable...).
+        Grid full = build_grid_stone_cleared(L);
+        std::vector<uint8_t> full_seen = reachable(full, sx, sy);
+        bool full_reach = stands_at(L, full_seen, hc.tx, hc.ty);
+        CHECK(full_reach);           // UNGATED with the Stone pound.
+
+        std::printf("  [r1-heart] H(%d,%d): base=%s full=%s kk_above=%s\n",
+                    hc.tx, hc.ty, base_reach?"REACHABLE(bad)":"gated",
+                    full_reach?"reachable":"UNREACHABLE(bad)", kk_above?"yes":"NO");
+        ++checked;
+    }
+    CHECK(checked >= 1);
+}
+
+// 11. ROOM 2: the spronk/exit MUST require the Ice freeze. With BASE movement (water a non-standable
+//     hazard, cracked SOLID) the cage C and exit E are NOT reachable from the entrance — the only
+//     crossing is the water run, capped by a low tunnel ceiling so there is no jump-over bypass. Once
+//     the water is frozen to a standable bridge (full kit + Stone pound to descend), C and E become
+//     reachable. Break test: remove the tunnel ceiling / add a bypass ledge so BASE movement crosses the
+//     water -> the BASE half goes REACHABLE (RED). (Verified by deleting the ceiling cap during authoring.)
+TEST(d7_room2_spronk_requires_freeze){
+    const LevelData& L = DUNGEON7_ROOM2_DATA;
+    CHECK(L.has_cage); CHECK(L.has_exit);
+    int sx = L.entrance_count? L.entrances[0].tx : L.spawn_tx;
+    int sy = L.entrance_count? L.entrances[0].ty : L.spawn_ty;
+
+    // (a) FULL-KIT-MINUS-FREEZE: cracked SMASHED (the Stone pound IS available) but water left a
+    //     non-standable HAZARD (the Ice freeze is NOT used). C and E must be unreachable from the
+    //     entrance — the water run is the only crossing and there is no jump-over platform bypass, so
+    //     without freezing it the player can never reach the descent / the spronk chamber.
+    Grid base = build_grid_stone_cleared(L);
+    std::vector<uint8_t> base_seen = reachable(base, sx, sy);
+    bool base_c = stands_at(L, base_seen, L.cage_tx, L.cage_ty);
+    bool base_e = stands_at(L, base_seen, L.exit_tx, L.exit_ty);
+    CHECK(!base_c); CHECK(!base_e);     // GATED by the water (no jump-over bypass).
+
+    // (b) FULL kit: freeze the water (standable bridge) + Stone-clear cracked floors. C and E reachable.
+    Grid full = build_grid_stone_cleared(L);
+    freeze_water(L, full);
+    std::vector<uint8_t> full_seen = reachable(full, sx, sy);
+    bool full_c = stands_at(L, full_seen, L.cage_tx, L.cage_ty);
+    bool full_e = stands_at(L, full_seen, L.exit_tx, L.exit_ty);
+    CHECK(full_c); CHECK(full_e);       // UNGATED once the water is frozen.
+
+    std::printf("  [r2-freeze] C(%d,%d) E(%d,%d): base=(%s,%s) frozen=(%s,%s)\n",
+                L.cage_tx,L.cage_ty,L.exit_tx,L.exit_ty,
+                base_c?"reach(bad)":"gated", base_e?"reach(bad)":"gated",
+                full_c?"reach":"MISS(bad)", full_e?"reach":"MISS(bad)");
+}
+
+// 12. ROOM 2: no exit soft-lock. From the cracked-floor DESCENT landing tile, BOTH the cage C and the
+//     exit E are reachable by the 2-wide flood-fill — the player who pounds down can always free the
+//     spronk AND leave. Break test: wall off E from the landing -> E goes unreachable from the landing
+//     (RED). (Verified by inserting a wall between the landing and E during authoring.)
+TEST(d7_room2_exit_reachable_from_descent){
+    const LevelData& L = DUNGEON7_ROOM2_DATA;
+    CHECK(L.has_cage); CHECK(L.has_exit);
+    Grid g = build_grid(L);                       // for the pound-landing scan (cracked solid)
+    int checked = 0;
+    for(int i=0;i<L.gate_count;++i){
+        if(L.gates[i].type!=GateType::CrackedFloor) continue;
+        int tx=L.gates[i].tx, ty=L.gates[i].ty;
+        int land = pound_landing_row(L, g, tx, ty);
+        CHECK(land >= 0); if(land<0) continue;
+        // Flood from the landing on the Stone-cleared frontier (cracked smashed); the chamber holds both
+        // C and E and is reachable from the landing without needing the frozen water.
+        Grid gp = build_grid_stone_cleared(L);
+        std::vector<uint8_t> seen = reachable(gp, tx, land);
+        bool c_ok = stands_at(L, seen, L.cage_tx, L.cage_ty);
+        bool e_ok = stands_at(L, seen, L.exit_tx, L.exit_ty);
+        CHECK(c_ok); CHECK(e_ok);                 // both the spronk AND the exit reachable -> no soft-lock.
+        std::printf("  [r2-descent] k(%d,%d) lands row %d -> C=%s E=%s\n",
+                    tx,ty,land, c_ok?"reached":"STUCK", e_ok?"reached":"STUCK");
+        ++checked;
+    }
+    CHECK(checked >= 1);
+}
+
+// ===========================================================================
+// ROOM 0 — QA-driven gating + re-entry-safety invariants (each FAILS on a broken layout; see report).
+// ===========================================================================
+
+// Find a room-door by its target_room in room 0 (-1 = hub-exit 'Q', 1/2 = branch rooms).
+static const RoomDoorSpawn* d7_find_door(const LevelData& L, int target_room){
+    for(int i=0;i<L.room_door_count;++i)
+        if(L.room_doors[i].target_room==target_room) return &L.room_doors[i];
+    return nullptr;
+}
+
+// 7b. DOOR GROUNDING (anti-floating-archway). The scene grounds each room-door archway on the FIRST
+//     solid tile below the door tile (floor_row_below), and a DarkVeil gate renders a 2-WIDE fill
+//     (cols gate..gate+1, rows 1..h-3) when CLOSED — the state a room loads in. If a door sits in a
+//     gate-fill column (or above any non-floor solid), its archway grounds on THAT and FLOATS above the
+//     real floor, overlapping the wall. This invariant asserts every Room-0 door column (room-1, room-2,
+//     hub-exit Q) grounds cleanly on the MAIN bottom floor (row h-2): the first solid at/below the door
+//     tile, with all DarkVeil gates CLOSED (2-wide fill), is the bottom floor row and there is NO
+//     intervening solid. Break test: place a door in a gate-fill column -> first-solid-below becomes the
+//     fill (row h-3) instead of the floor (row h-2) -> RED. (Verified by moving the door under the gate.)
+TEST(d7_room0_doors_ground_on_main_floor){
+    const LevelData& L = DUNGEON7_ROOM0_DATA;
+    const int floor_row = L.h - 2;                 // bottom interior floor row (row 20 for h=22)
+    // Render-faithful solid map with every DarkVeil gate CLOSED: its 2-wide fill (cols tx..tx+1,
+    // rows 1..h-3) mirrors scene_dungeon.cpp fill_column.
+    std::vector<uint8_t> solid(L.w*L.h, 0);
+    for(int y=0;y<L.h;++y) for(int x=0;x<L.w;++x)
+        if((TileKind)L.tiles[y*L.w+x]==TileKind::Solid || (TileKind)L.tiles[y*L.w+x]==TileKind::IcePlatform)
+            solid[y*L.w+x]=1;
+    for(int gi=0; gi<L.gate_count; ++gi){
+        if(L.gates[gi].type!=GateType::DarkVeil) continue;
+        for(int ty=1; ty<L.h-2; ++ty) for(int dx=0; dx<2; ++dx){
+            int x=L.gates[gi].tx+dx; if(x>=0 && x<L.w) solid[ty*L.w+x]=1;   // 2-wide closed fill
+        }
+    }
+    int checked=0;
+    for(int i=0;i<L.room_door_count;++i){
+        const RoomDoorSpawn& d = L.room_doors[i];
+        for(int dx=0; dx<2; ++dx){                  // the archway is 2-wide (cols d.tx, d.tx+1)
+            int col=d.tx+dx;
+            // first solid strictly below the door tile (mirrors floor_row_below)
+            int fr=-1;
+            for(int y=d.ty+1; y<L.h; ++y) if(solid[y*L.w+col]){ fr=y; break; }
+            CHECK(fr==floor_row);                   // grounds on the MAIN floor, not a gate fill/wall
+            if(fr!=floor_row)
+                std::printf("  [ground] door(%d,%d) col %d grounds at row %d (want %d) -> FLOATING\n",
+                            d.tx,d.ty,col,fr,floor_row);
+            ++checked;
+        }
+    }
+    std::printf("  [ground] %d door columns checked (all grounded on row %d)\n", checked, floor_row);
+    CHECK(checked>=4);   // >=2 doors x 2 columns
+}
+
+// 8. The Room-1 door MUST be gated behind the heavy switch: with the DarkVeil gate CLOSED and no pound
+//    (cracked floors solid), the Room-1 door is NOT reachable from spawn; once the heavy switch fires
+//    its open_column (opening the gate), it BECOMES reachable. Proves the gate genuinely blocks it.
+TEST(d7_room0_room1_requires_heavy_switch){
+    const LevelData& L = DUNGEON7_ROOM0_DATA;
+    const RoomDoorSpawn* r1 = d7_find_door(L, 1);
+    CHECK(r1 != nullptr);
+    // BASE KIT: static grid + cracked floors solid (build_grid already does this) + DarkVeil closed.
+    Grid base = build_grid(L);
+    close_dark_veil(L, base);
+    std::vector<uint8_t> seen_closed = reachable(base, L.spawn_tx, L.spawn_ty);
+    bool reachable_closed = stands_at(L, seen_closed, r1->tx, r1->ty);
+    CHECK(!reachable_closed);     // GATED: cannot reach the Room-1 door without opening the gate.
+
+    // OPEN the heavy switch's gate column(s) (mirror open_column at the heavy plate's target).
+    Grid opened = build_grid(L);
+    close_dark_veil(L, opened);
+    int heavy_target = -1;
+    for(int i=0;i<L.plate_count;++i) if(L.plates[i].heavy) heavy_target = L.plates[i].target_tx;
+    CHECK(heavy_target >= 0);
+    open_heavy_gate(L, opened, heavy_target);
+    std::vector<uint8_t> seen_open = reachable(opened, L.spawn_tx, L.spawn_ty);
+    bool reachable_open = stands_at(L, seen_open, r1->tx, r1->ty);
+    CHECK(reachable_open);        // UNGATED once the heavy switch opens the DarkVeil gate.
+    std::printf("  [r1-gate] Room-1 door (%d,%d): closed=%s open=%s\n",
+                r1->tx, r1->ty, reachable_closed?"REACHABLE(bad)":"gated", reachable_open?"reachable":"STILL-GATED(bad)");
+}
+
+// 9. RE-ENTRY SOFT-LOCK GUARD: with ALL cracked floors respawned SOLID and ALL gates CLOSED (the state a
+//    room is rebuilt into on every entry), the hub-return 'Q' door AND the Room-2 door must be reachable
+//    by the 2-wide flood-fill from the dungeon-entry spawn AND from EACH return entrance (id1, id2) —
+//    WITHOUT pounding. Guarantees the player can never be stranded after re-entry.
+TEST(d7_room0_hub_exit_and_room2_always_reachable){
+    const LevelData& L = DUNGEON7_ROOM0_DATA;
+    const RoomDoorSpawn* q  = d7_find_door(L, -1);   // hub-exit 'Q'
+    const RoomDoorSpawn* r2 = d7_find_door(L, 2);    // Room-2 door
+    CHECK(q  != nullptr);
+    CHECK(r2 != nullptr);
+
+    // Re-entry grid: cracked floors SOLID (build_grid default) + DarkVeil CLOSED. No pound, no open.
+    Grid g = build_grid(L);
+    close_dark_veil(L, g);
+
+    // Seed set: the dungeon-entry spawn, plus every return entrance (id1, id2).
+    struct Seed { const char* name; int x, y; };
+    std::vector<Seed> seeds;
+    seeds.push_back({"spawn", L.spawn_tx, L.spawn_ty});
+    for(int e=0;e<L.entrance_count;++e)
+        seeds.push_back({"entrance", L.entrances[e].tx, L.entrances[e].ty});
+
+    int verified = 0;
+    for(const Seed& s : seeds){
+        std::vector<uint8_t> seen = reachable(g, s.x, s.y);
+        bool q_ok  = stands_at(L, seen, q->tx,  q->ty);
+        bool r2_ok = stands_at(L, seen, r2->tx, r2->ty);
+        CHECK(q_ok);
+        CHECK(r2_ok);
+        std::printf("  [reentry] from %s (%d,%d): Q=%s Room2=%s\n",
+                    s.name, s.x, s.y, q_ok?"reachable":"STRANDED", r2_ok?"reachable":"STRANDED");
+        ++verified;
+    }
+    CHECK(verified >= 3);   // spawn + id1 + id2
+}

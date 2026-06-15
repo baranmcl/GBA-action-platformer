@@ -33,14 +33,15 @@ namespace game
 {
 namespace {
     logic::Fixed fx(int v){ return logic::Fixed::from_int(v); }
-    // Door N enterable: D1 always; each next door opens once the prior dungeon's spronk is freed. D7-8 not built.
+    // Door N enterable: D1 always; each next door opens once the prior dungeon's spronk is freed. D8 not built.
     bool door_enterable(int n, const logic::World& w){
         return n == 1
             || (n == 2 && w.spronk_freed(1))
             || (n == 3 && w.spronk_freed(2))
             || (n == 4 && w.spronk_freed(3))
             || (n == 5 && w.spronk_freed(4))
-            || (n == 6 && w.spronk_freed(5));
+            || (n == 6 && w.spronk_freed(5))
+            || (n == 7 && w.spronk_freed(6));
     }
 }
 
@@ -92,7 +93,28 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
 
     logic::Player player;
     player.body.half_w = fx(8); player.body.half_h = fx(16);
-    player.body.pos = { fx(HUB_DATA.spawn_tx * 8), fx(HUB_DATA.spawn_ty * 8) };
+    // Spawn at the door of the dungeon we just came from (emerge where we entered), facing into the
+    // plaza. last_dungeon == 0 means first entry from the title screen -> use the default spawn.
+    // The door's base sits on the floor at dr.ty; mirror the default spawn's vertical offset
+    // (HUB spawn_ty is 3 tiles above the door base) so the player lands cleanly on the floor in
+    // front of the archway. Door entry needs a fresh Up press, so spawning here can't re-enter it.
+    int spawn_tx = HUB_DATA.spawn_tx;
+    int spawn_ty = HUB_DATA.spawn_ty;
+    if(ps.last_dungeon > 0)
+    {
+        for(int i = 0; i < HUB_DATA.door_count; ++i)
+        {
+            const logic::DoorSpawn& dr = HUB_DATA.doors[i];
+            if(dr.dungeon == ps.last_dungeon)
+            {
+                spawn_tx = dr.tx;
+                spawn_ty = dr.ty - 3;                   // stand on the floor under/in front of the archway
+                player.facing = (dr.tx < HUB_DATA.w / 2) ? 1 : -1; // face inward toward the plaza centre
+                break;
+            }
+        }
+    }
+    player.body.pos = { fx(spawn_tx * 8), fx(spawn_ty * 8) };
 
     logic::Meter& magic = ps.magic;   // earned-magic pool (banked across hub <-> dungeon)
 
@@ -100,8 +122,10 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
     engine::SpellPool spells(lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::Hud hud; // shows the persistent health/magic in the hub too
 
-    // Spell selection, local to the hub (resets to the default owned tool on each hub entry).
-    logic::SpellState spell; spell.refresh(world);
+    // Spell selection lives in PlayerState so it persists across the hub, dungeon rooms, AND
+    // hub<->dungeon. ensure_valid initializes a default without clobbering a carried-in choice.
+    ps.spell.ensure_valid(world);
+    logic::SpellState& spell = ps.spell;
 
     // Vine VFX: 4 dot sprites (bolt reused as placeholder) drawn along player->anchor line.
     // Visible only while player.grapple.active() (or during a miss-vine animation).
@@ -144,6 +168,7 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
         player.abilities.glide       = world.has(logic::Ability::Glide);
         player.abilities.dash        = world.has(logic::Ability::Dash);
         player.abilities.grapple     = world.has(logic::Ability::Grapple);
+        player.abilities.stone       = world.has(logic::Ability::Stone);  // harmless on flat ground; kit parity
 
         // Read spell intent + cycle FIRST so the selection is current for the grapple/cast branch.
         engine::SpellIntent si = engine::read_spell_intent();

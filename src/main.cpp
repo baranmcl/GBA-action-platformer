@@ -31,7 +31,8 @@ int main()
         else if(n == 4) lvl = &DUNGEON4_DUNGEON;
         else if(n == 5) lvl = &DUNGEON5_DUNGEON;
         else if(n == 6) lvl = &DUNGEON6_DUNGEON;
-        else continue;                                // doors 7-8 not built
+        else if(n == 7) lvl = &DUNGEON7_DUNGEON;
+        else continue;                                // door 8 not built
 
         world.current_dungeon = n;
         game::DungeonResult dr = game::run_dungeon(*lvl, world, ps);

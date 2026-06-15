@@ -117,12 +117,13 @@ def gen_bolt():
 def gen_tiles():
     """Background tileset: 26 tiles of 8x8 in a horizontal strip. Index order:
     0 blank, 1 ground, 2 one-way, 3 gate(closed wall), 4 cage, 5 door-open, 6 door-locked,
-    7 vine, 8 ice-gate, 9 water-gate(waterfall, M4), 10 fire-wall-gate(M4), 11-12 reserved, 13 lava,
+    7 vine, 8 ice-gate, 9 water-gate(waterfall, M4), 10 fire-wall-gate(M4), 11 cracked-floor(M8 Stone),
+    12 dark-veil barrier(M8 Light gate), 13 lava,
     14 brazier-unlit, 15 brazier-lit, 16 water(M4), 17 plate, 18 button, 19 ice-platform(M4),
     20 updraft(M5), 21 wind-left(M5), 22 wind-right(M5), 23 cracked-wall(M6), 24 spikes(M6),
-    25 grapple-anchor(M7).
+    25 grapple-anchor(M7), 26 exit-to-hub portal door (target_room=-1; distinct from tiles 5/6).
     (block + shrine are SPRITES, not bg tiles.)"""
-    im = new_img(8 * 26, 8)
+    im = new_img(8 * 27, 8)
     # tile 0: blank -> all index 0 (transparent, shows backdrop). nothing to draw.
     # tile 1: ground (brown with grass top, dark bottom)
     ox = 8 * 1
@@ -162,6 +163,28 @@ def gen_tiles():
     ox = 8 * 8
     rect(im, ox, 0, ox + 7, 7, 8)            # cyan fill
     rect(im, ox, 0, ox + 7, 0, 9); rect(im, ox + 1, 1, ox + 2, 2, 9)  # white glints
+    # tile 11: cracked FLOOR (M8 Stone) — a brown ground slab (like tile 1) but with a dark fracture
+    # line + chips so it READS as "pound here to break through" and is distinct from solid ground.
+    ox = 8 * 11
+    rect(im, ox, 0, ox + 7, 7, 10)        # brown ground body (matches tile 1)
+    rect(im, ox, 0, ox + 7, 0, 11)        # dark top mortar (no grass -> reads as an interior floor)
+    rect(im, ox, 7, ox + 7, 7, 11)        # dark bottom
+    # jagged fracture running across the slab (near-black), with a couple of loosened chips
+    px(im, ox + 1, 2, 1); px(im, ox + 2, 3, 1); px(im, ox + 3, 2, 1); px(im, ox + 4, 4, 1)
+    px(im, ox + 5, 3, 1); px(im, ox + 6, 5, 1)
+    px(im, ox + 2, 5, 14); px(im, ox + 4, 6, 14); px(im, ox + 5, 1, 14)  # chip shadows
+    # tile 12: dark-veil barrier (M8 Light gate) — a shadowy purple-black curtain with a faint
+    # rune sheen, so the closed Light gate READS as a distinct dark veil (not solid stone, not flame).
+    ox = 8 * 12
+    rect(im, ox, 0, ox + 7, 7, 14)        # dark shadow body (pal 14, near-black blue)
+    rect(im, ox, 0, ox + 7, 0, 1)         # near-black top edge
+    rect(im, ox, 7, ox + 7, 7, 1)         # near-black bottom edge
+    # vertical veil folds (stone-purple pal 12) to suggest a hanging dark curtain
+    for cx in (1, 4, 6):
+        rect(im, ox + cx, 1, ox + cx, 6, 12)
+    # a faint rune sheen (shadow pal 14 highlights + one white-ish glint) so it shimmers
+    px(im, ox + 2, 2, 9); px(im, ox + 5, 4, 9)   # pale glints
+    px(im, ox + 3, 5, 12); px(im, ox + 2, 4, 12)  # mid folds
     # tile 13: lava (red with orange/gold bubbles)
     ox = 8 * 13
     rect(im, ox, 0, ox + 7, 7, 13)          # red
@@ -254,6 +277,17 @@ def gen_tiles():
         px(im, ox + cx, 3, 9); px(im, ox + cx, 4, 9)
     for cy in range(0, 8):
         px(im, ox + 3, cy, 9); px(im, ox + 4, cy, 9)
+    # tile 26: exit-to-hub portal door SEGMENT — a glowing cyan/white portal inside stone jambs.
+    # Distinct from tile 5 (dark room-door opening) and tile 6 (gold-barred dungeon goal): here the
+    # opening GLOWS cyan with a white swirl, reading as a magical "way out / hub portal" when tiled
+    # 2-wide x 4-tall into an archway.
+    ox = 8 * 26
+    rect(im, ox, 0, ox + 7, 7, 8)               # cyan portal glow fill (pal 8 bolt-cyan)
+    rect(im, ox, 0, ox, 7, 12); rect(im, ox + 7, 0, ox + 7, 7, 12)  # stone jambs (left/right)
+    # white swirl/sheen down the centre so it shimmers like an active portal
+    px(im, ox + 3, 1, 9); px(im, ox + 4, 2, 9); px(im, ox + 3, 3, 9)
+    px(im, ox + 4, 4, 9); px(im, ox + 3, 5, 9); px(im, ox + 4, 6, 9)
+    px(im, ox + 2, 2, 15); px(im, ox + 5, 5, 15)  # bright white glints
     write(im, "tiles", {"type": "regular_bg_tiles", "bpp_mode": "bpp_4"})
 
 def gen_ember_sprites():

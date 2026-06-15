@@ -7,13 +7,15 @@ struct EntitySpawn { int tx, ty, param0, param1, param2; }; // enemy: param0/1 p
 struct GateSpawn   { int tx, ty; GateType type; int latch_id = -1; }; // latch_id -1 = not latched
 struct DoorSpawn   { int tx, ty, dungeon; };                // dungeon 1..8
 struct BlockSpawn  { int tx, ty; bool pullable = false; };
-struct PlateSpawn  { int tx, ty, target_tx, target_ty; };
+struct PlateSpawn  { int tx, ty, target_tx, target_ty; bool heavy = false; };
 struct ButtonSpawn { int tx, ty, target_tx, target_ty; };
 struct BrazierSpawn{ int tx, ty, group; };
 struct BrazierGroupSpawn { int total, target_tx, target_ty; int latch_id = -1; }; // latch_id -1 = not latched; a group of braziers shares one target
 struct EntranceSpawn { int id, tx, ty, facing; };     // facing: -1 left, +1 right. id 0 = default/start.
 struct RoomDoorSpawn { int tx, ty, target_room, target_entrance; }; // room-graph door: leads to another room in the same dungeon (not the hub→dungeon DoorSpawn)
 struct HeartContainerSpawn { int tx, ty, id; };       // permanent HP upgrade pickup; id maps to World::heart_container_collected(id)
+struct BoulderSpawn        { int tx, ty; };            // M8 Stone: rolling boulder obstacle
+struct LoosePlatformSpawn  { int tx, ty, len; };       // M8 Stone: shaking platform that drops on pound
 struct LevelData {
     const uint8_t* tiles; int w, h;
     int spawn_tx, spawn_ty;
@@ -30,7 +32,9 @@ struct LevelData {
     const BrazierGroupSpawn* brazier_groups; int brazier_group_count;
     const EntranceSpawn* entrances  = nullptr; int entrance_count  = 0;
     const RoomDoorSpawn* room_doors = nullptr; int room_door_count = 0;
-    const HeartContainerSpawn* heart_containers = nullptr; int heart_container_count = 0;
+    const HeartContainerSpawn* heart_containers    = nullptr; int heart_container_count    = 0;
+    const BoulderSpawn*        boulders            = nullptr; int boulder_count            = 0;
+    const LoosePlatformSpawn*  loose_platforms     = nullptr; int loose_platform_count     = 0;
 };
 struct DungeonData {
     const LevelData* const* rooms;   // rooms[0..room_count-1]

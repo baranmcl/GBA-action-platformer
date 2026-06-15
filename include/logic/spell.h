@@ -44,5 +44,13 @@ struct SpellState {
         int start = (selected==SpellId::Ice) ? 1 : (selected==SpellId::Grapple) ? 2 : 0;  // None/unknown -> Fire slot (has_any guard above rejects None first)
         for(int i=1;i<=3;++i){ SpellId c = order[(start+i)%3]; if(owns(w,c)){ selected = c; return; } }
     }
+    // Initialize a default selection WITHOUT clobbering a valid one. Call on scene entry and
+    // after granting an ability: if the current `selected` is None or not owned, fall back to
+    // refresh() (first owned); otherwise LEAVE the player's cycled choice untouched. This is what
+    // makes the selection persist across rooms/hub/scenes and survive a shrine pickup (grabbing a
+    // new ability auto-selects it ONLY if you had nothing valid, never overriding your choice).
+    void ensure_valid(const World& w){
+        if(selected == SpellId::None || !owns(w, selected)) refresh(w);
+    }
 };
 }
