@@ -53,33 +53,37 @@ inline void clamp_lives_on_load(World& w){
     if(w.lives == 0 || w.lives > (uint8_t)m) w.lives = (uint8_t)m;
 }
 
-// v3 SaveData layout (16 bytes, naturally aligned, no padding):
+// v4 SaveData layout (20 bytes; 16 meaningful + 3 compiler padding after lives):
 //   [0..3]   magic           uint32_t  'SPRK'
-//   [4..5]   version         uint16_t  3  (same offset as v1/v2 for backward-compat detection)
+//   [4..5]   version         uint16_t  4  (same offset as v1/v2/v3 for backward-compat detection)
 //   [6..7]   spronks         uint16_t  World.spronks_freed
 //   [8..9]   abilities       uint16_t  World.abilities
 //   [10]     current_dungeon uint8_t
-//   [11]     checksum        uint8_t   sum of bytes [0..10]+[12..15] & 0xFF
+//   [11]     checksum        uint8_t   checksum_v4 (covers [0..10]+[12..16])
 //   [12..15] latches         uint32_t  World.latches  (4-byte aligned at offset 12)
+//   [16]     lives           uint8_t   World.lives
+//   [17..19] _pad            (3 bytes, compiler padding — zeroed by SaveData s{})
 struct SaveData {
     uint32_t magic;          // [0..3]   'SPRK'
-    uint16_t version;        // [4..5]   3  (same offset as v1/v2 — backward-compat)
+    uint16_t version;        // [4..5]   4  (same offset as v1/v2/v3 — backward-compat)
     uint16_t spronks;        // [6..7]   World.spronks_freed
     uint16_t abilities;      // [8..9]   World.abilities
     uint8_t  current_dungeon;// [10]
-    uint8_t  checksum;       // [11]     sum of bytes [0..10]+[12..15] & 0xFF
-    uint32_t latches;        // [12..15] World.latches (4-byte aligned -> no padding)
+    uint8_t  checksum;       // [11]     checksum_v4 result
+    uint32_t latches;        // [12..15] World.latches (4-byte aligned)
+    uint8_t  lives;          // [16]     World.lives
+    // [17..19] compiler padding (uint32_t alignment) — zero-inited by SaveData s{}
 };
 static_assert(std::is_trivially_copyable<SaveData>::value, "SaveData must be trivially copyable (SRAM)");
-static_assert(sizeof(SaveData) == 16, "SaveData layout changed (now v3, sizeof must stay 16) — bump SAVE_VERSION and add a migration branch");
+static_assert(sizeof(SaveData) == 20, "SaveData v4 layout changed — bump SAVE_VERSION and add a migration branch");
 
 static constexpr uint32_t SAVE_MAGIC = 0x5350524B; // "SPRK"
-static constexpr uint16_t SAVE_VERSION = 3;
+static constexpr uint16_t SAVE_VERSION = 4;
 
-// contiguous-range checksum; used by v1/v2 migration. v3 uses checksum_v3 (non-contiguous).
+// contiguous-range checksum; used by v1/v2 migration.
 inline uint8_t checksum_bytes(const uint8_t* p, int n){ uint32_t s=0; for(int i=0;i<n;++i) s+=p[i]; return (uint8_t)(s&0xFF); }
 
-// v3 checksum covers bytes [0..10] (header) + [12..15] (latches), skipping checksum byte [11] itself
+// v3 checksum covers bytes [0..10] (header) + [12..15] (latches), skipping checksum byte [11] and padding.
 inline uint8_t checksum_v3(const uint8_t* b){
     uint32_t s = 0;
     for(int i = 0; i < 11; ++i) s += b[i];  // [0..10]
@@ -87,12 +91,21 @@ inline uint8_t checksum_v3(const uint8_t* b){
     return (uint8_t)(s & 0xFF);
 }
 
+// v4 checksum covers [0..10] (header) + [12..15] (latches) + [16] (lives).
+// Skips checksum byte [11] and compiler padding [17..19].
+inline uint8_t checksum_v4(const uint8_t* b){
+    uint32_t s = 0;
+    for(int i = 0; i < 11; ++i) s += b[i];  // [0..10]
+    for(int i = 12; i < 17; ++i) s += b[i]; // [12..16]: latches + lives
+    return (uint8_t)(s & 0xFF);
+}
+
 inline SaveData make_save(const World& w){
-    SaveData s{};
+    SaveData s{};  // zero-inits all fields including padding
     s.magic=SAVE_MAGIC; s.version=SAVE_VERSION;
     s.spronks=w.spronks_freed; s.abilities=w.abilities; s.current_dungeon=w.current_dungeon;
-    s.latches=w.latches;
-    s.checksum = checksum_v3(reinterpret_cast<const uint8_t*>(&s));
+    s.latches=w.latches; s.lives=w.lives;
+    s.checksum = checksum_v4(reinterpret_cast<const uint8_t*>(&s));
     return s;
 }
 inline bool load_save(const SaveData& s, World& out){
@@ -106,17 +119,19 @@ inline bool load_save(const SaveData& s, World& out){
         out = World{};
         if(flags & 1) out.free_spronk(1);
         if(flags & 2) out.grant(Ability::Featherleap);
+        out.lives = World::STARTING_LIVES; // v1 predates lives — default to 3
         return true;
     }
     if(version == 2){
         // v2 on-disk layout: magic(4)@0, version(2)@4, spronks(2)@6, abilities(2)@8,
         //                    current_dungeon(1)@10, checksum(1)@11, _pad[4]@12
-        // Version and spronks/abilities offsets match v3 struct, so s.* members are safe to use.
+        // Version and spronks/abilities offsets match v4 struct, so s.* members are safe to use.
         if(checksum_bytes(b, 11) != b[11]) return false;   // v2 checksum at offset 11
         out = World{};
         out.spronks_freed = s.spronks; out.abilities = s.abilities;
         out.current_dungeon = s.current_dungeon;
         // latches stays 0 (new in v3)
+        out.lives = World::STARTING_LIVES; // v2 predates lives — default to 3
         return true;
     }
     if(version == 3){
@@ -124,6 +139,16 @@ inline bool load_save(const SaveData& s, World& out){
         out = World{};
         out.spronks_freed = s.spronks; out.abilities = s.abilities;
         out.current_dungeon = s.current_dungeon; out.latches = s.latches;
+        out.lives = World::STARTING_LIVES; // v3 predates lives — default to 3
+        return true;
+    }
+    if(version == 4){
+        if(checksum_v4(b) != b[11]) return false;
+        out = World{};
+        out.spronks_freed = s.spronks; out.abilities = s.abilities;
+        out.current_dungeon = s.current_dungeon; out.latches = s.latches;
+        out.lives = s.lives;
+        clamp_lives_on_load(out); // boot safety: never 0, never > max
         return true;
     }
     return false;
