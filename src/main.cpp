@@ -24,7 +24,7 @@ int main()
     while(true)
     {
         game::HubResult hr = game::run_hub(world, ps); // returns when a door is entered
-        int n = hr.enter_dungeon;                     // 1..8; dungeons 1-6 built (M2-M7), 7-8 not yet
+        int n = hr.enter_dungeon;                     // 1..8; all eight dungeons built (M2-M10)
         const logic::DungeonData* lvl = nullptr;
         if(n == 1) lvl = &DUNGEON1_DUNGEON;
         else if(n == 2) lvl = &DUNGEON2_DUNGEON;
@@ -33,7 +33,8 @@ int main()
         else if(n == 5) lvl = &DUNGEON5_DUNGEON;
         else if(n == 6) lvl = &DUNGEON6_DUNGEON;
         else if(n == 7) lvl = &DUNGEON7_DUNGEON;
-        else continue;                                // door 8 not built
+        else if(n == 8) lvl = &DUNGEON8_DUNGEON;
+        else continue;                                // out-of-range n (no such dungeon)
 
         world.current_dungeon = n;
         game::DungeonResult dr = game::run_dungeon(*lvl, world, ps);
