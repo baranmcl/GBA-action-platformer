@@ -24,13 +24,24 @@ using namespace logic;
 static const LevelData* const D8_ROOMS[] = {
     &DUNGEON8_ROOM0_DATA, &DUNGEON8_ROOM1_DATA, &DUNGEON8_ROOM2_DATA };
 static constexpr int D8_N = 3;
-// Featherleap double-jump reach. Bumped 6 -> 7 (M10 QA) so the flood-fill reflects the REAL player:
-// Featherleap reaches ~6-7 tiles straight up, so a climb is only TRULY Light-required when its rest-to-rest
-// VERTICAL gap exceeds 7 (a CLIMB=7 flood-fill base-unreachable then matches the in-game player — neither can
-// bypass). NOTE: glide extends HORIZONTAL distance and is NOT modeled here, so a horizontal "Light-gate" would
-// be unsafe (glide bypasses it); ALL D8 Light-climbs are therefore VERTICAL (gap > 7 straight up, hidden-only
-// footholds, no grapple anchor) — the only shape this model can soundly prove requires Light.
-static constexpr int CLIMB = 7;
+// Featherleap double-jump reach — DUAL threshold (M10 QA fix: "the light platform is not reachable").
+// The double-jump has two distinct heights and the flood-fill must use BOTH to bracket the player:
+//   * CLIMB_RELIABLE = 5 — the reach the player hits RELIABLY (an ordinary, non-pixel-perfect air-jump).
+//     A climb foothold->foothold step of <=5 is reliably double-jumpable. The LIT path (hidden platforms
+//     revealed) is flooded at CLIMB_RELIABLE: assert the spronk/heart/door ARE reachable, i.e. EVERY step
+//     of the revealed climb is <=5 -> reliably climbable. (This catches the "platform too high" bug: the
+//     old single CLIMB=7 called a 7-up first platform "reachable", but ~7 is only the pixel-perfect APEX
+//     edge, not reliable -> in practice unreachable -> soft-lock.)
+//   * CLIMB_MAX = 7 — the absolute EDGE reach at a perfect apex-timed air-jump. The BASE path (hidden
+//     platforms NON-solid + DarkVeil closed) is flooded at CLIMB_MAX: assert the spronk/heart/door are
+//     NOT reachable, i.e. even an edge double-jump cannot bypass the climb without Light. A Light-less gap
+//     between consecutive STATIC standable spots must therefore exceed 7.
+// So each Light-climb satisfies BOTH: lit-reachable @ CLIMB_RELIABLE (every hidden step <=5, reliable) AND
+// base-unreachable @ CLIMB_MAX (every static gap >7, un-bypassable even at the edge). glide extends
+// HORIZONTAL distance and is NOT modeled, so all D8 Light-climbs are VERTICAL (hidden-only footholds, no
+// grapple anchor) — the only shape this model can soundly prove requires Light.
+static constexpr int CLIMB_RELIABLE = 5;   // reliable double-jump reach (LIT path must clear every step)
+static constexpr int CLIMB_MAX      = 7;   // edge apex-timed reach    (BASE path must NOT bypass)
 
 static constexpr int PW = 2;   // player width in tiles
 static constexpr int PH = 4;   // player height in tiles
@@ -111,7 +122,7 @@ static bool snap_start(const Grid& g, int& sx, int& sy){
     return false;
 }
 
-static std::vector<uint8_t> reachable(const Grid& g, int sx, int sy){
+static std::vector<uint8_t> reachable(const Grid& g, int sx, int sy, int climb){
     std::vector<uint8_t> seen(g.w*g.h, 0);
     if(!snap_start(g, sx, sy)) return seen;
     std::queue<std::pair<int,int>> q;
@@ -123,7 +134,7 @@ static std::vector<uint8_t> reachable(const Grid& g, int sx, int sy){
     push(sx, sy);
     while(!q.empty()){
         auto [x,y] = q.front(); q.pop();
-        for(int up = 1; up <= CLIMB; ++up){
+        for(int up = 1; up <= climb; ++up){
             int ny = y - up;
             if(ny - PH + 1 < 0) break;
             if(!g.fits(x, ny)) break;
@@ -131,7 +142,7 @@ static std::vector<uint8_t> reachable(const Grid& g, int sx, int sy){
         }
         for(int dir = -1; dir <= 1; dir += 2){
             int nx = x + dir;
-            for(int up = 1; up <= CLIMB; ++up){
+            for(int up = 1; up <= climb; ++up){
                 int ny = y - up;
                 if(ny - PH + 1 < 0) break;
                 if(!g.fits(x, ny)) break;
@@ -290,14 +301,14 @@ TEST(d8_room1_has_heart_container){
 
     int sx = room_start_x(L), sy = room_start_y(L);
     Grid base = build_grid(L, /*reveal*/false, /*open_dv*/false);
-    std::vector<uint8_t> base_seen = reachable(base, sx, sy);
+    std::vector<uint8_t> base_seen = reachable(base, sx, sy, CLIMB_MAX);   // edge double-jump can't bypass
     bool base_h = stands_at(L, base_seen, hc.tx, hc.ty);
-    CHECK(!base_h);                            // sealed: NOT reachable before Light
+    CHECK(!base_h);                            // sealed: NOT reachable before Light (gap >7)
 
     Grid lit = build_grid(L, /*reveal*/true, /*open_dv*/true);
-    std::vector<uint8_t> lit_seen = reachable(lit, sx, sy);
+    std::vector<uint8_t> lit_seen = reachable(lit, sx, sy, CLIMB_RELIABLE); // every revealed step <=5
     bool lit_h = stands_at(L, lit_seen, hc.tx, hc.ty);
-    CHECK(lit_h);                              // reachable once Light reveals the climb
+    CHECK(lit_h);                              // RELIABLY reachable once Light reveals the climb
 
     std::printf("  [room1-heart] H(%d,%d) id=%d grounded=yes base=%s lit=%s\n",
                 hc.tx, hc.ty, hc.id, base_h?"reach(bad)":"sealed", lit_h?"reach":"MISS(bad)");
@@ -317,7 +328,7 @@ TEST(d8_light_shrine_reachable_without_light){
         for(int i=0;i<L.pickup_count;++i){
             if(L.pickups[i].ability != Ability::Light) continue;
             Grid base = build_grid(L, /*reveal*/false, /*open_dv*/false);  // BASE: no Light yet
-            std::vector<uint8_t> seen = reachable(base, L.spawn_tx, L.spawn_ty);
+            std::vector<uint8_t> seen = reachable(base, L.spawn_tx, L.spawn_ty, CLIMB_RELIABLE);  // reliably walkable
             bool reach = stands_at(L, seen, L.pickups[i].tx, L.pickups[i].ty);
             CHECK(reach);
             std::printf("  [shrine] room %d F(%d,%d) base-reachable=%s\n",
@@ -338,16 +349,20 @@ TEST(d8_spronk_requires_light){
     CHECK(L.has_cage); CHECK(L.has_exit);
     int sx = room_start_x(L), sy = room_start_y(L);
 
-    // (a) BASE: hidden platforms NON-solid, DarkVeil closed. C and E unreachable.
+    // (a) BASE: hidden platforms NON-solid, DarkVeil closed. C and E unreachable EVEN at the edge reach
+    //     (CLIMB_MAX=7) -> every Light-less static gap up the ascent is >7 -> Light genuinely required.
     Grid base = build_grid(L, /*reveal*/false, /*open_dv*/false);
-    std::vector<uint8_t> base_seen = reachable(base, sx, sy);
+    std::vector<uint8_t> base_seen = reachable(base, sx, sy, CLIMB_MAX);
     bool base_c = stands_at(L, base_seen, L.cage_tx, L.cage_ty);
     bool base_e = stands_at(L, base_seen, L.exit_tx, L.exit_ty);
     CHECK(!base_c); CHECK(!base_e);
 
-    // (b) Light used: reveal hidden platforms + open DarkVeil. C and E reachable.
+    // (b) Light used: reveal hidden platforms + open DarkVeil. C and E RELIABLY reachable (CLIMB_RELIABLE=5)
+    //     -> every revealed hidden-platform step is <=5 -> the ascent is reliably climbable (no apex-perfect
+    //     pixel edge needed). This is the M10 QA fix: the climb must be reachable by the REAL player, not the
+    //     edge-case double-jump.
     Grid lit = build_grid(L, /*reveal*/true, /*open_dv*/true);
-    std::vector<uint8_t> lit_seen = reachable(lit, sx, sy);
+    std::vector<uint8_t> lit_seen = reachable(lit, sx, sy, CLIMB_RELIABLE);
     bool lit_c = stands_at(L, lit_seen, L.cage_tx, L.cage_ty);
     bool lit_e = stands_at(L, lit_seen, L.exit_tx, L.exit_ty);
     CHECK(lit_c); CHECK(lit_e);
@@ -372,7 +387,7 @@ TEST(d8_magic_crystal_before_each_light_beat){
         if(L.hidden_platform_count == 0) continue;
         int sx = room_start_x(L), sy = room_start_y(L);
         Grid lit = build_grid(L, /*reveal*/true, /*open_dv*/true);
-        std::vector<uint8_t> seen = reachable(lit, sx, sy);
+        std::vector<uint8_t> seen = reachable(lit, sx, sy, CLIMB_RELIABLE);  // crystal must be reliably reachable
 
         // a crystal sits on PERSISTENT solid ground (a rest ledge / floor) — NOT on a fading hidden
         // platform — iff scanning straight down from it in the BASE grid (hidden platforms non-solid)
@@ -431,7 +446,7 @@ TEST(d8_no_one_way_traps){
         const LevelData& L = *D8_ROOMS[r];
         int sx = room_start_x(L), sy = room_start_y(L);
         Grid lit = build_grid(L, /*reveal*/true, /*open_dv*/true);
-        std::vector<uint8_t> seen = reachable(lit, sx, sy);
+        std::vector<uint8_t> seen = reachable(lit, sx, sy, CLIMB_RELIABLE);  // real player must escape
         bool fwd = reaches_forward_exit(L, seen);
         CHECK(fwd);
         std::printf("  [oneway] room %d -> forward exit reachable (lit) = %s\n", r, fwd?"yes":"NO");
@@ -488,7 +503,7 @@ TEST(d8_room0_reentry_shrine_reachable){
 
     int verified = 0;
     for(const Seed& s : seeds){
-        std::vector<uint8_t> seen = reachable(g, s.x, s.y);
+        std::vector<uint8_t> seen = reachable(g, s.x, s.y, CLIMB_RELIABLE);  // reliably re-reach the shrine
         bool ok = stands_at(L, seen, fx, fy);
         CHECK(ok);
         std::printf("  [reentry] from %s (%d,%d): shrine reachable = %s\n",

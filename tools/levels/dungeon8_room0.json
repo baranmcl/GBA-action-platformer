@@ -1,7 +1,6 @@
 { "tileset":"tiles",
   "pickups":[{"ability":"light"}],
   "enemies":[{"patrol":[18,22]}],
-  "gates":[{"type":"dark_veil"}],
   "hidden_platforms":[{"len":4}],
   "entrances":[{"id":2,"facing":-1},{"id":1,"facing":1}],
   "room_doors":[{"target_room":2,"target_entrance":0},{"target_room":1,"target_entrance":0}] }
