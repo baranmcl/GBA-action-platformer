@@ -2,5 +2,6 @@
   "pickups":[{"ability":"light"}],
   "enemies":[{"patrol":[4,8]}],
   "gates":[{"type":"dark_veil"},{"type":"dark_veil"},{"type":"dark_veil"},{"type":"dark_veil"},{"type":"dark_veil"}],
-  "entrances":[{"id":1,"facing":-1},{"id":2,"facing":-1}],
-  "room_doors":[{"target_room":1,"target_entrance":0},{"target_room":2,"target_entrance":0}] }
+  "hidden_platforms":[{"len":3},{"len":3},{"len":3}],
+  "entrances":[{"id":2,"facing":1},{"id":1,"facing":1}],
+  "room_doors":[{"target_room":2,"target_entrance":0},{"target_room":1,"target_entrance":0}] }
