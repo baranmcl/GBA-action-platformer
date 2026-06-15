@@ -12,9 +12,9 @@ inline constexpr logic::ButtonSpawn DUNGEON1_BUTTONS[] = { {0,0,0,0} };
 inline constexpr logic::BrazierSpawn DUNGEON1_BRAZIERS[] = { {0,0,0} };
 inline constexpr logic::BrazierGroupSpawn DUNGEON1_BRAZIER_GROUPS[] = { {0,0,0,-1} };
 inline constexpr logic::EntranceSpawn DUNGEON1_ENTRANCES[] = { {0,0,0,1} };
-inline constexpr logic::RoomDoorSpawn DUNGEON1_ROOM_DOORS[] = { {0,0,0,0} };
+inline constexpr logic::RoomDoorSpawn DUNGEON1_ROOM_DOORS[] = { {6,14,-1,0} };
 inline constexpr logic::HeartContainerSpawn DUNGEON1_HEART_CONTAINERS[] = { {0,0,0} };
 inline constexpr logic::BoulderSpawn DUNGEON1_BOULDERS[] = { {0,0} };
 inline constexpr logic::LoosePlatformSpawn DUNGEON1_LOOSE_PLATFORMS[] = { {0,0,1} };
-inline constexpr logic::LevelData DUNGEON1_DATA = { DUNGEON1_TILES, 48, 20, 3, 14, true, 10, 13, true, 43, 7, DUNGEON1_ENEMIES, 1, DUNGEON1_GATES, 0, DUNGEON1_DOORS, 0, DUNGEON1_PICKUPS, 1, DUNGEON1_BLOCKS, 0, DUNGEON1_PLATES, 0, DUNGEON1_BUTTONS, 0, DUNGEON1_BRAZIERS, 0, DUNGEON1_BRAZIER_GROUPS, 0, DUNGEON1_ENTRANCES, 0, DUNGEON1_ROOM_DOORS, 0, DUNGEON1_HEART_CONTAINERS, 0, DUNGEON1_BOULDERS, 0, DUNGEON1_LOOSE_PLATFORMS, 0 };
+inline constexpr logic::LevelData DUNGEON1_DATA = { DUNGEON1_TILES, 48, 20, 3, 14, true, 10, 13, true, 43, 7, DUNGEON1_ENEMIES, 1, DUNGEON1_GATES, 0, DUNGEON1_DOORS, 0, DUNGEON1_PICKUPS, 1, DUNGEON1_BLOCKS, 0, DUNGEON1_PLATES, 0, DUNGEON1_BUTTONS, 0, DUNGEON1_BRAZIERS, 0, DUNGEON1_BRAZIER_GROUPS, 0, DUNGEON1_ENTRANCES, 0, DUNGEON1_ROOM_DOORS, 1, DUNGEON1_HEART_CONTAINERS, 0, DUNGEON1_BOULDERS, 0, DUNGEON1_LOOSE_PLATFORMS, 0 };
 

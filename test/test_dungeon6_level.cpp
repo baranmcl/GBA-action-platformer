@@ -189,12 +189,13 @@ TEST(d6_has_carried_kit_obstacle){
 }
 
 TEST(d6_room_doors_resolve_in_range){
-    // Every room-door target_room is a valid room index, and the entrance the door
-    // points at exists in the target room (cross-room links resolve).
+    // Every room-door target_room is a valid room index (or -1 for the hub-exit door),
+    // and each non-hub door's entrance exists in the target room (cross-room links resolve).
     for(int r = 0; r < D6_N; ++r){
         const LevelData& L = *D6_ROOMS[r];
         for(int i = 0; i < L.room_door_count; ++i){
             const RoomDoorSpawn& d = L.room_doors[i];
+            if(d.target_room < 0) continue;   // hub-exit door (Q, target_room=-1): returns to hub, skip.
             CHECK(d.target_room >= 0 && d.target_room < D6_N);
             const LevelData& T = *D6_ROOMS[d.target_room];
             bool found = false;
@@ -287,12 +288,14 @@ TEST(d6_doors_are_two_way){
     // Room 0 offers the two distinct return entrances the children target:
     CHECK(d6_has_entrance(DUNGEON6_ROOM0_DATA, 1));
     CHECK(d6_has_entrance(DUNGEON6_ROOM0_DATA, 2));
-    // Each room-door is co-located with a return entrance (adjacent, within 2 tiles, same row) so
-    // arriving places the player ON/BESIDE the door back. Check every door has a nearby entrance.
+    // Each forward room-door is co-located with a return entrance (adjacent, within 2 tiles, same row)
+    // so arriving places the player ON/BESIDE the door back. Hub-exit doors (target_room=-1) are exempt
+    // — they return to the hub (no in-room entrance needed).
     for(int r = 0; r < D6_N; ++r){
         const LevelData& L = *D6_ROOMS[r];
         for(int i = 0; i < L.room_door_count; ++i){
             const RoomDoorSpawn& d = L.room_doors[i];
+            if(d.target_room < 0) continue;   // hub-exit door: exempt from co-location requirement.
             bool near = false;
             for(int e = 0; e < L.entrance_count; ++e){
                 const EntranceSpawn& n = L.entrances[e];
@@ -437,4 +440,34 @@ TEST(d6_room1_gate_is_full_barrier){
     // floor), so opening it yields a real walkable opening rather than a floating gap.
     CHECK_EQ(gt.ty, 18);
     CHECK(d6_solid(L, gt.tx, 19));
+}
+
+// M8 retrofit: hub-return door (Q) in D6 Room 0 near the spawn — structural + grounding invariants.
+TEST(d6_room0_has_hub_return_door){
+    // Room 0 (entry) must have exactly one hub-exit door (target_room=-1) added for M8.
+    const LevelData& L = DUNGEON6_ROOM0_DATA;
+    int hub_doors = 0;
+    for(int i = 0; i < L.room_door_count; ++i)
+        if(L.room_doors[i].target_room == -1) ++hub_doors;
+    CHECK_EQ(hub_doors, 1);
+}
+
+TEST(d6_room0_hub_door_grounds_on_main_floor){
+    // The hub-exit Q door in Room 0 must ground its 2-wide archway on the main bottom floor (row h-2).
+    // The first solid tile directly below each of the door's 2 columns (door.tx and door.tx+1)
+    // must be row h-2 (the interior floor), with no intervening solid.
+    const LevelData& L = DUNGEON6_ROOM0_DATA;
+    const int floor_row = L.h - 2;   // row 20 for h=22
+    const RoomDoorSpawn* qd = nullptr;
+    for(int i = 0; i < L.room_door_count; ++i)
+        if(L.room_doors[i].target_room == -1) { qd = &L.room_doors[i]; break; }
+    CHECK(qd != nullptr);
+    if(!qd) return;
+    for(int dx = 0; dx < 2; ++dx){
+        int col = qd->tx + dx;
+        int fr = -1;
+        for(int y = qd->ty + 1; y < L.h; ++y)
+            if(d6_solid(L, col, y)){ fr = y; break; }
+        CHECK_EQ(fr, floor_row);
+    }
 }
