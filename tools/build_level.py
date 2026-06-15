@@ -215,7 +215,7 @@ def compile_level(txt_path, json_path):
                 hidden_platforms.append((x, y, hlen))
                 hp_idx += 1
             elif c == '$':
-                # M10 Light: magic crystal collectible that grants the Light ability. No JSON needed.
+                # M10: a magic crystal — fully refills the magic meter on touch (respawns each attempt). No JSON needed.
                 magic_crystals.append((x, y))
             elif c in '12345678':
                 doors.append((x, y, int(c)))

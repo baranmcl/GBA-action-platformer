@@ -17,7 +17,7 @@ struct HeartContainerSpawn { int tx, ty, id; };       // permanent HP upgrade pi
 struct BoulderSpawn        { int tx, ty; };            // M8 Stone: rolling boulder obstacle
 struct LoosePlatformSpawn  { int tx, ty, len; };       // M8 Stone: shaking platform that drops on pound
 struct HiddenPlatformSpawn { int tx, ty, len; };       // M10 Light: invisible platform revealed while RevealState is active
-struct MagicCrystalSpawn   { int tx, ty; };            // M10 Light: collectible that grants Light ability
+struct MagicCrystalSpawn   { int tx, ty; };            // M10: a magic crystal — fully refills the magic meter on touch; respawns each attempt
 struct LevelData {
     const uint8_t* tiles; int w, h;
     int spawn_tx, spawn_ty;
