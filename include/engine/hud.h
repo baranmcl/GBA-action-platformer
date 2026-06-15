@@ -4,15 +4,18 @@
 #include "logic/meters.h"
 #include "logic/hud_math.h"
 namespace engine {
-// Top-left HUD: two rows of pips (health = red, magic = cyan). Screen-fixed (no camera).
+// Top-left HUD: three rows of pips (health = red, magic = cyan, lives = gold shield).
+// Screen-fixed (no camera).
 class Hud {
 public:
     Hud();
-    void update(const logic::Meter& health, const logic::Meter& magic);
+    void update(const logic::Meter& health, const logic::Meter& magic, int lives);
 private:
-    static constexpr int PIPS = 10;                              // magic row: fixed ratio bar
-    static constexpr int HEALTH_PIPS = logic::MAX_HEALTH_PIPS;   // health row: variable-length bar
+    static constexpr int PIPS = 10;                               // magic row: fixed ratio bar
+    static constexpr int HEALTH_PIPS = logic::MAX_HEALTH_PIPS;    // health row: variable-length bar
+    static constexpr int LIVES_PIPS  = logic::LIVES_HUD_CAP;      // lives row: up to cap icons
     bn::vector<bn::sprite_ptr, HEALTH_PIPS> _health;
-    bn::vector<bn::sprite_ptr, PIPS> _magic;
+    bn::vector<bn::sprite_ptr, PIPS>        _magic;
+    bn::vector<bn::sprite_ptr, LIVES_PIPS>  _lives;
 };
 }

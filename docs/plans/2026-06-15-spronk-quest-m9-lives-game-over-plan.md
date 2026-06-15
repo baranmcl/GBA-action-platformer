@@ -63,20 +63,21 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started.
+**Overall:** 4/4 phases shipped + 2 QA fixes. 352/352 host tests green, purity clean, ROM builds, no scaffold used. Branch `feat/m9-lives-game-over` ready for final review + merge.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 1 — Pure logic: World.lives + max_lives + SaveData v4 | ⬜ Not started | — | — |
-| 2 — Engine/scene: death→Game-Over flow + run_game_over + main routing | ⬜ Not started | — | — |
-| 3 — HUD lives counter | ⬜ Not started | — | — |
-| 4 — Emulator QA | ⬜ Not started | — | — |
+| 1 — Pure logic: World.lives + max_lives + SaveData v4 | ✅ Shipped 2026-06-15 | a3f2ac3, 0de0075 | 345/345 host tests; v1/v2/v3→v4 migration |
+| 2 — Engine/scene: death→Game-Over flow + run_game_over + main routing | ✅ Shipped 2026-06-15 | 373d6f6 (scene), 07e3e22 (flow), fe317d2 (main routing) | ROM builds; death→0→Game Over→Continue/Quit |
+| 3 — HUD lives counter | ✅ Shipped 2026-06-15 | 87620ed (art), a338f38 (hud) | 352/352; gold-shield life pips |
+| 4 — Emulator QA | ✅ Shipped 2026-06-15 | QA fixes below | 2 emulator rounds passed |
 
-### Deviations
-- _(none yet)_
+### Deviations (QA-driven)
+- **Lives granted on spronk PICKUP, not on dungeon exit** (QA round 1): the +1 max-life + refill now fires the instant the spronk is freed (the just-freed transition in `play_room`), not in the `ExitDungeon` case. Commit in the Phase-4 fix.
+- **Vitals refilled on BOTH Game-Over choices** (QA round 1): Quit-to-title was returning to the hub with `ps.health.cur == 0` (empty health bar); the `GameOver` case now refills health+magic before either return. Same fix commit.
 
 ### Discoveries
-- _(none yet)_
+- `engine/save.cpp` uses `bn::sram::read(s)`/`write(s)` with the struct directly (template deduces size) — no hardcoded 16, so the 20-byte v4 struct is handled automatically with no changes needed.
 
 ---
 
@@ -106,7 +107,7 @@ notes and commit messages.
 
 ## Phase 1 — Pure logic: World.lives + max_lives + SaveData v4
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED 2026-06-15 | Task 1.1: a3f2ac3 | Task 1.2: 0de0075
 
 **BEFORE starting:** read `include/logic/world_state.h` (the `World` struct + the v3 `SaveData` layout, `make_save`/`load_save`, `checksum_v3`, the v1/v2/v3 migration branches, `SAVE_VERSION`, the `static_assert(sizeof(SaveData)==16)`), `include/logic/player_state.h`, and `test/test_world_state_v3.cpp` for the save-test style. Note `World.spronks_freed` (uint16, bit d-1 = dungeon d) + `free_spronk`/`spronk_freed`.
 
@@ -137,7 +138,7 @@ inline void clamp_lives_on_load(World& w){                                      
 - `refill_lives` sets `lives = max_lives` (e.g. with 2 spronks → 5).
 - `clamp_lives_on_load`: lives 0 → max; lives > max → max; lives in [1,max] → unchanged.
 - Death-boundary semantics (documented for Phase 2): starting `lives=3`, three `lose_life` calls give 2,1,0 — the call that reaches 0 is the Game-Over trigger.
-- [ ] failing tests → implement → `bash tools/host_test.sh` green → `python tools/check_logic_purity.py` clean → commit `feat(logic): World.lives + max_lives (from spronks_freed) + lives helpers`.
+- [x] failing tests → implement → `bash tools/host_test.sh` green → `python tools/check_logic_purity.py` clean → commit `feat(logic): World.lives + max_lives (from spronks_freed) + lives helpers`.
 
 ### Task 1.2: SaveData v4 (add `lives`) + migration (host-tested)
 
@@ -157,7 +158,7 @@ Current v3 SaveData is 16 bytes: `magic[0..3] version[4..5] spronks[6..7] abilit
 - v1 and v2 migrations still succeed and set `lives == STARTING_LIVES` (keep the existing v1/v2 tests green).
 - Corrupt/empty SRAM (bad magic / bad checksum) → `load_save` returns false (caller starts a fresh game with `lives = STARTING_LIVES` by `World{}` default).
 - Boot clamp: a v4 buffer with `lives=0` → after load, `lives == max_lives` (clamped).
-- [ ] failing tests → implement → host_test green → purity clean → commit `feat(logic): SaveData v4 — persist lives + v1/v2/v3 migration (default 3)`.
+- [x] failing tests → implement → host_test green → purity clean → commit `feat(logic): SaveData v4 — persist lives + v1/v2/v3 migration (default 3)`.
 
 **After Phase 1:** review (≥3 rounds): the derivation (`max_lives` from spronks), the boundary (`lose_life` to 0 = game over), v4 sizeof/checksum/migration correctness, all prior save tests green, no `bn::` in logic. Update the banner ✅ SHIPPED.
 
@@ -243,7 +244,7 @@ GameOverChoice run_game_over(const logic::World& world);  // const: it only disp
 
 ## Phase 3 — HUD lives counter
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED 2026-06-15 | 87620ed (art sprite) + a338f38 (hud math + engine + call sites)
 
 **BEFORE starting:** read `include/engine/hud.h` + `src/engine/hud.cpp` (the health/magic pip rows; `Hud::update(health, magic)`), `include/logic/hud_math.h` + `test/test_hud_math.cpp` (the pure HUD-math + test pattern), and how `Hud::update` is called in `scene_dungeon.cpp` (and `scene_hub.cpp` if it shows the HUD).
 
@@ -255,7 +256,7 @@ GameOverChoice run_game_over(const logic::World& world);  // const: it only disp
 - Engine (`hud.cpp`/`hud.h`): **PIN the representation to a row of life-icon pips** — one small life glyph per current life, up to `LIVES_HUD_CAP`, exactly mirroring the existing health/magic pip rows (a pre-created `bn::vector<bn::sprite_ptr, LIVES_HUD_CAP>`, with `lives_display_count` of them set visible). This matches the pip-based HUD and avoids introducing a `sprite_text_generator`/number into the HUD. Use a distinct life glyph sprite — add a small placeholder via `make_placeholder_art.py` (a Laurel-head or simple life icon) if no existing sprite fits; position the row screen-fixed near the health/magic rows. Extend `Hud::update` to `Hud::update(const Meter& health, const Meter& magic, int lives)`; update the call sites (`scene_dungeon.cpp`, and `scene_hub.cpp` if it draws the HUD) to pass `world.lives`.
 - TEST (`test_hud_math.cpp`): the lives display count is correct for 0..max and clamps at the cap.
 - `bash tools/host_test.sh` green; `bash tools/build_rom.sh` → `ROM fixed!`.
-- [ ] failing test → implement → host_test green → ROM → commit `feat(hud): lives counter`.
+- [x] failing test → implement → host_test green → ROM → commit `feat(hud): lives counter`.
 
 **After Phase 3:** review (≥3 rounds): the HUD shows the right count, updates on death/refill, fits the screen at max (11+), no `bn::` in the hud_math logic. Update the banner ✅ SHIPPED.
 
