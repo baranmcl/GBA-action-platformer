@@ -19,6 +19,7 @@
 #include "bn_sprite_items_bolt.h"
 #include "bn_sprite_items_grapple_icon.h"
 #include "bn_sprite_items_heart_container.h"
+#include "bn_sprite_items_magic_crystal.h"
 
 #include "logic/reveal.h"
 
@@ -93,6 +94,8 @@ namespace
         bool shown = false;
         bn::vector<bn::sprite_ptr, 8> sprites;   // one per tile in the run
     };
+    // M10 Light: a respawning full-magic-refill pickup (reset each attempt — never latched).
+    struct MagicCrystalInst { int tx, ty; logic::Body body; bn::optional<bn::sprite_ptr> sprite; bool collected = false; };
     struct ShrineInst { logic::AbilityPickup pk; logic::Body body; bn::optional<bn::sprite_ptr> sprite; };
     struct HeartInst  { logic::HeartContainerSpawn hc; logic::Body body; bn::optional<bn::sprite_ptr> sprite; bool collected = false; };
     // src_tx/ty: plate or button tile to test; group: brazier group (Braziers kind)
@@ -358,6 +361,17 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         }
     }
     logic::RevealState reveal;   // room-wide Light reveal timer (a Light cast (re)starts it)
+
+    // ---- magic crystals (M10 Light: full-magic-refill pickup; respawns each attempt, NOT latched) ----
+    bn::vector<MagicCrystalInst, 8> magic_crystals;
+    for(int i = 0; i < level.magic_crystal_count && i < 8; ++i){
+        const logic::MagicCrystalSpawn& mc = level.magic_crystals[i];
+        magic_crystals.push_back(MagicCrystalInst{ mc.tx, mc.ty, tile_body(mc.tx, mc.ty, 6, 8), {}, false });
+        MagicCrystalInst& ci = magic_crystals.back();
+        ci.sprite = bn::sprite_items::magic_crystal.create_sprite(0, 0);
+        ci.sprite->set_camera(cam);
+        ci.sprite->set_position(wx(mc.tx * 8 + 8), wy(mc.ty * 8 + 8));
+    }
 
     // ---- room-doors (bg tile 5 open-door; 2-wide x 4-tall archway grounded on the floor,
     //      matching the hub's archway). Floor-scanned so a row-18-authored door reaches the
@@ -825,6 +839,12 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                 engine::set_collision_tile(bi.blk.tx, bi.blk.ty, 1);          // solid at the start cell
                 if(bi.sprite) bi.sprite->set_position(wx(bi.blk.tx * 8 + 4), wy(bi.blk.ty * 8 + 4));
             }
+            // M10: reset magic crystals each attempt (NOT latched) so a fresh full-refill is always
+            // available after a death-respawn — guarantees no magic soft-lock on the Light ascent.
+            for(MagicCrystalInst& ci : magic_crystals){
+                ci.collected = false;
+                if(ci.sprite) ci.sprite->set_visible(true);
+            }
         }
 
         // ---- ability shrines ----
@@ -845,6 +865,17 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                 engine::write_world(world);                  // persist immediately (same path as latches)
                 hi.collected = true;
                 if(hi.sprite) hi.sprite->set_visible(false);
+            }
+        }
+
+        // ---- magic crystals: collect on overlap -> full magic refill. NOT latched (resets each
+        //      attempt below) so a Light beat never soft-locks on empty magic. ----
+        for(MagicCrystalInst& ci : magic_crystals){
+            if(ci.collected) continue;
+            if(logic::aabb_overlap(player.body, ci.body)){
+                magic.cur = magic.max;   // full refill — the guaranteed combat-free magic source
+                ci.collected = true;
+                if(ci.sprite) ci.sprite->set_visible(false);
             }
         }
 
