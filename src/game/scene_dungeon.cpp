@@ -44,6 +44,7 @@
 #include "engine/hud.h"
 #include "engine/fade.h"
 #include "engine/save.h"        // write_world (persist latches)
+#include "game/scene_game_over.h" // run_game_over (death -> 0 lives flow)
 
 namespace game
 {
@@ -53,7 +54,7 @@ namespace
     int px2t(logic::Fixed p){ return logic::Tilemap::px_to_tile(p); }
 
     struct RoomOutcome {
-        enum Kind { ExitDungeon, Quit, Restart, GoToRoom } kind;
+        enum Kind { ExitDungeon, Quit, Restart, GoToRoom, GameOver } kind;
         int target_room = 0;
         int target_entrance = 0;
     };
@@ -745,6 +746,15 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         if(invuln > 0) { --invuln; avatar.set_visible((invuln / 4) % 2 == 0); }
         else avatar.set_visible(true);
         if(health.is_empty()){
+            logic::lose_life(world);
+            engine::write_world(world);   // persist the decremented count immediately
+            // NOTE: this is the FIRST mid-dungeon save — it persists current_dungeon = n
+            // (the old code only wrote post-clear with current_dungeon already 0). This is
+            // benign: door_enterable uses spronks_freed, and main re-sets current_dungeon
+            // before each run_dungeon, so the stored n is overwritten on the next entry.
+            if(world.lives == 0){
+                return RoomOutcome{ RoomOutcome::GameOver };   // run_dungeon shows the Game Over scene
+            }
             player.body.pos = spawn_pos; player.body.vel = { fx(0), fx(0) };
             health.cur = health.max;
             invuln = RESPAWN_IFRAMES;   // grace window (NOT 0): never re-die before regaining control
@@ -881,7 +891,9 @@ DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world
         RoomOutcome out = play_room(*dungeon.rooms[cur_room], cur_entrance, world, ps);
         engine::fade_out(16);   // one fade-out per room exit; next play_room fades in
         switch(out.kind){
-            case RoomOutcome::ExitDungeon: return DungeonResult::Cleared;
+            case RoomOutcome::ExitDungeon:
+                logic::refill_lives(world);   // cleared: spronk freed in play_room (max grew) -> top up; main persists on Cleared
+                return DungeonResult::Cleared;
             case RoomOutcome::Quit:        return DungeonResult::Quit;
             case RoomOutcome::Restart:
                 ps.health.cur = ps.health.max;   // anti-soft-lock: refill vitals, replay same room
@@ -891,6 +903,17 @@ DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world
                 cur_room = out.target_room;
                 cur_entrance = out.target_entrance;
                 break;
+            case RoomOutcome::GameOver: {
+                game::GameOverChoice c = game::run_game_over(world);
+                logic::refill_lives(world);   // both choices refill to max
+                engine::write_world(world);   // persist the refill — the save never holds lives==0
+                if(c == game::GameOverChoice::QuitToTitle) return DungeonResult::QuitToTitle;
+                // Continue: restart THIS dungeon from the start room, vitals refilled like Restart.
+                cur_room = dungeon.start_room; cur_entrance = 0;
+                ps.health.cur = ps.health.max;   // mirror the Restart case verbatim
+                ps.magic.cur  = ps.magic.max;
+                break;   // loop re-enters play_room at the start room
+            }
         }
     }
 }
