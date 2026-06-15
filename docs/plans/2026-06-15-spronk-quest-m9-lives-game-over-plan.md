@@ -63,13 +63,13 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Phase 1 shipped.
+**Overall:** Phases 1 and 3 shipped (Phase 2 not yet started).
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure logic: World.lives + max_lives + SaveData v4 | ✅ Shipped 2026-06-15 | a3f2ac3, 0de0075 | 345/345 host tests green; purity clean |
 | 2 — Engine/scene: death→Game-Over flow + run_game_over + main routing | ⬜ Not started | — | — |
-| 3 — HUD lives counter | ⬜ Not started | — | — |
+| 3 — HUD lives counter | ✅ Shipped 2026-06-15 | 87620ed (art), a338f38 (hud) | 352/352 host tests green; purity clean; ROM fixed! |
 | 4 — Emulator QA | ⬜ Not started | — | — |
 
 ### Deviations
@@ -243,7 +243,7 @@ GameOverChoice run_game_over(const logic::World& world);  // const: it only disp
 
 ## Phase 3 — HUD lives counter
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED 2026-06-15 | 87620ed (art sprite) + a338f38 (hud math + engine + call sites)
 
 **BEFORE starting:** read `include/engine/hud.h` + `src/engine/hud.cpp` (the health/magic pip rows; `Hud::update(health, magic)`), `include/logic/hud_math.h` + `test/test_hud_math.cpp` (the pure HUD-math + test pattern), and how `Hud::update` is called in `scene_dungeon.cpp` (and `scene_hub.cpp` if it shows the HUD).
 
@@ -255,7 +255,7 @@ GameOverChoice run_game_over(const logic::World& world);  // const: it only disp
 - Engine (`hud.cpp`/`hud.h`): **PIN the representation to a row of life-icon pips** — one small life glyph per current life, up to `LIVES_HUD_CAP`, exactly mirroring the existing health/magic pip rows (a pre-created `bn::vector<bn::sprite_ptr, LIVES_HUD_CAP>`, with `lives_display_count` of them set visible). This matches the pip-based HUD and avoids introducing a `sprite_text_generator`/number into the HUD. Use a distinct life glyph sprite — add a small placeholder via `make_placeholder_art.py` (a Laurel-head or simple life icon) if no existing sprite fits; position the row screen-fixed near the health/magic rows. Extend `Hud::update` to `Hud::update(const Meter& health, const Meter& magic, int lives)`; update the call sites (`scene_dungeon.cpp`, and `scene_hub.cpp` if it draws the HUD) to pass `world.lives`.
 - TEST (`test_hud_math.cpp`): the lives display count is correct for 0..max and clamps at the cap.
 - `bash tools/host_test.sh` green; `bash tools/build_rom.sh` → `ROM fixed!`.
-- [ ] failing test → implement → host_test green → ROM → commit `feat(hud): lives counter`.
+- [x] failing test → implement → host_test green → ROM → commit `feat(hud): lives counter`.
 
 **After Phase 3:** review (≥3 rounds): the HUD shows the right count, updates on death/refill, fits the screen at max (11+), no `bn::` in the hud_math logic. Update the banner ✅ SHIPPED.
 
