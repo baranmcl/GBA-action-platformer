@@ -16,6 +16,8 @@ struct RoomDoorSpawn { int tx, ty, target_room, target_entrance; }; // room-grap
 struct HeartContainerSpawn { int tx, ty, id; };       // permanent HP upgrade pickup; id maps to World::heart_container_collected(id)
 struct BoulderSpawn        { int tx, ty; };            // M8 Stone: rolling boulder obstacle
 struct LoosePlatformSpawn  { int tx, ty, len; };       // M8 Stone: shaking platform that drops on pound
+struct HiddenPlatformSpawn { int tx, ty, len; };       // M10 Light: invisible platform revealed while RevealState is active
+struct MagicCrystalSpawn   { int tx, ty; };            // M10 Light: collectible that grants Light ability
 struct LevelData {
     const uint8_t* tiles; int w, h;
     int spawn_tx, spawn_ty;
@@ -35,6 +37,8 @@ struct LevelData {
     const HeartContainerSpawn* heart_containers    = nullptr; int heart_container_count    = 0;
     const BoulderSpawn*        boulders            = nullptr; int boulder_count            = 0;
     const LoosePlatformSpawn*  loose_platforms     = nullptr; int loose_platform_count     = 0;
+    const HiddenPlatformSpawn* hidden_platforms    = nullptr; int hidden_platform_count    = 0;
+    const MagicCrystalSpawn*   magic_crystals      = nullptr; int magic_crystal_count      = 0;
 };
 struct DungeonData {
     const LevelData* const* rooms;   // rooms[0..room_count-1]
