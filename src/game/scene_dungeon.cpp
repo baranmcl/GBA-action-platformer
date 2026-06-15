@@ -864,7 +864,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
 
         // ---- pound VFX tick (placeholder): fade out the dust; apply a tiny vertical camera shake ----
         if(pound_vfx_t > 0){ if(--pound_vfx_t == 0) pound_dust.set_visible(false); }
-        hud.update(health, magic);
+        hud.update(health, magic, world.lives);
         int cx = player.body.pos.x.to_int() + player.body.half_w.to_int();
         int cy = player.body.pos.y.to_int() + player.body.half_h.to_int();
         if(pound_shake_t > 0){ cy += (pound_shake_t % 2 == 0) ? 2 : -2; --pound_shake_t; }  // 2px jitter

@@ -84,3 +84,30 @@ TEST(health_bar_ties_to_containers){
     CHECK_EQ(health_fill_pips(125, max_health_for(w)), 13);      // full at the longer length
     CHECK_EQ(health_fill_pips(100, max_health_for(w)), 10);      // partial on the longer bar
 }
+
+// --- lives_display_count: clamps to [0, LIVES_HUD_CAP], floors negatives at 0 ---
+TEST(lives_display_zero){
+    CHECK_EQ(lives_display_count(0), 0);
+}
+TEST(lives_display_one){
+    CHECK_EQ(lives_display_count(1), 1);
+}
+TEST(lives_display_three_starting){
+    CHECK_EQ(lives_display_count(3), 3);    // STARTING_LIVES = 3
+}
+TEST(lives_display_at_cap){
+    CHECK_EQ(lives_display_count(LIVES_HUD_CAP), LIVES_HUD_CAP);
+}
+TEST(lives_display_above_cap_clamped){
+    CHECK_EQ(lives_display_count(15), LIVES_HUD_CAP);   // 15 > 12 -> clamp to cap
+    CHECK_EQ(lives_display_count(LIVES_HUD_CAP + 1), LIVES_HUD_CAP);
+}
+TEST(lives_display_negative_floors_to_zero){
+    CHECK_EQ(lives_display_count(-1), 0);
+    CHECK_EQ(lives_display_count(-99), 0);
+}
+TEST(lives_display_explicit_cap){
+    // custom cap: lives_display_count(lives, cap) honours the cap arg
+    CHECK_EQ(lives_display_count(5, 3), 3);
+    CHECK_EQ(lives_display_count(2, 3), 2);
+}

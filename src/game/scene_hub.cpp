@@ -259,7 +259,7 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
         int cx = player.body.pos.x.to_int() + player.body.half_w.to_int();
         int cy = player.body.pos.y.to_int() + player.body.half_h.to_int();
         set_clamped_cam(cx, cy);
-        hud.update(ps.health, ps.magic);
+        hud.update(ps.health, ps.magic, world.lives);
         if(fade_in_t > 0) engine::set_fade(--fade_in_t);
         bn::core::update();
     }

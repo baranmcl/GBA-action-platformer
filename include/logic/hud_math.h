@@ -43,4 +43,15 @@ inline int health_fill_pips(int cur, int max){
     if(fill > total) fill = total;
     return fill;
 }
+
+// --- Lives HUD display --------------------------------------------------------
+// Cap on how many life-icon pips the HUD can show (enough for max_lives with 8
+// spronks: 3 base + 8 = 11; 12 leaves one slot of margin).
+static constexpr int LIVES_HUD_CAP = 12;
+
+// How many life-icon pips to light: clamp lives to [0, cap].
+inline int lives_display_count(int lives, int cap = LIVES_HUD_CAP){
+    if(lives < 0) lives = 0;
+    return lives < cap ? lives : cap;
+}
 }
