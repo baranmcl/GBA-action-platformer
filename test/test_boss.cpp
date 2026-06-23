@@ -108,3 +108,27 @@ TEST(boss_player_death_restarts_full_fight){
     CHECK_EQ(b.attack_timer, 0);
     CHECK(!b.exposed());
 }
+
+TEST(switch_budget_invariant_all_windows){
+    // No telegraph window and no expose window may be tighter than the worst-case
+    // time to cycle (L) to the right spell + react + cast. If this fails, a window
+    // was set below SWITCH_BUDGET -> the phase would be unfair regardless of skill.
+    for(int i = 0; i < 3; ++i)
+        CHECK(PHASE_PATTERNS[i].telegraph_frames >= SWITCH_BUDGET);
+    CHECK(EXPOSE_FRAMES >= SWITCH_BUDGET);
+}
+
+TEST(phase_pattern_escalates_but_respects_budget){
+    // Telegraph shrinks each phase (escalation) but never below the floor.
+    CHECK(PHASE_PATTERNS[0].telegraph_frames >= PHASE_PATTERNS[1].telegraph_frames);
+    CHECK(PHASE_PATTERNS[1].telegraph_frames >= PHASE_PATTERNS[2].telegraph_frames);
+    CHECK(PHASE_PATTERNS[2].telegraph_frames >= SWITCH_BUDGET);
+}
+
+TEST(boss_phase_step_is_deterministic){
+    // Same phase + same attack_timer -> same pattern step (no hidden state/RNG).
+    BossState a; a.reset(); BossState b; b.reset();
+    for(int i=0;i<40;++i){ a.tick(); b.tick(); }
+    CHECK_EQ(a.attack_timer, b.attack_timer);
+    CHECK_EQ((int)a.current_step(), (int)b.current_step());
+}

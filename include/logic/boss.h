@@ -32,6 +32,8 @@ inline constexpr PhasePattern PHASE_PATTERNS[3] = {
 // exposed_return. Generic naming so M12 can lift this into a shared boss framework.
 enum class BossPhase : uint8_t { P1=0, P2, P3, Exposed, Defeated };
 
+enum class AttackStep : uint8_t { Telegraph=0, Active, Recovery };
+
 struct BossState {
     int hp = KING_MAX_HP;
     BossPhase phase = BossPhase::P1;
@@ -88,6 +90,14 @@ struct BossState {
     // Player died: full-fight restart (spec design decision). Own named method so the
     // intent is explicit and M12 can override per-boss.
     void on_player_death(){ reset(); }
-    // (current_step added in a later task)
+
+    AttackStep current_step() const {
+        BossPhase active = (phase==BossPhase::Exposed) ? exposed_return : phase;
+        int i = (active==BossPhase::P2)?1 : (active==BossPhase::P3)?2 : 0;
+        const PhasePattern& pp = PHASE_PATTERNS[i];
+        if(attack_timer < pp.telegraph_frames) return AttackStep::Telegraph;
+        if(attack_timer < pp.telegraph_frames + pp.attack_active_frames) return AttackStep::Active;
+        return AttackStep::Recovery;
+    }
 };
 }
