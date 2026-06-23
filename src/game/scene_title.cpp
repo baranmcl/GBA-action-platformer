@@ -25,6 +25,10 @@ void run_title(const logic::World& world)
     bn::vector<bn::sprite_ptr, 40> prompt;
     text.generate(0, 16, world.spronks_freed != 0 ? "CONTINUE - PRESS START" : "PRESS START", prompt);
 
+    // M11: reflect a completed game with a single additive line (does not alter title/prompt/START).
+    bn::vector<bn::sprite_ptr, 24> complete;
+    if(world.beaten) text.generate(0, 40, "GAME COMPLETE", complete);
+
     engine::fade_in(16); // fade in from the black handed over by the previous scene
 
     while(true)
