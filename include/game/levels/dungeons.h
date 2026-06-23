@@ -14,6 +14,9 @@
 #include "game/levels/dungeon8_room0.h"
 #include "game/levels/dungeon8_room1.h"
 #include "game/levels/dungeon8_room2.h"
+#include "game/levels/dungeon9_room0.h"
+#include "game/levels/dungeon9_room1.h"
+#include "game/levels/dungeon9_arena.h"
 
 inline constexpr const logic::LevelData* DUNGEON1_ROOMS[] = { &DUNGEON1_DATA };
 inline constexpr logic::DungeonData DUNGEON1_DUNGEON{ DUNGEON1_ROOMS, 1, 0 };
@@ -48,3 +51,12 @@ inline constexpr logic::DungeonData DUNGEON7_DUNGEON{ DUNGEON7_ROOMS, 3, 0 };
 inline constexpr const logic::LevelData* DUNGEON8_ROOMS[] = {
     &DUNGEON8_ROOM0_DATA, &DUNGEON8_ROOM1_DATA, &DUNGEON8_ROOM2_DATA };
 inline constexpr logic::DungeonData DUNGEON8_DUNGEON{ DUNGEON8_ROOMS, 3, 0 };
+// DUNGEON9 — Nightmare King finale (M11). NOT a spronk-rescue dungeon: a 2-room traversal approach
+// (no combat) hands off to a bespoke boss arena. The approach (DUNGEON9_APPROACH) runs through the normal
+// room-to-room run_dungeon; room1's exit returns DungeonResult::Cleared, which main.cpp (Task 4.3) routes
+// into run_boss. The arena (DUNGEON9_ARENA) is a single room read by run_boss via rooms[start_room]; it has
+// has_exit=false/has_cage=false (the fight ends on boss defeat in code, not on an exit tile).
+inline constexpr const logic::LevelData* DUNGEON9_APPROACH_ROOMS[] = { &DUNGEON9_ROOM0_DATA, &DUNGEON9_ROOM1_DATA };
+inline constexpr logic::DungeonData DUNGEON9_APPROACH{ DUNGEON9_APPROACH_ROOMS, 2, 0 };
+inline constexpr const logic::LevelData* DUNGEON9_ARENA_ROOMS[] = { &DUNGEON9_ARENA_DATA };
+inline constexpr logic::DungeonData DUNGEON9_ARENA{ DUNGEON9_ARENA_ROOMS, 1, 0 };

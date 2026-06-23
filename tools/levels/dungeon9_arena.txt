@@ -1,0 +1,55 @@
+; M11 D9 arena (Nightmare King boss room) — intentionally minimal (framework/testing pass), may be expanded later.
+; Fixed-screen flat-ish combat arena. NO exit 'E', NO cage 'C' (the fight ends via boss defeat in
+; run_boss code, NOT by an exit tile). Player entrance id 0 on the left floor. Exactly ONE magic crystal
+; '$' on the base floor (reachable by base movement — no magic/abilities needed to reach it).
+;
+; The King has no level-data spawn type. CHOSEN King tile position (scene_boss.cpp Task 3.2 must define
+; matching constants); upper-centre, hovering above the central platform:
+;   KING_SPAWN_TX=19 KING_SPAWN_TY=7
+;
+; Per-phase intended FIRING tiles (Task 4.5's reachability invariant references these; all base-reachable):
+;   P1 (aerial) grapple-approach firing tile : TX=19 TY=18  (standing atop the central '######' platform
+;                                              at grid row 19; the grapple anchor 'g' at (18,12) is the
+;                                              aerial approach aid)
+;   P2 (ground) firing tile                  : TX=12 TY=28  (base floor, left of centre, under the King)
+;   P3 (frozen-foothold) base firing tile    : TX=26 TY=18  (standing atop the right '###' platform at grid
+;                                              row 19; this is
+;                                              a SIMPLE solid ledge standing in for the frozen foothold — the
+;                                              format's water-freeze is omitted here to keep the firing tile
+;                                              base-reachable [no Ice needed to reach it] so Task 4.5's
+;                                              reachability invariant holds; may be swapped for a 'w' freeze
+;                                              tile in a later content-expansion pass)
+;
+; Standard floor: entities row 28, solid rows 30-31. Grid rows 0..31 (40x32, matching the approach rooms).
+########################################
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#..................g...................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#..............######......###.........#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#.N@.........$.........................#
+#......................................#
+########################################
+########################################

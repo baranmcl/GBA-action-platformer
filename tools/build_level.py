@@ -57,7 +57,9 @@ class LevelError(Exception):
 def compile_level(txt_path, json_path):
     with open(txt_path, 'r', encoding='utf-8') as f:
         rows = [line.rstrip('\n').rstrip('\r') for line in f]
-    rows = [r for r in rows if r != '']  # ignore blank lines
+    # ignore blank lines and ';'-prefixed comment lines (';' is not a grid symbol, so a leading ';'
+    # is unambiguously a comment — distinct from '#', which is the solid-wall tile).
+    rows = [r for r in rows if r != '' and not r.lstrip().startswith(';')]
     if not rows:
         raise LevelError("empty level")
     w = len(rows[0])
