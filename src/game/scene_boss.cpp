@@ -294,6 +294,25 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
                                player.body.pos.y + player.body.half_h };
         bolts.update(in.fire_pressed, muzzle, player.facing, lvl.map);
         spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);
+
+        // ---- damage resolution (mirrors the dungeon's consume_hit hooks; King is a logic::Body) ----
+        // Light ALWAYS exposes/refreshes — runs every frame regardless of phase (M10 Light-clears
+        // hook, repointed to expose). on_light_hit() is a no-op once defeated.
+        if(spells.consume_hit(king_body, logic::SpellId::Light)) b.on_light_hit();
+        // Wounding lands ONLY while EXPOSED (the King is immune while shielded). on_wound() itself
+        // also guards on exposed(), but we gate here so a shot never silently vanishes off the King
+        // mid-shield. An ELEMENTAL wound also refills magic (sustains casts; dungeon kill-refill feel).
+        if(b.exposed()){
+            if(bolts.consume_hit(king_body)){
+                b.on_wound(logic::WOUND_DMG);
+            } else if(spells.consume_hit(king_body, logic::SpellId::Fire)
+                   || spells.consume_hit(king_body, logic::SpellId::Ice)){
+                b.on_wound(logic::WOUND_DMG);
+                magic.heal(25);
+            }
+        }
+        if(b.defeated()) return BossResult::Victory;
+
         spells.despawn_on_solid(lvl.map);
 
         // ---- magic crystal: full refill on overlap (reset un-collected each attempt) ----
