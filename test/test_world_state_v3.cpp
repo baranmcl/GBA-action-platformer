@@ -9,7 +9,7 @@ TEST(set_and_test_latch){ World w; w.set_latch(5); CHECK(w.latched(5)); CHECK(!w
 TEST(save_v3_roundtrip_latches){
     World w; w.grant(Ability::Fire); w.set_latch(0); w.set_latch(31); w.current_dungeon = 3;
     SaveData s = make_save(w);
-    CHECK_EQ((int)s.version, 4); // bumped to v4 (was v3; migration added lives)
+    CHECK_EQ((int)s.version, 5); // bumped to v5 (was v3->v4; v5 added beaten)
     World w2; CHECK(load_save(s, w2) == true);
     CHECK(w2.has(Ability::Fire));
     CHECK(w2.latched(0)); CHECK(w2.latched(31)); CHECK(!w2.latched(1));
@@ -76,8 +76,8 @@ TEST(heart_container_persists_save_load){
     w.collect_heart_container(0);
     w.collect_heart_container(5);
     SaveData s = make_save(w);
-    CHECK_EQ((int)s.version, 4); // bumped to v4
-    CHECK_EQ((int)sizeof(SaveData), 20); // v4: 20 bytes
+    CHECK_EQ((int)s.version, 5); // bumped to v5
+    CHECK_EQ((int)sizeof(SaveData), 20); // v5: still 20 bytes (beaten in former padding)
     World w2;
     CHECK(load_save(s, w2) == true);
     CHECK(w2.heart_container_collected(0));
@@ -102,8 +102,8 @@ TEST(heart_container_no_collision_with_dungeon_latches){
         CHECK(!w2.latched(i));
 }
 
-TEST(save_version_is_4_and_size_is_20){
-    // Updated for v4: lives byte added at offset 16; struct pads to 20 bytes.
-    CHECK_EQ((int)SAVE_VERSION, 4);
+TEST(save_version_is_5_and_size_is_20){
+    // Updated for v5: beaten byte added at offset 17 (former padding); struct stays 20 bytes.
+    CHECK_EQ((int)SAVE_VERSION, 5);
     CHECK_EQ((int)sizeof(SaveData), 20);
 }
