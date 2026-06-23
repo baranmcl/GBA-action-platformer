@@ -78,6 +78,7 @@ Reason: 4.2 (content) unblocks the scene; 4.4 (`run_victory`) must exist before 
 
 ### Deviations
 - **Phase 2 (Task 2.1):** also edited `test/test_world_state_v3.cpp` (3 assertions `SAVE_VERSION==4`/make_save-produces-v4 → `==5`), beyond the plan's named file list. Necessary + mechanical (no logic change) — the suite could not go green otherwise. Folded into commit `649c7c4`.
+- **Task 4.2:** extended `tools/build_level.py` to support `;`-prefixed comment lines in level `.txt` files (commit `4e84503`). The level format had no comment syntax, but the plan required documenting `KING_SPAWN_TX/TY` + the per-phase firing tiles inside `dungeon9_arena.txt`. `;` is unambiguous (not a grid symbol; distinct from `#` wall). Verified non-breaking: level-compiler unit tests + all regenerated dungeon headers + host suite stay green (409/409). Task 4.2 also executed BEFORE Phase 3 per the plan's own "Recommended execution order" (not a deviation, but noting the actual order).
 
 ### Discoveries
 - `test/test_world_state_v3.cpp` pins the CURRENT save version (asserts `SAVE_VERSION==4` in 3 places), not just v3-on-disk migration. Any future save-version bump must update it too (the plan's Phase 2 only anticipated `test_world_state_v4.cpp`). Fixed in `649c7c4`.
