@@ -437,6 +437,38 @@ def gen_magic_crystal():
     px(im, 7, 11, 1); px(im, 8, 11, 1)
     write(im, "magic_crystal", {"type": "sprite"})
 
+def gen_king():
+    """Nightmare King boss placeholder 32x32 (M11) — a tall, looming dark/violet figure with a
+    horned crown, glowing red eyes, and a flowing shadow cloak. Built from the shared 16-colour
+    palette: shadow-blue body (pal 14), stone-purple cloak folds (pal 12), near-black outline
+    (pal 1), red eyes (pal 13), gold crown (pal 6), white glints (pal 15). 32x32 is a Butano-
+    supported sprite size (4bpp/16-colour). Distinct, readable silhouette vs every other sprite."""
+    im = new_img(32, 32)
+    # ---- horned crown (gold) sitting atop the head ----
+    rect(im, 11, 2, 20, 4, 6)            # gold crown band
+    rect(im, 10, 0, 11, 3, 6); rect(im, 20, 0, 21, 3, 6)   # two outer horns
+    rect(im, 15, 0, 16, 2, 6)            # centre horn
+    px(im, 12, 3, 15); px(im, 19, 3, 15)  # white crown glints
+    # ---- head (shadow-blue) with red glowing eyes ----
+    rect(im, 11, 5, 20, 12, 14)          # head block
+    rect(im, 11, 5, 20, 5, 1)            # near-black brow line
+    rect(im, 13, 8, 14, 9, 13); rect(im, 17, 8, 18, 9, 13)  # red eyes
+    px(im, 13, 8, 15); px(im, 17, 8, 15)  # eye glints
+    # ---- shoulders + cloaked body (widening shadow cloak with purple folds) ----
+    rect(im, 7, 13, 24, 16, 14)          # broad shoulders
+    rect(im, 8, 17, 23, 27, 14)          # cloak body
+    rect(im, 6, 20, 25, 29, 14)          # cloak flares wider toward the base
+    # purple vertical cloak folds
+    for cx in (10, 15, 20):
+        rect(im, cx, 17, cx, 28, 12)
+    rect(im, 12, 14, 19, 18, 12)         # chest plate (purple)
+    px(im, 15, 15, 15); px(im, 16, 16, 15)  # chest glints
+    # ---- near-black outline along the cloak hem (ragged bottom) ----
+    for bx in range(6, 26, 3):
+        px(im, bx, 29, 1); px(im, bx + 1, 28, 1)
+    rect(im, 6, 30, 25, 30, 1)           # base shadow line
+    write(im, "king", {"type": "sprite"})
+
 def gen_grapple_icon():
     """Grapple HUD icon 8x8 — a green hook glyph, clearly distinct from the cyan Ice orb.
     Uses bright green (pal 4) + dark green (pal 5) + near-black outline (pal 1).
@@ -471,5 +503,6 @@ if __name__ == "__main__":
     gen_light_proj()
     gen_magic_crystal()
     gen_grapple_icon()
+    gen_king()
     gen_heart_container()
     print("placeholder sprites + bg tiles + hud + ember art generated.")
