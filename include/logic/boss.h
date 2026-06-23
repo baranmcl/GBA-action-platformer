@@ -71,6 +71,20 @@ struct BossState {
             if(++attack_timer >= phase_period(phase)) attack_timer = 0;
         }
     }
-    // (on_wound / on_player_death / current_step added in later tasks)
+    void advance_phase_for_hp(){
+        // Update the UNDERLYING phase (exposed_return) based on HP thresholds.
+        BossPhase np = (hp <= 0)        ? BossPhase::Defeated
+                     : (hp <= P2_END_HP)? BossPhase::P3
+                     : (hp <= P1_END_HP)? BossPhase::P2
+                     :                    BossPhase::P1;
+        if(hp <= 0){ phase = BossPhase::Defeated; return; }
+        if(np != exposed_return){ exposed_return = np; phase_start_hp = hp; }
+    }
+    void on_wound(int dmg){
+        if(!exposed() || defeated()) return;   // shielded or dead -> immune
+        hp -= dmg; if(hp < 0) hp = 0;
+        advance_phase_for_hp();
+    }
+    // (on_player_death / current_step added in later tasks)
 };
 }

@@ -69,3 +69,29 @@ TEST(boss_attack_frozen_while_exposed){
     for(int i = 0; i < 10; ++i) b.tick();    // ticks during expose
     CHECK_EQ(b.attack_timer, frozen);        // unchanged while exposed
 }
+
+TEST(boss_wound_only_while_exposed){
+    BossState b; b.reset();
+    b.on_wound(WOUND_DMG);          // NOT exposed -> no effect (shielded)
+    CHECK_EQ(b.hp, KING_MAX_HP);
+    b.on_light_hit();
+    b.on_wound(WOUND_DMG);          // exposed -> subtract
+    CHECK_EQ(b.hp, KING_MAX_HP - WOUND_DMG);
+}
+
+TEST(boss_wound_crossing_threshold_advances_phase){
+    BossState b; b.reset();
+    // wound down to just above P1_END while exposed
+    b.on_light_hit();
+    while(b.hp > P1_END_HP) b.on_wound(WOUND_DMG); // 90 -> 60 (crosses)
+    CHECK_EQ(b.hp, P1_END_HP);
+    CHECK_EQ((int)b.exposed_return, (int)BossPhase::P2); // underlying phase advanced
+    CHECK_EQ(b.phase_start_hp, P1_END_HP);
+}
+
+TEST(boss_wound_to_zero_defeats){
+    BossState b; b.reset(); b.on_light_hit();
+    for(int i = 0; i < KING_MAX_HP / WOUND_DMG; ++i) b.on_wound(WOUND_DMG);
+    CHECK(b.defeated());
+    CHECK_EQ((int)b.phase, (int)BossPhase::Defeated);
+}
