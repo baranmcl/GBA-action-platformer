@@ -42,7 +42,8 @@ namespace {
             || (n == 5 && w.spronk_freed(4))
             || (n == 6 && w.spronk_freed(5))
             || (n == 7 && w.spronk_freed(6))
-            || (n == 8 && w.spronk_freed(7));
+            || (n == 8 && w.spronk_freed(7))
+            || (n == 9 && logic::spronk_count(w) == 8); // Door 9 (finale) opens only when ALL 8 spronks are freed
     }
 }
 
