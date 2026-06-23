@@ -66,7 +66,7 @@ notes and commit messages.
 | 1 — Pure logic: BossState + attack table + SWITCH_BUDGET | ✅ Shipped | `c6e25df` (P1.1–P1.6) | 14 host tests; 404/404; non-vacuity verified |
 | 2 — Save v5: World.beaten + migrations | ✅ Shipped | `649c7c4`, `20c45ee` | 409/409; sizeof==20; all migrations + clamp ports |
 | 3 — Engine/scene: run_boss() + King + art | ✅ Shipped | `9a8204f`,`021fd4b`,`b565821`,`71c69bb` | ROM builds; scene reviewed vs BossState contract |
-| 4 — Content + integration + invariants + QA | 🚧 In progress | `4e84503` (Task 4.2) | 4.2 (D9 level data) shipped early; 4.1/4.3/4.4/4.5/4.6 pending |
+| 4 — Content + integration + invariants + QA | 🚧 In progress | `4e84503`,`6e93f25`,`1424bd1`,`31c2e6c`,`1b02c94` | 4.1/4.2/4.3/4.4/4.5 shipped (416/416, ROM builds); **4.6 emulator QA pending** — see Discovery re: King projectile-reach |
 
 ### Recommended execution order (dependency-aware)
 
@@ -79,9 +79,13 @@ Reason: 4.2 (content) unblocks the scene; 4.4 (`run_victory`) must exist before 
 ### Deviations
 - **Phase 2 (Task 2.1):** also edited `test/test_world_state_v3.cpp` (3 assertions `SAVE_VERSION==4`/make_save-produces-v4 → `==5`), beyond the plan's named file list. Necessary + mechanical (no logic change) — the suite could not go green otherwise. Folded into commit `649c7c4`.
 - **Task 4.2:** extended `tools/build_level.py` to support `;`-prefixed comment lines in level `.txt` files (commit `4e84503`). The level format had no comment syntax, but the plan required documenting `KING_SPAWN_TX/TY` + the per-phase firing tiles inside `dungeon9_arena.txt`. `;` is unambiguous (not a grid symbol; distinct from `#` wall). Verified non-breaking: level-compiler unit tests + all regenerated dungeon headers + host suite stay green (409/409). Task 4.2 also executed BEFORE Phase 3 per the plan's own "Recommended execution order" (not a deviation, but noting the actual order).
+- **Task 4.1:** extended `tools/build_level.py` to accept the `9` door digit (CONTENT set + door scan + docstring) — the compiler previously only handled doors 1–8. Mechanical, non-breaking (commit `6e93f25`). Hub kept at width 58, door pitch 6 (2-wide archway + 4-tile gap), 9 doors cols 3..51 on row 15.
+- **Task 4.5:** also modified the Task-4.2 arena (`dungeon9_arena.txt`) to fix completability (see Discoveries) and made the `reaches_forward_exit` test helper room-index-aware so a backtrack room-door can't mask a walled-off forward exit (needed for the room1 non-vacuity break). Committed in `1b02c94`.
 
 ### Discoveries
 - `test/test_world_state_v3.cpp` pins the CURRENT save version (asserts `SAVE_VERSION==4` in 3 places), not just v3-on-disk migration. Any future save-version bump must update it too (the plan's Phase 2 only anticipated `test_world_state_v4.cpp`). Fixed in `649c7c4`.
+- **Task 4.5:** the committed Task-4.2 arena had the P1/P3 firing platforms (row 19) floating ~11 tiles above the floor with the grapple anchor beyond grapple RANGE — the documented firing tiles were unreachable, so the arena was not completable. Fixed in `1b02c94` by adding two-step staircases (solid stubs at rows 20+25, staggered per the M10 overhead-clip lesson, ≤5-tile steps) so P1(19,18)/P3(26,18) are base-reachable. The `d9_arena_expose_positions_reachable` invariant now guards this.
+- **OPEN (for 4.6 QA) — King projectile-reach:** spell projectiles travel purely horizontally (`spell.h`: `vel={2·facing,0}`). The King is anchored at `KING_SPAWN_TY=7` (hitbox rows ~6–9), ~9–11 tiles ABOVE every reachable firing tile (rows 18–28), so a horizontal Light bolt cannot hit it — the fight is statically unwinnable as positioned. The 4.5 reachability invariant does NOT catch this (it checks the player can stand on the firing tile, not that a horizontal shot connects). Also the phases do not yet move the King between aerial/ground heights (it's static at one tile). RESOLUTION: tune `KING_SPAWN_TX/TY` in `scene_boss.cpp` (and/or raise the firing platforms / add per-phase King movement) during 4.6 emulator QA — a positioning/feel decision. Files: `src/game/scene_boss.cpp` (KING_SPAWN_*), `tools/levels/dungeon9_arena.txt` (platform heights).
 
 ---
 
