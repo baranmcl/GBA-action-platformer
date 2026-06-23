@@ -326,6 +326,23 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         if(invuln > 0){ --invuln; avatar.set_visible((invuln / 4) % 2 == 0); }
         else avatar.set_visible(true);
 
+        // ---- death / lives / Game-Over (M9 flow; the WHOLE fight restarts, not the approach) ----
+        if(health.is_empty()){
+            logic::lose_life(world);
+            engine::write_world(world);   // persist the decremented count immediately
+            if(world.lives > 0){
+                restart_fight();          // full-fight restart: BossState->P1, vitals, position, crystal
+            } else {
+                game::GameOverChoice c = game::run_game_over(world);
+                logic::refill_lives(world);   // both choices refill to max
+                engine::write_world(world);   // persist the refill — the save never holds lives==0
+                if(c == game::GameOverChoice::QuitToTitle) return BossResult::QuitToTitle;
+                restart_fight();              // Continue: restart the fight (vitals refilled inside)
+            }
+            // run_game_over took over the screen; re-arm the fade-in so the fight fades back in.
+            engine::set_fade(16); fade_in_t = 16;
+        }
+
         refresh_spell_icon();
         hud.update(health, magic, world.lives);
         if(fade_in_t > 0) engine::set_fade(--fade_in_t);
