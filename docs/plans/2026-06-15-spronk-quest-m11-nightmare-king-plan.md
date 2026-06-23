@@ -59,12 +59,12 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started. Branch: `feat/m11-nightmare-king` (recommended; create from `main`).
+**Overall:** 2/4 phases shipped. Branch: `feat/m11-nightmare-king` (off `main`).
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 1 — Pure logic: BossState + attack table + SWITCH_BUDGET | ⬜ Not started | — | — |
-| 2 — Save v5: World.beaten + migrations | ⬜ Not started | — | — |
+| 1 — Pure logic: BossState + attack table + SWITCH_BUDGET | ✅ Shipped | `c6e25df` (P1.1–P1.6) | 14 host tests; 404/404; non-vacuity verified |
+| 2 — Save v5: World.beaten + migrations | ✅ Shipped | `649c7c4`, `20c45ee` | 409/409; sizeof==20; all migrations + clamp ports |
 | 3 — Engine/scene: run_boss() + King + art | ⬜ Not started | — | — |
 | 4 — Content + integration + invariants + QA | ⬜ Not started | — | — |
 
@@ -77,10 +77,10 @@ Tasks are grouped by phase for readability, but dependencies force this executio
 Reason: 4.2 (content) unblocks the scene; 4.4 (`run_victory`) must exist before 4.3 references it; everything else is intra-phase sequential. Taking this order is NOT a deviation (the phase numbers are organizational, not execution-order); document it only if you diverge from THIS list.
 
 ### Deviations
-- _(none yet)_
+- **Phase 2 (Task 2.1):** also edited `test/test_world_state_v3.cpp` (3 assertions `SAVE_VERSION==4`/make_save-produces-v4 → `==5`), beyond the plan's named file list. Necessary + mechanical (no logic change) — the suite could not go green otherwise. Folded into commit `649c7c4`.
 
 ### Discoveries
-- _(none yet)_
+- `test/test_world_state_v3.cpp` pins the CURRENT save version (asserts `SAVE_VERSION==4` in 3 places), not just v3-on-disk migration. Any future save-version bump must update it too (the plan's Phase 2 only anticipated `test_world_state_v4.cpp`). Fixed in `649c7c4`.
 
 ---
 
@@ -146,7 +146,7 @@ inline constexpr PhasePattern PHASE_PATTERNS[3] = {
 
 ## Phase 1 — Pure logic: BossState + attack table + SWITCH_BUDGET
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `c6e25df` on 2026-06-15 (tasks P1.1–P1.6; `include/logic/boss.h` + `test/test_boss.cpp`, 14 tests, 404/404 green, SWITCH_BUDGET + expose-decay non-vacuity verified)
 
 **Why this matters:** the boss's entire decision logic is pure and host-tested here, so Phase 3's scene is "just rendering." This is also the M12-extraction seed — keep naming generic (`BossPhase`, not `KingRage`) and attacks data-described.
 
@@ -503,7 +503,7 @@ Review the batch from multiple perspectives. Minimum 3 review rounds. If round 3
 
 ## Phase 2 — Save v5: World.beaten + migrations
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `649c7c4`, `20c45ee` on 2026-06-15 (World.beaten in padding byte [17]; SAVE_VERSION 5; checksum_v5; v1–v4→v5 migrations; sizeof==20; 409/409 green. See Deviations re: test_world_state_v3.cpp.)
 
 **Why this matters:** the game's first persisted completion flag. The change MUST keep `sizeof(SaveData)==20` (store `beaten` in existing padding) and cover EVERY migration (TEST-4).
 
