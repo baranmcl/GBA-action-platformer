@@ -85,6 +85,9 @@ struct BossState {
         hp -= dmg; if(hp < 0) hp = 0;
         advance_phase_for_hp();
     }
-    // (on_player_death / current_step added in later tasks)
+    // Player died: full-fight restart (spec design decision). Own named method so the
+    // intent is explicit and M12 can override per-boss.
+    void on_player_death(){ reset(); }
+    // (current_step added in a later task)
 };
 }

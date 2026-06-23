@@ -95,3 +95,16 @@ TEST(boss_wound_to_zero_defeats){
     CHECK(b.defeated());
     CHECK_EQ((int)b.phase, (int)BossPhase::Defeated);
 }
+
+TEST(boss_player_death_restarts_full_fight){
+    BossState b; b.reset();
+    b.on_light_hit();
+    while(b.hp > P2_END_HP) b.on_wound(WOUND_DMG); // deep into the fight (P3)
+    b.on_player_death();
+    CHECK_EQ((int)b.phase, (int)BossPhase::P1);
+    CHECK_EQ(b.hp, KING_MAX_HP);
+    CHECK_EQ(b.phase_start_hp, KING_MAX_HP);
+    CHECK_EQ(b.expose_timer, 0);
+    CHECK_EQ(b.attack_timer, 0);
+    CHECK(!b.exposed());
+}
