@@ -44,6 +44,33 @@ struct BossState {
                   phase_start_hp=KING_MAX_HP; expose_timer=0; attack_timer=0; }
     bool exposed() const { return expose_timer > 0; }
     bool defeated() const { return hp <= 0 || phase == BossPhase::Defeated; }
-    // (on_light_hit / on_wound / tick / on_player_death / current_step added in later tasks)
+
+    void on_light_hit(){
+        if(defeated()) return;
+        if(phase != BossPhase::Exposed) exposed_return = phase; // only capture the real phase
+        phase = BossPhase::Exposed;
+        expose_timer = EXPOSE_FRAMES;
+    }
+
+    int phase_period(BossPhase p) const {
+        int i = (p==BossPhase::P2)?1 : (p==BossPhase::P3)?2 : 0;
+        const PhasePattern& pp = PHASE_PATTERNS[i];
+        return pp.telegraph_frames + pp.attack_active_frames + pp.recovery_frames;
+    }
+    void tick(){
+        if(defeated()) return;
+        if(expose_timer > 0){
+            // EXPOSED = a clean damage window: the King is stunned, so the attack pattern is
+            // FROZEN (do not advance attack_timer). This honors the co-design rule (never force
+            // the player to switch spells AND dodge on the same clock).
+            if(--expose_timer == 0) phase = exposed_return; // window closed -> shield back up
+            return;
+        }
+        // attack pattern advances only while NOT exposed
+        if(phase==BossPhase::P1 || phase==BossPhase::P2 || phase==BossPhase::P3){
+            if(++attack_timer >= phase_period(phase)) attack_timer = 0;
+        }
+    }
+    // (on_wound / on_player_death / current_step added in later tasks)
 };
 }
