@@ -27,6 +27,13 @@ The free wand bolt always damages the King **only while he is EXPOSED**. Each ph
 
 **Magic economy (no magic soft-lock):** Light + elemental casts cost magic. A respawning **magic crystal** (the M10 `MagicCrystalSpawn` pickup — full refill, resets each attempt) sits in the arena, reachable by base movement, so the player can always afford the keystone Light cast. Same guarantee as Gloom Spire: solvability is guaranteed; the challenge is execution + timing, balanced in QA (expose-window length, HP thresholds, attack timings, magic cost).
 
+**Spell-switch budget (shared-button balance — REQUIRED):** Grapple, Fire, Ice, and Light all share the **L-cycle / R-fire** UI, and the cycle is **forward-only** (`Fire→Ice→Grapple→Light→Fire`). Under a boss clock the player needs time to cycle to the right spell, react, and cast — so no timing window may be tighter than that. We make this an explicit, testable constraint rather than leaving it implicit:
+
+- **`SWITCH_BUDGET`** (named constant, frames): the worst-case time to arrive at the needed spell and use it. Starting estimate (QA-tuned): `reaction (~15f) + worst-case L-presses × per-press cadence (worst chain = 2 presses, e.g. Ice→Grapple→Light, ~10f each = ~20f) + cast+travel (~15f)` ≈ **~50f (~0.85s)**, sized up with margin to a round window (e.g. **~60f**).
+- **Window rule:** every phase **telegraph** window (the warning before an attack the player must answer with a specific spell) and every **expose** window MUST be `≥ SWITCH_BUDGET`. Host-tested invariant (§9).
+- **Co-design rule (minimize worst-case distance):** sequence each phase so the player is **never switching spells AND dodging on the same tight clock**. Concretely for P3, the **Ice** freeze (the 2-press swap) happens in a *calm* sub-window, and the **Light** expose (1 press from Grapple, or already-selected) happens in the tight sub-window — so a single window never demands the 2-press chain under fire. Phase spell-sequences and window sizes are co-designed, not tuned independently.
+- The free **bolt** needs no switch — it's always available for wounding during expose, so the expose window's hard floor is "switch to one wound spell OR just bolt," keeping it humane.
+
 ## 3. Pure-logic core — `include/logic/boss.h` (host-tested; the M12 extraction seed)
 
 The boss's state/decisions are pure C++ (no `bn::`), host-testable like `RevealState`/`StoneState`/`DashState`. Written to **generalize** so M12 lifts it into a shared framework — a *move*, not a rewrite.
@@ -56,6 +63,8 @@ struct BossState {
 ```
 
 **Design discipline for M12-ready generalization:** generic naming (`BossPhase`, not `KingRage`); integer-only; attack patterns **data-described** (a small per-phase pattern table the scene reads), NOT a hand-unrolled `if`-ladder; all decisions in logic, only sprite/rendering in the scene. HP thresholds for P1→P2→P3 are named constants (single source of truth, shared by scene + tests).
+
+**Switch-budget enforcement in the data:** the per-phase attack-pattern table's **telegraph durations** and the **`expose_timer`** initial value (set by `on_light_hit()`) are named constants that MUST be `≥ SWITCH_BUDGET` (§2). Because the table lives in pure logic, the host test in §9 can assert this invariant directly over the table — the shared-button balance constraint is verified, not just hoped for.
 
 ## 4. Encounter structure & scene wiring (hybrid approach)
 
@@ -91,6 +100,7 @@ The novel/hard part (phase machine + boss combat) lives in a focused new scene; 
 ## 9. Testing strategy
 
 - **Pure-logic host tests (`test/test_boss.cpp`):** P1→P2→P3 HP thresholds (exact); `on_light_hit` enters EXPOSED + sets `exposed_return`; `on_wound` subtracts HP **only while EXPOSED** (no damage while shielded); `tick` expose-window decay (exact-frame boundary, `exposed()` true while >0); `on_player_death` resets to P1 full HP + clears timers; `defeated()` at hp<=0; attack-pattern table is deterministic (same phase+timer → same pattern step).
+- **Switch-budget invariant (host-tested):** every phase telegraph duration in the attack-pattern table is `≥ SWITCH_BUDGET`, and the `expose_timer` initial value is `≥ SWITCH_BUDGET`. This proves no window is tighter than the worst-case spell-cycle-and-cast time (§2). Must FAIL if a window is set below budget (non-vacuity).
 - **Save tests:** v5 round-trip (`beaten` true/false survives); **every** migration v1/v2/v3/v4 → v5 defaults `beaten=false` (TEST-4: cover corruption + every migration); `sizeof(SaveData)==20` unchanged; bad-checksum rejected.
 - **No-soft-lock invariant tests (2-wide player):** the 2 approach rooms are traversable with the carried kit (flood-fill); the arena's expose-opening is reachable each phase with the intended ability-combo; the magic crystal is reachable by base movement (no magic soft-lock); full-fight-restart leaves no stranded state (arena re-entry safe). Each invariant must FAIL on a deliberately-broken layout (non-vacuity gate), per the M8–M10 discipline.
 - **Build gates:** `bash tools/host_test.sh` green (N/N), `python tools/check_logic_purity.py` clean, `bash tools/build_rom.sh` → `ROM fixed!`. Manual emulator QA — **balance pass**: expose-window length, P1/P2/P3 HP thresholds, attack timings/density, Light + element magic cost vs crystal spacing, full-fight-restart feel; verify the lives/Game-Over interaction, victory screen, persisted completion + title reflect, and that all 8 abilities are genuinely exercised across the phases.
@@ -99,6 +109,7 @@ The novel/hard part (phase machine + boss combat) lives in a focused new scene; 
 
 - Door 9 opens when all 8 spronks are freed; the 2-room approach is completable with the carried kit and hands off to the arena.
 - The King fight requires chaining traversal powers to open a window, **Light** to expose, and bolt/elements to wound — across 3 escalating phases; he cannot be cheesed by bolt-spam while shielded.
+- No timing window is tighter than the worst-case shared-button spell-switch time: every telegraph + expose window `≥ SWITCH_BUDGET`, host-tested + fail-on-broken; phase spell-sequences are co-designed so the player never switches *and* dodges on the same tight clock.
 - Death restarts the whole fight at P1 (approach not repeated); lives/Game-Over (M9) integrate correctly; no magic soft-lock; invariants green + fail-on-broken.
 - Defeating the King plays a victory screen, persists `beaten` (save v5, no `sizeof` change, all migrations covered), and the title reflects completion — the game is **winnable end-to-end**.
 - `BossState` is pure logic, host-tested, and written to generalize (named phases/thresholds, data-described attacks) so M12 can extract a shared boss framework without a rewrite.
