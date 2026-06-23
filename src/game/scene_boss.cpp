@@ -44,8 +44,13 @@ namespace
 
     // King position — no level-data spawn type; matches the comment marker in
     // tools/levels/dungeon9_arena.txt (KING_SPAWN_TX/TY). Tile coords.
+    // TY=16 (not 7): spell projectiles travel HORIZONTALLY (spell.h vel={2*facing,0}), so the King
+    // must sit at the firing platforms' height to be hittable. The central/right firing platforms are
+    // at row 19 (player stands ~row 17 atop them); a King body centred ~row 17 is hit by a horizontal
+    // Light bolt from the platform. (Per-phase King movement / aerial-vs-ground height is a feel item
+    // for QA — phase flavour currently comes from the ATTACK patterns, not King position.) QA-tunable.
     constexpr int KING_SPAWN_TX = 19;
-    constexpr int KING_SPAWN_TY = 7;
+    constexpr int KING_SPAWN_TY = 16;
 
     logic::Body tile_body(int tx, int ty, int hw, int hh){
         logic::Body b{}; b.half_w = fx(hw); b.half_h = fx(hh);
