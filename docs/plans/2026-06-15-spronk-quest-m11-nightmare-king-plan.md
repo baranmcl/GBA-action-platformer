@@ -59,14 +59,14 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** 2/4 phases shipped. Branch: `feat/m11-nightmare-king` (off `main`).
+**Overall:** 3/4 phases shipped (+ Task 4.2 content shipped early). Branch: `feat/m11-nightmare-king` (off `main`).
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure logic: BossState + attack table + SWITCH_BUDGET | ✅ Shipped | `c6e25df` (P1.1–P1.6) | 14 host tests; 404/404; non-vacuity verified |
 | 2 — Save v5: World.beaten + migrations | ✅ Shipped | `649c7c4`, `20c45ee` | 409/409; sizeof==20; all migrations + clamp ports |
-| 3 — Engine/scene: run_boss() + King + art | ⬜ Not started | — | — |
-| 4 — Content + integration + invariants + QA | ⬜ Not started | — | — |
+| 3 — Engine/scene: run_boss() + King + art | ✅ Shipped | `9a8204f`,`021fd4b`,`b565821`,`71c69bb` | ROM builds; scene reviewed vs BossState contract |
+| 4 — Content + integration + invariants + QA | 🚧 In progress | `4e84503` (Task 4.2) | 4.2 (D9 level data) shipped early; 4.1/4.3/4.4/4.5/4.6 pending |
 
 ### Recommended execution order (dependency-aware)
 
@@ -623,6 +623,8 @@ Review the batch (min 3 rounds). Confirm: `sizeof(SaveData)==20`; every migratio
 ## Phase 3 — Engine/scene: run_boss() + King + art
 
 **Execution Status:** ⬜ NOT STARTED
+
+**Execution Status:** ✅ SHIPPED at `9a8204f`,`021fd4b`,`b565821`,`71c69bb` on 2026-06-15 (King art; `scene_boss.{h,cpp}` run_boss — Light-expose, wound-only-while-exposed, attacks-frozen-while-exposed, M9 death/lives/full-fight-restart, magic crystal, fixed camera; ROM builds; reviewed against the BossState contract. Deviations: P3 uses a single descending projectile placeholder (not 2–3) per "keep minimal"; added a 60-frame respawn i-frame grace; persists `lose_life` immediately.)
 
 **Why this matters:** the playable fight. The DECISIONS are already host-tested in Phase 1 — this scene only renders `BossState` and routes input/damage through existing pools. Scene code is NOT host-testable (it uses `bn::`), so correctness rides on the Phase-1 logic tests + manual emulator QA (Phase 4). Keep ALL new decision logic in `BossState` — do NOT add gameplay branching here that isn't backed by a logic test.
 
