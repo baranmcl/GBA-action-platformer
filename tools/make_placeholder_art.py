@@ -469,6 +469,21 @@ def gen_king():
     rect(im, 6, 30, 25, 30, 1)           # base shadow line
     write(im, "king", {"type": "sprite"})
 
+def gen_king_hp():
+    """King HP pip 8x8 (M11) — the boss-health unit, shown as a row at the bottom of the screen.
+    A small violet orb with a red core + white glint, deliberately distinct from the player's red
+    health / cyan magic bars and from the gold fire orb: stone-purple (pal 12) body, red (pal 13)
+    core, white (pal 15) glint, near-black (pal 1) outline corners."""
+    im = new_img(8, 8)
+    # round-ish orb body (per-row spans)
+    rect(im, 2, 1, 5, 1, 12)
+    rect(im, 1, 2, 6, 5, 12)
+    rect(im, 2, 6, 5, 6, 12)
+    rect(im, 3, 3, 4, 4, 13)            # red core (boss menace)
+    px(im, 2, 2, 15)                    # white glint, top-left
+    px(im, 1, 1, 1); px(im, 6, 1, 1); px(im, 1, 6, 1); px(im, 6, 6, 1)  # outline corners
+    write(im, "king_hp", {"type": "sprite"})
+
 def gen_grapple_icon():
     """Grapple HUD icon 8x8 — a green hook glyph, clearly distinct from the cyan Ice orb.
     Uses bright green (pal 4) + dark green (pal 5) + near-black outline (pal 1).
@@ -504,5 +519,6 @@ if __name__ == "__main__":
     gen_magic_crystal()
     gen_grapple_icon()
     gen_king()
+    gen_king_hp()
     gen_heart_container()
     print("placeholder sprites + bg tiles + hud + ember art generated.")

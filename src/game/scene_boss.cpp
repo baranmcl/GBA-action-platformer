@@ -17,6 +17,7 @@
 #include "bn_sprite_items_light_proj.h"
 #include "bn_sprite_items_grapple_icon.h"
 #include "bn_sprite_items_magic_crystal.h"
+#include "bn_sprite_items_king_hp.h"
 
 #include "logic/boss.h"
 #include "logic/tilemap.h"
@@ -123,11 +124,12 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         king.set_position(wx(kcx), wy(kcy));
     }
 
-    // ---- King HP bar: red pips at the top-centre (screen-space, no camera), one per WOUND_DMG ----
+    // ---- King HP bar: violet King-HP pips along the BOTTOM-centre (screen-space, no camera), one
+    //      per WOUND_DMG. Bottom + dedicated art so it never overlaps the player's top-left HUD. ----
     constexpr int KING_HP_PIPS = logic::KING_MAX_HP / logic::WOUND_DMG;  // 9
     bn::vector<bn::sprite_ptr, 9> king_hp_pips;
     for(int i = 0; i < KING_HP_PIPS; ++i)
-        king_hp_pips.push_back(bn::sprite_items::fire_proj.create_sprite(-32 + i * 8, -70));
+        king_hp_pips.push_back(bn::sprite_items::king_hp.create_sprite(-32 + i * 8, 68));
     auto refresh_king_hp = [&]{
         int alive = (b.hp + logic::WOUND_DMG - 1) / logic::WOUND_DMG;  // ceil(hp / WOUND_DMG)
         for(int i = 0; i < king_hp_pips.size(); ++i)
