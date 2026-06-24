@@ -36,6 +36,7 @@
 #include "engine/hud.h"
 #include "engine/fade.h"
 #include "engine/save.h"         // write_world (persist refilled lives)
+#include "engine/pause.h"        // check_pause (START -> GAME PAUSED)
 #include "game/scene_game_over.h"
 
 namespace game
@@ -46,13 +47,13 @@ namespace
 
     // King position — no level-data spawn type; matches the comment marker in
     // tools/levels/dungeon9_arena.txt (KING_SPAWN_TX/TY). Tile coords.
-    // TY=16 (not 7): spell projectiles travel HORIZONTALLY (spell.h vel={2*facing,0}), so the King
-    // must sit at the firing platforms' height to be hittable. The central/right firing platforms are
-    // at row 19 (player stands ~row 17 atop them); a King body centred ~row 17 is hit by a horizontal
-    // Light bolt from the platform. (Per-phase King movement / aerial-vs-ground height is a feel item
-    // for QA — phase flavour currently comes from the ATTACK patterns, not King position.) QA-tunable.
+    // TY=26: spell projectiles travel HORIZONTALLY (spell.h vel={2*facing,0}), so the player and King
+    // must share a height for a shot to connect. The King sits at FLOOR-CENTRE (row ~26, resting just
+    // above the solid floor rows 30-31) so the player can shoot it directly from the ground — the
+    // intuitive "boss in the middle, shoot it" read. The platforms are for DODGING (jump up to clear a
+    // ground attack), not for reaching the King. QA-tunable.
     constexpr int KING_SPAWN_TX = 19;
-    constexpr int KING_SPAWN_TY = 16;
+    constexpr int KING_SPAWN_TY = 26;
 
     logic::Body tile_body(int tx, int ty, int hw, int hh){
         logic::Body b{}; b.half_w = fx(hw); b.half_h = fx(hh);
@@ -109,11 +110,11 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
 
     // ---- King ----
     logic::BossState b; b.reset();
-    // King hit-body: ~24x24 centred on the King tile (sprite is 32x32; a slightly tighter body
-    // so Light/bolts must actually hit the figure). pos = top-left in px.
+    // King hit-body: ~28x32, roughly matching the 32x32 sprite (a forgiving hitbox so the player can
+    // reliably land Light/bolt/Fire/Ice from the floor — QA: it was too hard to hit). pos = top-left.
     logic::Body king_body;
-    king_body.half_w = fx(12); king_body.half_h = fx(12);
-    king_body.pos = { fx(KING_SPAWN_TX * 8 - 4), fx(KING_SPAWN_TY * 8 - 4) };
+    king_body.half_w = fx(14); king_body.half_h = fx(16);
+    king_body.pos = { fx(KING_SPAWN_TX * 8 - 6), fx(KING_SPAWN_TY * 8 - 8) };
     bn::sprite_ptr king = bn::sprite_items::king.create_sprite(0, 0);
     king.set_camera(cam);
     {
@@ -121,6 +122,18 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         int kcy = king_body.pos.y.to_int() + king_body.half_h.to_int();
         king.set_position(wx(kcx), wy(kcy));
     }
+
+    // ---- King HP bar: red pips at the top-centre (screen-space, no camera), one per WOUND_DMG ----
+    constexpr int KING_HP_PIPS = logic::KING_MAX_HP / logic::WOUND_DMG;  // 9
+    bn::vector<bn::sprite_ptr, 9> king_hp_pips;
+    for(int i = 0; i < KING_HP_PIPS; ++i)
+        king_hp_pips.push_back(bn::sprite_items::fire_proj.create_sprite(-32 + i * 8, -70));
+    auto refresh_king_hp = [&]{
+        int alive = (b.hp + logic::WOUND_DMG - 1) / logic::WOUND_DMG;  // ceil(hp / WOUND_DMG)
+        for(int i = 0; i < king_hp_pips.size(); ++i)
+            king_hp_pips[i].set_visible(i < alive);
+    };
+    refresh_king_hp();
 
     // ---- attack hitbox (single placeholder; reused per phase) ----
     AttackInst atk;
@@ -203,6 +216,10 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         }
     };  // 'say' sprites destroyed here -> dialogue clears
 
+    // Settle the player onto the floor (gravity) BEFORE the intro renders, so they aren't shown
+    // embedded in the floor at the raw spawn row (QA: player appeared under the floor during dialogue).
+    { logic::InputFrame nin{}; for(int i = 0; i < 24; ++i) player.update(nin, lvl.map); }
+
     // Intro: fade in on the player + King (so the player is VISIBLE at the start — QA fix), then greet.
     avatar.sync(player);
     set_clamped_cam(player.body.pos.x.to_int() + player.body.half_w.to_int(),
@@ -213,6 +230,8 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
 
     while(true)
     {
+        engine::check_pause();   // START -> freeze + "GAME PAUSED" until START again
+
         // ---- input + abilities (no quit/restart keys: run_boss has no mid-fight exit) ----
         logic::InputFrame in = engine::read_input();
         player.abilities.featherleap = world.has(logic::Ability::Featherleap);
@@ -268,33 +287,19 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
             logic::BossPhase ph = b.phase;
             if(step == logic::AttackStep::Active){
                 if(!atk_spawned_this_active){
-                    // Spawn the phase-appropriate placeholder attack.
+                    // One READABLE, DODGEABLE attack for every phase: the King fires a ground-level
+                    // bolt toward the player at a FIXED height (the King's floor height — NOT tracking
+                    // the player's Y, which was the old unfair sweep). The player JUMPS over it (or onto
+                    // a platform). Speed escalates per phase but stays low enough to react + jump.
                     atk.active = true;
                     atk_spawned_this_active = true;
-                    if(ph == logic::BossPhase::P1){
-                        // P1 aerial sweep: a horizontal projectile crossing at the player's height.
-                        atk.body.half_w = fx(6); atk.body.half_h = fx(6);
-                        int sweep_y = pcy;   // aim at the player's current height
-                        int from_left = (pcx >= kcx) ? -1 : 1;  // come from the side toward the player
-                        int start_x = (from_left == 1) ? 16 : (level.w * 8 - 16);
-                        atk.body.pos = { fx(start_x - atk.body.half_w.to_int()),
-                                         fx(sweep_y - atk.body.half_h.to_int()) };
-                        atk.vel = { fx(4 * from_left), fx(0) };
-                    } else if(ph == logic::BossPhase::P2){
-                        // P2 ground slam: a shockwave body at floor level expanding outward from the King.
-                        atk.body.half_w = fx(8); atk.body.half_h = fx(8);
-                        int floor_y = level.h * 8 - 24;   // just above the solid floor rows 30-31
-                        atk.body.pos = { fx(kcx - atk.body.half_w.to_int()),
-                                         fx(floor_y - atk.body.half_h.to_int()) };
-                        atk.vel = { fx((pcx >= kcx) ? 5 : -5), fx(0) };  // travel along the floor toward the player
-                    } else {
-                        // P3 spread/fan: a descending projectile from the King toward the player.
-                        atk.body.half_w = fx(6); atk.body.half_h = fx(6);
-                        atk.body.pos = { fx(kcx - atk.body.half_w.to_int()),
-                                         fx(kcy - atk.body.half_h.to_int()) };
-                        int dx = (pcx >= kcx) ? 3 : -3;
-                        atk.vel = { fx(dx), fx(4) };   // fan downward toward the player
-                    }
+                    (void)pcy;
+                    atk.body.half_w = fx(6); atk.body.half_h = fx(6);
+                    int dir = (pcx >= kcx) ? 1 : -1;   // travel toward the player
+                    atk.body.pos = { fx(kcx - atk.body.half_w.to_int()),
+                                     fx(kcy - atk.body.half_h.to_int()) };
+                    int speed = (ph == logic::BossPhase::P1) ? 2 : 3;  // P1 slow; P2/P3 a touch faster
+                    atk.vel = { fx(speed * dir), fx(0) };
                 }
             } else if(step == logic::AttackStep::Recovery){
                 atk.active = false;
@@ -323,6 +328,11 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
             }
         }
 
+        // ---- King contact damage: touching the King's body hurts (fight from range) ----
+        if(invuln == 0 && !player.dash.invincible() && logic::aabb_overlap(player.body, king_body)){
+            health.damage(20); invuln = 45;
+        }
+
         // ---- projectile pools ----
         logic::Vec2 muzzle = { player.body.pos.x + player.body.half_w,
                                player.body.pos.y + player.body.half_h };
@@ -349,11 +359,16 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
 
         spells.despawn_on_solid(lvl.map);
 
-        // ---- magic crystal: full refill on overlap (reset un-collected each attempt) ----
+        // ---- magic crystal: full refill on overlap; REAPPEARS once magic is spent below one cast,
+        //      so the player can recharge again mid-fight (a repeatable station, not one-shot). ----
         if(!crystal_collected && logic::aabb_overlap(player.body, crystal_body)){
             magic.cur = magic.max;
             crystal_collected = true;
             if(crystal_sprite) crystal_sprite->set_visible(false);
+        }
+        if(crystal_collected && magic.cur < 10){   // 10 = one spell cast (SpellCast.cost) -> depleted
+            crystal_collected = false;
+            if(crystal_sprite) crystal_sprite->set_visible(true);
         }
 
         // ---- i-frames blink ----
@@ -378,6 +393,7 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         }
 
         refresh_spell_icon();
+        refresh_king_hp();
         hud.update(health, magic, world.lives);
         set_clamped_cam(player.body.pos.x.to_int() + player.body.half_w.to_int(),
                         player.body.pos.y.to_int() + player.body.half_h.to_int());

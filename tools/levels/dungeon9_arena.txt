@@ -3,27 +3,12 @@
 ; run_boss code, NOT by an exit tile). Player entrance id 0 on the left floor. Exactly ONE magic crystal
 ; '$' on the base floor (reachable by base movement — no magic/abilities needed to reach it).
 ;
-; The King has no level-data spawn type. CHOSEN King tile position (scene_boss.cpp defines matching
-; constants). KING_SPAWN_TY is at the firing-platform height (row ~16-17), NOT high up: spell projectiles
-; travel HORIZONTALLY, so the King must sit level with a reachable firing tile to be hittable at all.
-;   KING_SPAWN_TX=19 KING_SPAWN_TY=16  (hittable by a horizontal Light bolt from atop the central platform)
-;
-; Per-phase intended FIRING tiles (Task 4.5's reachability invariant references these; all base-reachable):
-;   P1 (aerial) grapple-approach firing tile : TX=19 TY=18  (standing atop the central '######' platform
-;                                              at grid row 19; the grapple anchor 'g' at (19,12) is the
-;                                              aerial approach aid/flourish)
-;   P2 (ground) firing tile                  : TX=12 TY=28  (base floor, left of centre, under the King)
-;   P3 (frozen-foothold) base firing tile    : TX=26 TY=18  (standing atop the right '###' platform at grid
-;                                              row 19; a SIMPLE solid ledge standing in for the frozen
-;                                              foothold — the format's water-freeze is omitted here to keep
-;                                              the firing tile base-reachable [no Ice needed]; may be swapped
-;                                              for a 'w' freeze tile in a later content-expansion pass)
-;
-; M11 P4.5 reachability fix: each high platform (row 19) is made BASE-reachable by a two-step staircase
-; (solid stubs at rows 20 + 25 below each platform's left edge), so the P1/P3 firing tiles atop the platforms
-; are reliably reachable (every climb step <=5 tiles) WITHOUT the grapple — the grapple anchor stays as the
-; intended aerial flourish. Before this fix the platforms floated ~11 tiles above the floor (unreachable by
-; double-jump, and the anchor itself was >RANGE from the floor) -> the arena was not actually completable.
+; The King has no level-data spawn type; scene_boss.cpp defines KING_SPAWN_TX=19, KING_SPAWN_TY=26.
+; QA r2 redesign: spell projectiles travel HORIZONTALLY, so the King sits at FLOOR-CENTRE (row ~26,
+; resting just above the solid floor) where the player can shoot it directly from the ground — the
+; intuitive "boss in the middle, shoot it" read. The platforms above are for DODGING (jump up to clear
+; a ground attack), NOT for reaching the King. Firing position is simply the floor (trivially reachable
+; from the entrance), so the Task-4.5 expose-reachability invariant is satisfied by the open floor.
 ;
 ; Standard floor: entities row 28, solid rows 30-31. Grid rows 0..31 (40x32, matching the approach rooms).
 ########################################
