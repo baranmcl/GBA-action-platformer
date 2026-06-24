@@ -27,6 +27,7 @@
 #include "engine/avatar.h"
 #include "engine/fade.h"
 #include "engine/hud.h"
+#include "engine/pause.h"        // check_pause (START -> GAME PAUSED; global pause)
 #include "game/levels/hub.h"
 
 namespace game
@@ -164,6 +165,7 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
 
     while(true)
     {
+        engine::check_pause();   // START -> freeze + "GAME PAUSED" until START again (global pause)
         logic::InputFrame in = engine::read_input();
         // Full ability parity with the dungeon: every earned movement ability is live in the hub.
         player.abilities.featherleap = world.has(logic::Ability::Featherleap);
