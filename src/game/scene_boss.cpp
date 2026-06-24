@@ -52,8 +52,18 @@ namespace
     // X spreads across the arena so it floats "around the platforms"; the platforms are for DODGING.
     // QA-tunable (positions + TELEPORT_PERIOD).
     struct Perch { int cx, cy; };
-    constexpr Perch KING_PERCHES[] = { {19, 27}, {9, 27}, {30, 27}, {14, 27}, {25, 27} };
-    constexpr int KING_PERCH_COUNT = 5;
+    // A mix of FLOOR perches (row 27 — shoot from the ground) and PLATFORM perches (row 17 — the King
+    // stands atop the central/right platforms; hit it from the OTHER platform at the same height). The
+    // teleport cycles high+low so the player must reposition (climb / cross) to keep hitting it.
+    constexpr Perch KING_PERCHES[] = {
+        {19, 27},   // floor centre
+        {17, 17},   // atop the central platform (climb a platform to hit)
+        {30, 27},   // floor right
+        {28, 17},   // atop the right platform
+        {9, 27},    // floor left
+        {25, 27},   // floor centre-right
+    };
+    constexpr int KING_PERCH_COUNT = 6;
     constexpr int TELEPORT_PERIOD = 200;   // frames between teleports (paused while EXPOSED)
 
     logic::Body tile_body(int tx, int ty, int hw, int hh){
@@ -157,7 +167,7 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
     bool atk_spawned_this_active = false;   // edge-detect the Active step
     int attack_variant = 0;                 // NEXT attack to fire: 0 aimed, 1 spiral, 2 spread/fan
     int current_attack = 0;                 // the attack firing during the CURRENT Active window
-    int spiral_idx = 0, spiral_slot = 0, spiral_cd = 0;   // spiral emitter state
+    int spiral_idx = 0, spiral_cd = 0;   // spiral emitter state (two opposite arms per tick)
     // 8 rotating directions for the spiral (integer approx of a circle, ~3 px/frame).
     static const int SPIRAL_DIRS[8][2] = { {0,-3},{2,-2},{3,0},{2,2},{0,3},{-2,2},{-3,0},{-2,-2} };
 
@@ -237,8 +247,6 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
     // shown by the King HP bar — every 3 pips). combat_phase() = the underlying phase even mid-expose.
     auto combat_phase = [&]{ return b.exposed() ? b.exposed_return : b.phase; };
     logic::BossPhase last_phase = logic::BossPhase::P1;
-    bn::vector<bn::sprite_ptr, 16> phase_label;
-    int phase_label_t = 0;
 
     // restart_fight: every restart path (death-with-lives, Game-Over Continue) runs this.
     auto restart_fight = [&]{
@@ -253,10 +261,10 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         avatar.sync(player);
         invuln = RESPAWN_IFRAMES;
         clear_attacks(); atk_spawned_this_active = false;
-        attack_variant = 0; current_attack = 0; spiral_idx = 0; spiral_slot = 0; spiral_cd = 0;
+        attack_variant = 0; current_attack = 0; spiral_idx = 0; spiral_cd = 0;
         telegraph_orb.set_visible(false);
         set_king_perch(0); teleport_timer = TELEPORT_PERIOD; teleport_flash = 0;
-        last_phase = logic::BossPhase::P1; phase_label.clear(); phase_label_t = 0;
+        last_phase = logic::BossPhase::P1;
         crystal_collected = false;
         if(crystal_sprite) crystal_sprite->set_visible(true);
     };
@@ -362,15 +370,16 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
                 if(!atk_spawned_this_active){
                     current_attack = attack_variant;            // lock the attack for this window
                     attack_variant = (attack_variant + 1) % 3;  // advance for next time
-                    spiral_idx = 0; spiral_slot = 0; spiral_cd = 0;
+                    spiral_idx = 0; spiral_cd = 0;
                     if(current_attack != 1) spawn_attack(current_attack);  // aimed/spread fire now
                     atk_spawned_this_active = true;
                 }
-                if(current_attack == 1){    // spiral: emit a rotating stream throughout Active
-                    if(spiral_cd <= 0){
-                        launch(spiral_slot, king_cx(), king_cy(),
-                               SPIRAL_DIRS[spiral_idx % 8][0], SPIRAL_DIRS[spiral_idx % 8][1]);
-                        ++spiral_idx; spiral_slot = (spiral_slot + 1) % 8; spiral_cd = 4;
+                if(current_attack == 1 && spiral_idx < 4){   // spiral: TWO opposite arms per tick (both
+                    if(spiral_cd <= 0){                       // sides), 4 ticks -> 8 orbs filling the pool
+                        int d0 = spiral_idx % 8, d1 = (spiral_idx + 4) % 8;
+                        launch(spiral_idx * 2,     king_cx(), king_cy(), SPIRAL_DIRS[d0][0], SPIRAL_DIRS[d0][1]);
+                        launch(spiral_idx * 2 + 1, king_cx(), king_cy(), SPIRAL_DIRS[d1][0], SPIRAL_DIRS[d1][1]);
+                        ++spiral_idx; spiral_cd = 5;
                     } else --spiral_cd;
                 }
             } else { // Recovery
@@ -423,19 +432,15 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
                 magic.heal(25);
             }
         }
-        // ---- phase-change announcement (the wound above may have crossed a threshold) ----
+        // ---- phase-change dialogue (the King taunts as he escalates — in-character, not a banner) ----
         {
             logic::BossPhase cp = combat_phase();
             if(cp != last_phase && cp != logic::BossPhase::Defeated){
                 last_phase = cp;
-                phase_label.clear();
-                const char* lbl = (cp == logic::BossPhase::P2) ? "PHASE 2" :
-                                  (cp == logic::BossPhase::P3) ? "PHASE 3" : "PHASE 1";
-                text_gen.generate(0, -20, lbl, phase_label);   // brief banner above centre
-                phase_label_t = 75;
+                if(cp == logic::BossPhase::P2)      boss_say("NOW YOU'RE GETTING ME ANGRY");
+                else if(cp == logic::BossPhase::P3) boss_say("I'M DONE TOYING WITH YOU");
             }
         }
-        if(phase_label_t > 0){ if(--phase_label_t == 0) phase_label.clear(); }
 
         if(b.defeated()){ boss_say("NOOOOO!"); return BossResult::Victory; }
 

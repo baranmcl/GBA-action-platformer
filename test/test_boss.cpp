@@ -2,6 +2,14 @@
 #include "logic/boss.h"
 using namespace logic;
 
+// Land exactly one wound the way the fight now requires: run out any post-wound i-frames, expose with
+// Light, then wound. (A wound ends the expose + grants i-frames, so wounds must be paced like this.)
+static void wound_once(BossState& b){
+    for(int i = 0; i < HIT_IFRAMES + 1; ++i) b.tick();   // clear post-wound i-frames
+    b.on_light_hit();                                    // expose
+    b.on_wound(WOUND_DMG);                               // one wound (ends expose, sets i-frames)
+}
+
 TEST(boss_initial_state){
     BossState b;
     b.reset(); // sets P1 + full HP + cleared timers
@@ -79,33 +87,62 @@ TEST(boss_wound_only_while_exposed){
     CHECK_EQ(b.hp, KING_MAX_HP - WOUND_DMG);
 }
 
+TEST(boss_wound_ends_expose_and_sets_iframes){
+    BossState b; b.reset();
+    b.on_light_hit();
+    CHECK(b.exposed());
+    b.on_wound(WOUND_DMG);
+    CHECK(!b.exposed());                       // a wound ends the expose window
+    CHECK_EQ(b.hit_iframes, HIT_IFRAMES);
+    CHECK_EQ(b.hp, KING_MAX_HP - WOUND_DMG);
+}
+
+TEST(boss_one_wound_per_expose){
+    BossState b; b.reset();
+    b.on_light_hit();
+    b.on_wound(WOUND_DMG);                     // lands
+    b.on_wound(WOUND_DMG);                     // blocked (expose ended + i-frames)
+    CHECK_EQ(b.hp, KING_MAX_HP - WOUND_DMG);
+}
+
+TEST(boss_cannot_reexpose_during_iframes){
+    BossState b; b.reset();
+    b.on_light_hit(); b.on_wound(WOUND_DMG);   // now in i-frames
+    b.on_light_hit();                          // blocked while i-frames > 0
+    CHECK(!b.exposed());
+    for(int i = 0; i < HIT_IFRAMES; ++i) b.tick();   // i-frames decay
+    CHECK_EQ(b.hit_iframes, 0);
+    b.on_light_hit();                          // works again
+    CHECK(b.exposed());
+}
+
 TEST(boss_wound_crossing_threshold_advances_phase){
     BossState b; b.reset();
-    // wound down to just above P1_END while exposed
-    b.on_light_hit();
-    while(b.hp > P1_END_HP) b.on_wound(WOUND_DMG); // 90 -> 60 (crosses)
+    while(b.hp > P1_END_HP) wound_once(b);     // 90 -> 60 (crosses), one wound per Light
     CHECK_EQ(b.hp, P1_END_HP);
     CHECK_EQ((int)b.exposed_return, (int)BossPhase::P2); // underlying phase advanced
     CHECK_EQ(b.phase_start_hp, P1_END_HP);
 }
 
 TEST(boss_wound_to_zero_defeats){
-    BossState b; b.reset(); b.on_light_hit();
-    for(int i = 0; i < KING_MAX_HP / WOUND_DMG; ++i) b.on_wound(WOUND_DMG);
+    BossState b; b.reset();
+    int guard = 0;
+    while(!b.defeated() && guard++ < 100) wound_once(b);
     CHECK(b.defeated());
     CHECK_EQ((int)b.phase, (int)BossPhase::Defeated);
+    CHECK_EQ(guard, KING_MAX_HP / WOUND_DMG);  // exactly 9 wounds (one per Light) to kill
 }
 
 TEST(boss_player_death_restarts_full_fight){
     BossState b; b.reset();
-    b.on_light_hit();
-    while(b.hp > P2_END_HP) b.on_wound(WOUND_DMG); // deep into the fight (P3)
+    while(b.hp > P2_END_HP) wound_once(b);     // deep into the fight (P3)
     b.on_player_death();
     CHECK_EQ((int)b.phase, (int)BossPhase::P1);
     CHECK_EQ(b.hp, KING_MAX_HP);
     CHECK_EQ(b.phase_start_hp, KING_MAX_HP);
     CHECK_EQ(b.expose_timer, 0);
     CHECK_EQ(b.attack_timer, 0);
+    CHECK_EQ(b.hit_iframes, 0);
     CHECK(!b.exposed());
 }
 

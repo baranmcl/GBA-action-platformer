@@ -16,6 +16,12 @@ inline constexpr int WOUND_DMG   = 10;   // damage per bolt/element hit while EX
 //     switch to a wound spell, or just bolt). ---
 inline constexpr int EXPOSE_FRAMES = 75;
 
+// --- Hit invulnerability (frames). A wound ENDS the expose window and grants the King these
+//     i-frames, during which it resumes attacking and cannot be re-exposed by Light. This caps the
+//     fight at ONE wound per Light cast — prevents the "Light-stun then spam shots to death" exploit
+//     and forces the player to dodge between wounds. QA-tunable. ---
+inline constexpr int HIT_IFRAMES = 45;
+
 // --- Per-phase attack pattern (data-described; escalating). telegraph MUST be
 //     >= SWITCH_BUDGET for every phase. Escalation = shorter telegraph each phase
 //     but never below the budget floor (P3 sits AT the floor). ---
@@ -41,14 +47,15 @@ struct BossState {
     int phase_start_hp = KING_MAX_HP;         // HP at the active phase's entry
     int expose_timer = 0;                     // >0 while EXPOSED (vulnerable)
     int attack_timer = 0;                     // drives the per-phase attack pattern
+    int hit_iframes = 0;                      // >0 = just wounded: immune, not re-exposable, attacking
 
     void reset(){ hp=KING_MAX_HP; phase=BossPhase::P1; exposed_return=BossPhase::P1;
-                  phase_start_hp=KING_MAX_HP; expose_timer=0; attack_timer=0; }
+                  phase_start_hp=KING_MAX_HP; expose_timer=0; attack_timer=0; hit_iframes=0; }
     bool exposed() const { return expose_timer > 0; }
     bool defeated() const { return hp <= 0 || phase == BossPhase::Defeated; }
 
     void on_light_hit(){
-        if(defeated()) return;
+        if(defeated() || hit_iframes > 0) return;   // can't re-expose during post-wound i-frames
         if(phase != BossPhase::Exposed) exposed_return = phase; // only capture the real phase
         phase = BossPhase::Exposed;
         expose_timer = EXPOSE_FRAMES;
@@ -61,6 +68,7 @@ struct BossState {
     }
     void tick(){
         if(defeated()) return;
+        if(hit_iframes > 0) --hit_iframes;   // post-wound recovery (King is attacking, not exposable)
         if(expose_timer > 0){
             // EXPOSED = a clean damage window: the King is stunned, so the attack pattern is
             // FROZEN (do not advance attack_timer). This honors the co-design rule (never force
@@ -83,9 +91,14 @@ struct BossState {
         if(np != exposed_return){ exposed_return = np; phase_start_hp = hp; }
     }
     void on_wound(int dmg){
-        if(!exposed() || defeated()) return;   // shielded or dead -> immune
+        if(!exposed() || defeated() || hit_iframes > 0) return;   // shielded / dead / i-frames -> immune
         hp -= dmg; if(hp < 0) hp = 0;
         advance_phase_for_hp();
+        // A wound ENDS the expose window + grants i-frames: ONE wound per Light cast, then the King
+        // recovers and attacks. (advance_phase_for_hp already set phase=Defeated if hp<=0.)
+        hit_iframes = HIT_IFRAMES;
+        expose_timer = 0;
+        if(!defeated()) phase = exposed_return;
     }
     // Player died: full-fight restart (spec design decision). Own named method so the
     // intent is explicit and M12 can override per-boss.
