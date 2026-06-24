@@ -412,8 +412,12 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         }
 
         // ---- projectile pools ----
+        // Shot aim (Zelda II style): hold UP = fire HIGH, DOWN = fire LOW, else MEDIUM. Offsets the
+        // muzzle height so the player can line bolt/Fire/Ice up with attacks (and the King) at
+        // different heights — makes BLOCKING practical. Bolt + spell share the muzzle, so both aim.
+        int aim_dy = bn::keypad::up_held() ? -14 : bn::keypad::down_held() ? 14 : 0;
         logic::Vec2 muzzle = { player.body.pos.x + player.body.half_w,
-                               player.body.pos.y + player.body.half_h };
+                               player.body.pos.y + player.body.half_h + fx(aim_dy) };
         bolts.update(in.fire_pressed, muzzle, player.facing, lvl.map);
         spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);
 
