@@ -8,6 +8,8 @@
 #include "bn_keypad.h"
 #include "bn_vector.h"
 #include "bn_optional.h"
+#include "bn_sprite_text_generator.h"
+#include "common_variable_8x16_sprite_font.h"
 #include "bn_sprite_items_king.h"
 #include "bn_sprite_items_bolt.h"
 #include "bn_sprite_items_fire_proj.h"
@@ -156,10 +158,17 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
     };
     refresh_spell_icon();
 
-    // FIXED camera at the arena centre (do NOT scroll-follow).
-    const int arena_cx = level.w * 8 / 2;
-    const int arena_cy = level.h * 8 / 2;
-    cam.set_position(arena_cx - hw, arena_cy - hh);
+    // Clamped follow-camera (the arena is larger than the 240x160 screen, so a fixed camera would
+    // leave a corner spawn off-screen — the QA bug). Mirrors scene_dungeon's set_clamped_cam: centre
+    // on the player, clamped so the view never scrolls past the authored level.
+    auto set_clamped_cam = [&](int cx, int cy){
+        const int ll = -hw, lt = -hh, lr = ll + level.w * 8, lb = lt + level.h * 8;
+        const int minx = ll + 120, maxx = lr - 120, miny = lt + 80, maxy = lb - 80;
+        int camx = cx - hw, camy = cy - hh;
+        camx = (minx <= maxx) ? (camx < minx ? minx : camx > maxx ? maxx : camx) : (ll + lr) / 2;
+        camy = (miny <= maxy) ? (camy < miny ? miny : camy > maxy ? maxy : camy) : (lt + lb) / 2;
+        cam.set_position(camx, camy);
+    };
 
     // restart_fight: every restart path (death-with-lives, Game-Over Continue) runs this.
     auto restart_fight = [&]{
@@ -179,8 +188,28 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         if(crystal_sprite) crystal_sprite->set_visible(true);
     };
 
-    engine::set_fade(16);
-    int fade_in_t = 16;
+    // ---- boss dialogue (King speaks before + after the fight) ----
+    bn::sprite_text_generator text_gen(common::variable_8x16_sprite_font);
+    text_gen.set_center_alignment();
+    auto boss_say = [&](const char* line){
+        bn::vector<bn::sprite_ptr, 32> say;
+        text_gen.generate(0, 54, line, say);   // lower-centre, below the King, clear of the HUD
+        int t = 0;
+        while(true){
+            // ignore input briefly so a button held from the approach doesn't skip instantly
+            if(t > 20 && (bn::keypad::a_pressed() || bn::keypad::start_pressed())) break;
+            ++t;
+            bn::core::update();
+        }
+    };  // 'say' sprites destroyed here -> dialogue clears
+
+    // Intro: fade in on the player + King (so the player is VISIBLE at the start — QA fix), then greet.
+    avatar.sync(player);
+    set_clamped_cam(player.body.pos.x.to_int() + player.body.half_w.to_int(),
+                    player.body.pos.y.to_int() + player.body.half_h.to_int());
+    engine::fade_in(16);
+    boss_say("YOU FINALLY MADE IT");
+    int fade_in_t = 0;   // already faded in by the intro; the Game-Over path re-arms this
 
     while(true)
     {
@@ -316,7 +345,7 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
                 magic.heal(25);
             }
         }
-        if(b.defeated()) return BossResult::Victory;
+        if(b.defeated()){ boss_say("NOOOOO!"); return BossResult::Victory; }
 
         spells.despawn_on_solid(lvl.map);
 
@@ -350,6 +379,8 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
 
         refresh_spell_icon();
         hud.update(health, magic, world.lives);
+        set_clamped_cam(player.body.pos.x.to_int() + player.body.half_w.to_int(),
+                        player.body.pos.y.to_int() + player.body.half_h.to_int());
         if(fade_in_t > 0) engine::set_fade(--fade_in_t);
         bn::core::update();
     }
