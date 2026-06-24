@@ -145,43 +145,51 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
     };
     refresh_king_hp();
 
-    // ---- attack projectiles (a small pool; each attack variant spawns 1-2) ----
-    bn::vector<AttackInst, 4> attacks;
-    for(int i = 0; i < 4; ++i){
+    // ---- attack projectiles (pool; EVERY attack is emitted FROM the King) ----
+    bn::vector<AttackInst, 8> attacks;
+    for(int i = 0; i < 8; ++i){
         attacks.push_back(AttackInst{});
         attacks[i].sprite = bn::sprite_items::bolt.create_sprite(0, 0);
         attacks[i].sprite->set_camera(cam);
         attacks[i].sprite->set_visible(false);
         attacks[i].sprite->set_scale(2.0);
     }
-    bool atk_spawned_this_active = false;   // edge-detect the Active step to spawn once per cycle
-    int attack_variant = 0;                 // cycles 0,1,2 -> three distinct, dodgeable attacks
+    bool atk_spawned_this_active = false;   // edge-detect the Active step
+    int attack_variant = 0;                 // NEXT attack to fire: 0 aimed, 1 spiral, 2 spread/fan
+    int current_attack = 0;                 // the attack firing during the CURRENT Active window
+    int spiral_idx = 0, spiral_slot = 0, spiral_cd = 0;   // spiral emitter state
+    // 8 rotating directions for the spiral (integer approx of a circle, ~3 px/frame).
+    static const int SPIRAL_DIRS[8][2] = { {0,-3},{2,-2},{3,0},{2,2},{0,3},{-2,2},{-3,0},{-2,-2} };
+
+    // Telegraph cue: a coloured charge orb shown AT the King during the wind-up so the incoming attack
+    // is READABLE — red (fire) = aimed, gold (light) = spiral, cyan (ice) = spread.
+    bn::sprite_ptr telegraph_orb = bn::sprite_items::fire_proj.create_sprite(0, 0);
+    telegraph_orb.set_camera(cam);
+    telegraph_orb.set_visible(false);
+
+    auto king_cx = [&]{ return king_body.pos.x.to_int() + king_body.half_w.to_int(); };
+    auto king_cy = [&]{ return king_body.pos.y.to_int() + king_body.half_h.to_int(); };
     auto clear_attacks = [&]{
         for(AttackInst& a : attacks){ a.active = false; if(a.sprite) a.sprite->set_visible(false); }
     };
-    // Spawn the given attack variant from the King's current position toward the player. Speed scales
-    // with the phase. Three readable dodges: (0) ground bolt -> JUMP; (1) falling bolt -> SIDESTEP;
-    // (2) two bolts from both edges -> JUMP.
+    auto launch = [&](int idx, int cx_px, int cy_px, int vx, int vy){
+        attacks[idx].active = true;
+        attacks[idx].body.half_w = fx(6); attacks[idx].body.half_h = fx(6);
+        attacks[idx].body.pos = { fx(cx_px - 6), fx(cy_px - 6) };
+        attacks[idx].vel = { fx(vx), fx(vy) };
+    };
+    // Aimed (0) + spread (2) fire once at the Active edge, FROM the King toward the player. The spiral
+    // (1) is emitted continuously during Active (in the loop). Speed scales with the phase.
     auto spawn_attack = [&](int variant){
         int pcx_ = player.body.pos.x.to_int() + player.body.half_w.to_int();
-        int kcx_ = king_body.pos.x.to_int() + king_body.half_w.to_int();
-        int kcy_ = king_body.pos.y.to_int() + king_body.half_h.to_int();
+        int dir  = (pcx_ >= king_cx()) ? 1 : -1;
         int spd  = (b.phase == logic::BossPhase::P1) ? 2 : 3;
-        auto launch = [&](int idx, int cx_px, int cy_px, int vx, int vy){
-            attacks[idx].active = true;
-            attacks[idx].body.half_w = fx(6); attacks[idx].body.half_h = fx(6);
-            attacks[idx].body.pos = { fx(cx_px - 6), fx(cy_px - 6) };
-            attacks[idx].vel = { fx(vx), fx(vy) };
-        };
         if(variant == 0){
-            int dir = (pcx_ >= kcx_) ? 1 : -1;          // ground bolt toward the player -> jump over it
-            launch(0, kcx_, kcy_, spd * dir, 0);
-        } else if(variant == 1){
-            launch(0, pcx_, 12, 0, spd + 1);            // falling bolt above the player -> sidestep it
-        } else {
-            int gy = level.h * 8 - 28;                  // two bolts from both edges -> jump over them
-            launch(0, 12, gy, spd, 0);
-            launch(1, level.w * 8 - 12, gy, -spd, 0);
+            launch(0, king_cx(), king_cy(), spd * dir, 0);                 // aimed bolt at the player
+        } else if(variant == 2){
+            launch(0, king_cx(), king_cy(), spd * dir, 0);                 // 3-bolt fan from the King
+            launch(1, king_cx(), king_cy(), spd * dir, -2);
+            launch(2, king_cx(), king_cy(), spd * dir, 2);
         }
     };
 
@@ -225,6 +233,13 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         cam.set_position(camx, camy);
     };
 
+    // Phase-transition announcement so the player feels progression (the fight has 3 HP-gated phases,
+    // shown by the King HP bar — every 3 pips). combat_phase() = the underlying phase even mid-expose.
+    auto combat_phase = [&]{ return b.exposed() ? b.exposed_return : b.phase; };
+    logic::BossPhase last_phase = logic::BossPhase::P1;
+    bn::vector<bn::sprite_ptr, 16> phase_label;
+    int phase_label_t = 0;
+
     // restart_fight: every restart path (death-with-lives, Game-Over Continue) runs this.
     auto restart_fight = [&]{
         b.on_player_death();                       // BossState -> P1, full HP, timers cleared
@@ -237,8 +252,11 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         player.facing = ent.facing;
         avatar.sync(player);
         invuln = RESPAWN_IFRAMES;
-        clear_attacks(); atk_spawned_this_active = false; attack_variant = 0;
+        clear_attacks(); atk_spawned_this_active = false;
+        attack_variant = 0; current_attack = 0; spiral_idx = 0; spiral_slot = 0; spiral_cd = 0;
+        telegraph_orb.set_visible(false);
         set_king_perch(0); teleport_timer = TELEPORT_PERIOD; teleport_flash = 0;
+        last_phase = logic::BossPhase::P1; phase_label.clear(); phase_label_t = 0;
         crystal_collected = false;
         if(crystal_sprite) crystal_sprite->set_visible(true);
     };
@@ -325,22 +343,38 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
             }
         }
 
-        // ---- attack spawn/playback — ONLY while NOT exposed (expose = clean window). Each Active step
-        //      fires the next variant (ground bolt -> falling bolt -> double from edges), cycling. ----
+        // ---- attack telegraph + spawn — ONLY while NOT exposed (expose = clean window) ----
+        //   Telegraph: a coloured charge orb at the King reads the incoming attack. Active: aimed/spread
+        //   fire once from the King; the spiral streams orbs from the King in rotating directions.
         if(b.exposed()){
-            clear_attacks(); atk_spawned_this_active = false;
+            clear_attacks(); atk_spawned_this_active = false; telegraph_orb.set_visible(false);
         } else {
             logic::AttackStep step = b.current_step();
-            if(step == logic::AttackStep::Active){
+            if(step == logic::AttackStep::Telegraph){
+                atk_spawned_this_active = false;
+                if(attack_variant == 0)      telegraph_orb.set_item(bn::sprite_items::fire_proj);   // aimed
+                else if(attack_variant == 1) telegraph_orb.set_item(bn::sprite_items::light_proj);  // spiral
+                else                         telegraph_orb.set_item(bn::sprite_items::ice_proj);    // spread
+                telegraph_orb.set_position(wx(king_cx()), wy(king_cy() - 14));   // charge above the King
+                telegraph_orb.set_visible((b.attack_timer / 6) % 2 == 0);       // pulse the cue
+            } else if(step == logic::AttackStep::Active){
+                telegraph_orb.set_visible(false);
                 if(!atk_spawned_this_active){
-                    spawn_attack(attack_variant);
-                    attack_variant = (attack_variant + 1) % 3;
+                    current_attack = attack_variant;            // lock the attack for this window
+                    attack_variant = (attack_variant + 1) % 3;  // advance for next time
+                    spiral_idx = 0; spiral_slot = 0; spiral_cd = 0;
+                    if(current_attack != 1) spawn_attack(current_attack);  // aimed/spread fire now
                     atk_spawned_this_active = true;
                 }
-            } else if(step == logic::AttackStep::Recovery){
-                clear_attacks(); atk_spawned_this_active = false;
-            } else { // Telegraph
-                atk_spawned_this_active = false;
+                if(current_attack == 1){    // spiral: emit a rotating stream throughout Active
+                    if(spiral_cd <= 0){
+                        launch(spiral_slot, king_cx(), king_cy(),
+                               SPIRAL_DIRS[spiral_idx % 8][0], SPIRAL_DIRS[spiral_idx % 8][1]);
+                        ++spiral_idx; spiral_slot = (spiral_slot + 1) % 8; spiral_cd = 4;
+                    } else --spiral_cd;
+                }
+            } else { // Recovery
+                clear_attacks(); atk_spawned_this_active = false; telegraph_orb.set_visible(false);
             }
         }
 
@@ -389,6 +423,20 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
                 magic.heal(25);
             }
         }
+        // ---- phase-change announcement (the wound above may have crossed a threshold) ----
+        {
+            logic::BossPhase cp = combat_phase();
+            if(cp != last_phase && cp != logic::BossPhase::Defeated){
+                last_phase = cp;
+                phase_label.clear();
+                const char* lbl = (cp == logic::BossPhase::P2) ? "PHASE 2" :
+                                  (cp == logic::BossPhase::P3) ? "PHASE 3" : "PHASE 1";
+                text_gen.generate(0, -20, lbl, phase_label);   // brief banner above centre
+                phase_label_t = 75;
+            }
+        }
+        if(phase_label_t > 0){ if(--phase_label_t == 0) phase_label.clear(); }
+
         if(b.defeated()){ boss_say("NOOOOO!"); return BossResult::Victory; }
 
         spells.despawn_on_solid(lvl.map);
