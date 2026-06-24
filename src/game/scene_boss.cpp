@@ -46,15 +46,15 @@ namespace
 {
     logic::Fixed fx(int v){ return logic::Fixed::from_int(v); }
 
-    // King position — no level-data spawn type; matches the comment marker in
-    // tools/levels/dungeon9_arena.txt (KING_SPAWN_TX/TY). Tile coords.
-    // TY=26: spell projectiles travel HORIZONTALLY (spell.h vel={2*facing,0}), so the player and King
-    // must share a height for a shot to connect. The King sits at FLOOR-CENTRE (row ~26, resting just
-    // above the solid floor rows 30-31) so the player can shoot it directly from the ground — the
-    // intuitive "boss in the middle, shoot it" read. The platforms are for DODGING (jump up to clear a
-    // ground attack), not for reaching the King. QA-tunable.
-    constexpr int KING_SPAWN_TX = 19;
-    constexpr int KING_SPAWN_TY = 26;
+    // King perches (center tile coords). The King TELEPORTS between these so it isn't a sitting duck.
+    // All sit at a FLOOR-HITTABLE height (row 27 — spell bolts travel HORIZONTALLY, so the King must
+    // share the player's standing height to be shootable from the ground; the read that tested well).
+    // X spreads across the arena so it floats "around the platforms"; the platforms are for DODGING.
+    // QA-tunable (positions + TELEPORT_PERIOD).
+    struct Perch { int cx, cy; };
+    constexpr Perch KING_PERCHES[] = { {19, 27}, {9, 27}, {30, 27}, {14, 27}, {25, 27} };
+    constexpr int KING_PERCH_COUNT = 5;
+    constexpr int TELEPORT_PERIOD = 200;   // frames between teleports (paused while EXPOSED)
 
     logic::Body tile_body(int tx, int ty, int hw, int hh){
         logic::Body b{}; b.half_w = fx(hw); b.half_h = fx(hh);
@@ -115,7 +115,15 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
     // reliably land Light/bolt/Fire/Ice from the floor — QA: it was too hard to hit). pos = top-left.
     logic::Body king_body;
     king_body.half_w = fx(14); king_body.half_h = fx(16);
-    king_body.pos = { fx(KING_SPAWN_TX * 8 - 6), fx(KING_SPAWN_TY * 8 - 8) };
+    int perch_idx = 0;
+    auto set_king_perch = [&](int idx){
+        perch_idx = idx;
+        king_body.pos = { fx(KING_PERCHES[idx].cx * 8 - king_body.half_w.to_int()),
+                          fx(KING_PERCHES[idx].cy * 8 - king_body.half_h.to_int()) };
+    };
+    set_king_perch(0);
+    int teleport_timer = TELEPORT_PERIOD;
+    int teleport_flash = 0;   // brief blink after a teleport so it reads as a warp, not a glitch
     bn::sprite_ptr king = bn::sprite_items::king.create_sprite(0, 0);
     king.set_camera(cam);
     {
@@ -137,13 +145,45 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
     };
     refresh_king_hp();
 
-    // ---- attack hitbox (single placeholder; reused per phase) ----
-    AttackInst atk;
-    atk.sprite = bn::sprite_items::bolt.create_sprite(0, 0);
-    atk.sprite->set_camera(cam);
-    atk.sprite->set_visible(false);
-    atk.sprite->set_scale(2.0);
+    // ---- attack projectiles (a small pool; each attack variant spawns 1-2) ----
+    bn::vector<AttackInst, 4> attacks;
+    for(int i = 0; i < 4; ++i){
+        attacks.push_back(AttackInst{});
+        attacks[i].sprite = bn::sprite_items::bolt.create_sprite(0, 0);
+        attacks[i].sprite->set_camera(cam);
+        attacks[i].sprite->set_visible(false);
+        attacks[i].sprite->set_scale(2.0);
+    }
     bool atk_spawned_this_active = false;   // edge-detect the Active step to spawn once per cycle
+    int attack_variant = 0;                 // cycles 0,1,2 -> three distinct, dodgeable attacks
+    auto clear_attacks = [&]{
+        for(AttackInst& a : attacks){ a.active = false; if(a.sprite) a.sprite->set_visible(false); }
+    };
+    // Spawn the given attack variant from the King's current position toward the player. Speed scales
+    // with the phase. Three readable dodges: (0) ground bolt -> JUMP; (1) falling bolt -> SIDESTEP;
+    // (2) two bolts from both edges -> JUMP.
+    auto spawn_attack = [&](int variant){
+        int pcx_ = player.body.pos.x.to_int() + player.body.half_w.to_int();
+        int kcx_ = king_body.pos.x.to_int() + king_body.half_w.to_int();
+        int kcy_ = king_body.pos.y.to_int() + king_body.half_h.to_int();
+        int spd  = (b.phase == logic::BossPhase::P1) ? 2 : 3;
+        auto launch = [&](int idx, int cx_px, int cy_px, int vx, int vy){
+            attacks[idx].active = true;
+            attacks[idx].body.half_w = fx(6); attacks[idx].body.half_h = fx(6);
+            attacks[idx].body.pos = { fx(cx_px - 6), fx(cy_px - 6) };
+            attacks[idx].vel = { fx(vx), fx(vy) };
+        };
+        if(variant == 0){
+            int dir = (pcx_ >= kcx_) ? 1 : -1;          // ground bolt toward the player -> jump over it
+            launch(0, kcx_, kcy_, spd * dir, 0);
+        } else if(variant == 1){
+            launch(0, pcx_, 12, 0, spd + 1);            // falling bolt above the player -> sidestep it
+        } else {
+            int gy = level.h * 8 - 28;                  // two bolts from both edges -> jump over them
+            launch(0, 12, gy, spd, 0);
+            launch(1, level.w * 8 - 12, gy, -spd, 0);
+        }
+    };
 
     // ---- magic crystal (M10 pattern: full refill on overlap; reset un-collected each attempt) ----
     bool crystal_collected = false;
@@ -197,8 +237,8 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         player.facing = ent.facing;
         avatar.sync(player);
         invuln = RESPAWN_IFRAMES;
-        atk.active = false; atk_spawned_this_active = false;
-        if(atk.sprite) atk.sprite->set_visible(false);
+        clear_attacks(); atk_spawned_this_active = false; attack_variant = 0;
+        set_king_perch(0); teleport_timer = TELEPORT_PERIOD; teleport_flash = 0;
         crystal_collected = false;
         if(crystal_sprite) crystal_sprite->set_visible(true);
     };
@@ -256,75 +296,67 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         // ---- boss logic tick ----
         b.tick();
 
-        // ---- King render: telegraph tint while Telegraph, distinct flash while EXPOSED ----
+        // ---- King teleport: cycle perches so it isn't a sitting duck (it was too easy to spam down).
+        //      Paused while EXPOSED so the player keeps a stationary window to wound it. ----
+        if(!b.exposed() && !b.defeated()){
+            if(--teleport_timer <= 0){
+                set_king_perch((perch_idx + 1) % KING_PERCH_COUNT);
+                teleport_timer = TELEPORT_PERIOD;
+                teleport_flash = 12;
+                clear_attacks();                 // don't leave a bolt flying from the old position
+                atk_spawned_this_active = false;
+            }
+        }
+        if(teleport_flash > 0) --teleport_flash;
+
+        // ---- King render: teleport flash, then EXPOSED blink, then telegraph pulse ----
         {
             int kcx = king_body.pos.x.to_int() + king_body.half_w.to_int();
             int kcy = king_body.pos.y.to_int() + king_body.half_h.to_int();
             king.set_position(wx(kcx), wy(kcy));
-            if(b.exposed()){
-                // EXPOSED = visibly distinct: rapid blink (vulnerable / stunned).
-                king.set_visible((b.expose_timer / 4) % 2 == 0);
+            if(teleport_flash > 0){
+                king.set_visible((teleport_flash / 2) % 2 == 0);     // fast warp blink
+            } else if(b.exposed()){
+                king.set_visible((b.expose_timer / 4) % 2 == 0);     // vulnerable / stunned blink
             } else if(b.current_step() == logic::AttackStep::Telegraph){
-                // Telegraph: slow pulse so the wind-up reads as a warning.
-                king.set_visible((b.attack_timer / 8) % 2 == 0);
+                king.set_visible((b.attack_timer / 8) % 2 == 0);     // wind-up pulse (warning)
             } else {
                 king.set_visible(true);
             }
         }
 
-        // ---- player position helpers ----
-        int pcx = player.body.pos.x.to_int() + player.body.half_w.to_int();
-        int pcy = player.body.pos.y.to_int() + player.body.half_h.to_int();
-        int kcx = king_body.pos.x.to_int() + king_body.half_w.to_int();
-        int kcy = king_body.pos.y.to_int() + king_body.half_h.to_int();
-
-        // ---- attack spawn/playback — ONLY while NOT exposed (expose = clean window) ----
+        // ---- attack spawn/playback — ONLY while NOT exposed (expose = clean window). Each Active step
+        //      fires the next variant (ground bolt -> falling bolt -> double from edges), cycling. ----
         if(b.exposed()){
-            // Stunned: freeze + hide any active attack; no contact damage during the window.
-            atk.active = false; atk_spawned_this_active = false;
-            if(atk.sprite) atk.sprite->set_visible(false);
+            clear_attacks(); atk_spawned_this_active = false;
         } else {
             logic::AttackStep step = b.current_step();
-            // Resolve the underlying combat phase (Exposed never reaches here).
-            logic::BossPhase ph = b.phase;
             if(step == logic::AttackStep::Active){
                 if(!atk_spawned_this_active){
-                    // One READABLE, DODGEABLE attack for every phase: the King fires a ground-level
-                    // bolt toward the player at a FIXED height (the King's floor height — NOT tracking
-                    // the player's Y, which was the old unfair sweep). The player JUMPS over it (or onto
-                    // a platform). Speed escalates per phase but stays low enough to react + jump.
-                    atk.active = true;
+                    spawn_attack(attack_variant);
+                    attack_variant = (attack_variant + 1) % 3;
                     atk_spawned_this_active = true;
-                    (void)pcy;
-                    atk.body.half_w = fx(6); atk.body.half_h = fx(6);
-                    int dir = (pcx >= kcx) ? 1 : -1;   // travel toward the player
-                    atk.body.pos = { fx(kcx - atk.body.half_w.to_int()),
-                                     fx(kcy - atk.body.half_h.to_int()) };
-                    int speed = (ph == logic::BossPhase::P1) ? 2 : 3;  // P1 slow; P2/P3 a touch faster
-                    atk.vel = { fx(speed * dir), fx(0) };
                 }
             } else if(step == logic::AttackStep::Recovery){
-                atk.active = false;
-                atk_spawned_this_active = false;
-                if(atk.sprite) atk.sprite->set_visible(false);
+                clear_attacks(); atk_spawned_this_active = false;
             } else { // Telegraph
                 atk_spawned_this_active = false;
             }
         }
 
-        // ---- attack advance + render + contact ----
-        if(atk.active){
-            atk.body.pos.x = atk.body.pos.x + atk.vel.x;
-            atk.body.pos.y = atk.body.pos.y + atk.vel.y;
-            int ax = atk.body.pos.x.to_int() + atk.body.half_w.to_int();
-            int ay = atk.body.pos.y.to_int() + atk.body.half_h.to_int();
-            // Expire off-arena.
-            if(ax < 0 || ax > level.w * 8 || ay < 0 || ay > level.h * 8){
-                atk.active = false;
-                if(atk.sprite) atk.sprite->set_visible(false);
+        // ---- attack advance + render + contact (all active projectiles) ----
+        for(AttackInst& a : attacks){
+            if(!a.active) continue;
+            a.body.pos.x = a.body.pos.x + a.vel.x;
+            a.body.pos.y = a.body.pos.y + a.vel.y;
+            int ax = a.body.pos.x.to_int() + a.body.half_w.to_int();
+            int ay = a.body.pos.y.to_int() + a.body.half_h.to_int();
+            if(ax < 0 || ax > level.w * 8 || ay < 0 || ay > level.h * 8){   // expire off-arena
+                a.active = false;
+                if(a.sprite) a.sprite->set_visible(false);
             } else {
-                if(atk.sprite){ atk.sprite->set_position(wx(ax), wy(ay)); atk.sprite->set_visible(true); }
-                if(invuln == 0 && !player.dash.invincible() && logic::aabb_overlap(player.body, atk.body)){
+                if(a.sprite){ a.sprite->set_position(wx(ax), wy(ay)); a.sprite->set_visible(true); }
+                if(invuln == 0 && !player.dash.invincible() && logic::aabb_overlap(player.body, a.body)){
                     health.damage(20); invuln = 45;
                 }
             }
