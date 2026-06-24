@@ -167,7 +167,7 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
     bool atk_spawned_this_active = false;   // edge-detect the Active step
     int attack_variant = 0;                 // NEXT attack to fire: 0 aimed, 1 spiral, 2 spread/fan
     int current_attack = 0;                 // the attack firing during the CURRENT Active window
-    int spiral_idx = 0, spiral_cd = 0;   // spiral emitter state (two opposite arms per tick)
+    int spiral_idx = 0, spiral_cd = 0, spiral_rot = 1;   // spiral emitter state (one arm toward player)
     // 8 rotating directions for the spiral (integer approx of a circle, ~3 px/frame).
     static const int SPIRAL_DIRS[8][2] = { {0,-3},{2,-2},{3,0},{2,2},{0,3},{-2,2},{-3,0},{-2,-2} };
 
@@ -371,14 +371,15 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
                     current_attack = attack_variant;            // lock the attack for this window
                     attack_variant = (attack_variant + 1) % 3;  // advance for next time
                     spiral_idx = 0; spiral_cd = 0;
+                    int pcx0 = player.body.pos.x.to_int() + player.body.half_w.to_int();
+                    spiral_rot = (pcx0 >= king_cx()) ? 1 : -1;  // sweep toward the player's side
                     if(current_attack != 1) spawn_attack(current_attack);  // aimed/spread fire now
                     atk_spawned_this_active = true;
                 }
-                if(current_attack == 1 && spiral_idx < 4){   // spiral: TWO opposite arms per tick (both
-                    if(spiral_cd <= 0){                       // sides), 4 ticks -> 8 orbs filling the pool
-                        int d0 = spiral_idx % 8, d1 = (spiral_idx + 4) % 8;
-                        launch(spiral_idx * 2,     king_cx(), king_cy(), SPIRAL_DIRS[d0][0], SPIRAL_DIRS[d0][1]);
-                        launch(spiral_idx * 2 + 1, king_cx(), king_cy(), SPIRAL_DIRS[d1][0], SPIRAL_DIRS[d1][1]);
+                if(current_attack == 1 && spiral_idx < 5){   // spiral: ONE arm sweeping up->down on the
+                    if(spiral_cd <= 0){                       // player's side (rot picks left vs right)
+                        int di = ((spiral_rot * spiral_idx) % 8 + 8) % 8;
+                        launch(spiral_idx, king_cx(), king_cy(), SPIRAL_DIRS[di][0], SPIRAL_DIRS[di][1]);
                         ++spiral_idx; spiral_cd = 5;
                     } else --spiral_cd;
                 }
@@ -416,9 +417,24 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         bolts.update(in.fire_pressed, muzzle, player.facing, lvl.map);
         spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);
 
+        // ---- DEFENSE: the player's bolt / Fire / Ice DESTROYS an incoming boss projectile on contact
+        //      (block). The shot is consumed by the block, so it can't also reach the King. (Light is
+        //      NOT a blocker — it must pass through to expose.) Runs BEFORE the King-damage check so a
+        //      blocked shot never doubles as a wound. ----
+        for(AttackInst& a : attacks){
+            if(!a.active) continue;
+            if(bolts.consume_hit(a.body)
+               || spells.consume_hit(a.body, logic::SpellId::Fire)
+               || spells.consume_hit(a.body, logic::SpellId::Ice)){
+                a.active = false; if(a.sprite) a.sprite->set_visible(false);
+            }
+        }
+
+        int hp_before = b.hp;   // detect a wound this frame -> the King teleports away (see below)
+
         // ---- damage resolution (mirrors the dungeon's consume_hit hooks; King is a logic::Body) ----
         // Light ALWAYS exposes/refreshes — runs every frame regardless of phase (M10 Light-clears
-        // hook, repointed to expose). on_light_hit() is a no-op once defeated.
+        // hook, repointed to expose). on_light_hit() is a no-op once defeated/i-framed.
         if(spells.consume_hit(king_body, logic::SpellId::Light)) b.on_light_hit();
         // Wounding lands ONLY while EXPOSED (the King is immune while shielded). on_wound() itself
         // also guards on exposed(), but we gate here so a shot never silently vanishes off the King
@@ -443,6 +459,19 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         }
 
         if(b.defeated()){ boss_say("NOOOOO!"); return BossResult::Victory; }
+
+        // ---- King teleports AWAY after taking a wound (fairer than attacking immediately): warp to a
+        //      new perch, clear in-flight attacks, and restart the attack cycle (fresh telegraph) so it
+        //      winds up at the new spot rather than striking instantly. (BossState i-frames already
+        //      prevent an immediate re-expose.) ----
+        if(b.hp < hp_before){
+            set_king_perch((perch_idx + 1) % KING_PERCH_COUNT);
+            teleport_timer = TELEPORT_PERIOD;
+            teleport_flash = 12;
+            clear_attacks();
+            atk_spawned_this_active = false;
+            b.attack_timer = 0;
+        }
 
         spells.despawn_on_solid(lvl.map);
 
