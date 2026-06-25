@@ -5,64 +5,63 @@ using namespace logic;
 // Land exactly one wound the way the fight now requires: run out any post-wound i-frames, expose with
 // Light, then wound. (A wound ends the expose + grants i-frames, so wounds must be paced like this.)
 static void wound_once(BossState& b){
-    for(int i = 0; i < HIT_IFRAMES + 1; ++i) b.tick();   // clear post-wound i-frames
-    b.on_light_hit();                                    // expose
-    b.on_wound(WOUND_DMG);                               // one wound (ends expose, sets i-frames)
+    for(int i = 0; i < KING_DEF.hit_iframes + 1; ++i) b.tick();   // clear post-wound i-frames
+    b.on_expose_hit(SpellId::Light);                              // expose
+    b.on_wound(KING_DEF.wound_dmg);                              // one wound (ends expose, sets i-frames)
 }
 
 TEST(boss_initial_state){
     BossState b;
-    b.reset(); // sets P1 + full HP + cleared timers
-    CHECK_EQ((int)b.phase, (int)BossPhase::P1);
-    CHECK_EQ(b.hp, KING_MAX_HP);
-    CHECK_EQ(b.phase_start_hp, KING_MAX_HP);
+    b.reset(KING_DEF); // sets P1 + full HP + cleared timers
+    CHECK_EQ(b.phase, 0);
+    CHECK_EQ(b.hp, KING_DEF.max_hp);
+    CHECK_EQ(b.phase_start_hp, KING_DEF.max_hp);
     CHECK_EQ(b.expose_timer, 0);
     CHECK(!b.exposed());
     CHECK(!b.defeated());
 }
 
 TEST(boss_constants_sane){
-    CHECK_EQ(KING_MAX_HP, 90);
-    CHECK(P1_END_HP > P2_END_HP);
-    CHECK(P2_END_HP > 0);
-    CHECK_EQ(KING_MAX_HP % WOUND_DMG, 0); // HP is a whole number of wounds
+    CHECK_EQ(KING_DEF.max_hp, 90);
+    CHECK(KING_PHASES[0].end_hp > KING_PHASES[1].end_hp);
+    CHECK(KING_PHASES[1].end_hp > 0);
+    CHECK_EQ(KING_DEF.max_hp % KING_DEF.wound_dmg, 0); // HP is a whole number of wounds
 }
 
 TEST(boss_light_hit_exposes){
-    BossState b; b.reset();
-    b.on_light_hit();
+    BossState b; b.reset(KING_DEF);
+    b.on_expose_hit(SpellId::Light);
     CHECK(b.exposed());
-    CHECK_EQ((int)b.phase, (int)BossPhase::Exposed);
-    CHECK_EQ((int)b.exposed_return, (int)BossPhase::P1); // remembers underlying phase
-    CHECK_EQ(b.expose_timer, EXPOSE_FRAMES);
+    CHECK_EQ(b.phase, 0); // phase index unchanged (combat phase held across expose)
+    CHECK_EQ(b.expose_timer, KING_DEF.expose_frames);
 }
 
 TEST(boss_light_hit_while_already_exposed_refreshes){
-    BossState b; b.reset();
-    b.on_light_hit();
+    BossState b; b.reset(KING_DEF);
+    b.on_expose_hit(SpellId::Light);
     b.tick(); // expose_timer 75 -> 74
-    b.on_light_hit(); // refresh, do NOT overwrite exposed_return with Exposed
-    CHECK_EQ(b.expose_timer, EXPOSE_FRAMES);
-    CHECK_EQ((int)b.exposed_return, (int)BossPhase::P1);
+    b.on_expose_hit(SpellId::Light); // refresh; phase index unchanged
+    CHECK_EQ(b.expose_timer, KING_DEF.expose_frames);
+    CHECK_EQ(b.phase, 0);
 }
 
 TEST(boss_expose_decays_to_exact_zero_then_returns){
-    BossState b; b.reset();
-    b.on_light_hit();                       // expose_timer = 75, phase = Exposed
-    for(int i = 0; i < EXPOSE_FRAMES - 1; ++i) b.tick();
+    BossState b; b.reset(KING_DEF);
+    b.on_expose_hit(SpellId::Light);        // expose_timer = 75, phase index 0
+    for(int i = 0; i < KING_DEF.expose_frames - 1; ++i) b.tick();
     CHECK(b.exposed());                      // still >0 at frame 74
     CHECK_EQ(b.expose_timer, 1);
-    CHECK_EQ((int)b.phase, (int)BossPhase::Exposed);
+    CHECK_EQ(b.phase, 0);
     b.tick();                                // 1 -> 0
     CHECK(!b.exposed());
-    CHECK_EQ((int)b.phase, (int)BossPhase::P1); // returned to exposed_return
+    CHECK_EQ(b.phase, 0); // phase index unchanged across expose
 }
 
 TEST(boss_attack_timer_advances_and_wraps_per_phase){
-    BossState b; b.reset();                  // phase P1
-    int period = PHASE_PATTERNS[0].telegraph_frames
-               + PHASE_PATTERNS[0].attack_active_frames
-               + PHASE_PATTERNS[0].recovery_frames;
+    BossState b; b.reset(KING_DEF);          // phase 0 (P1)
+    int period = KING_PHASES[0].pattern.telegraph_frames
+               + KING_PHASES[0].pattern.attack_active_frames
+               + KING_PHASES[0].pattern.recovery_frames;
     for(int i = 0; i < period; ++i) b.tick();
     CHECK_EQ(b.attack_timer, 0);             // wrapped exactly at the phase period
 }
@@ -70,76 +69,75 @@ TEST(boss_attack_timer_advances_and_wraps_per_phase){
 TEST(boss_attack_frozen_while_exposed){
     // The expose window is a CLEAN damage window — the King's attack pattern must NOT
     // advance while EXPOSED (so the player can safely switch spells + wound; co-design rule).
-    BossState b; b.reset();
+    BossState b; b.reset(KING_DEF);
     for(int i = 0; i < 5; ++i) b.tick();     // advance the attack pattern a little
     int frozen = b.attack_timer;
-    b.on_light_hit();                        // EXPOSED
+    b.on_expose_hit(SpellId::Light);         // EXPOSED
     for(int i = 0; i < 10; ++i) b.tick();    // ticks during expose
     CHECK_EQ(b.attack_timer, frozen);        // unchanged while exposed
 }
 
 TEST(boss_wound_only_while_exposed){
-    BossState b; b.reset();
-    b.on_wound(WOUND_DMG);          // NOT exposed -> no effect (shielded)
-    CHECK_EQ(b.hp, KING_MAX_HP);
-    b.on_light_hit();
-    b.on_wound(WOUND_DMG);          // exposed -> subtract
-    CHECK_EQ(b.hp, KING_MAX_HP - WOUND_DMG);
+    BossState b; b.reset(KING_DEF);
+    b.on_wound(KING_DEF.wound_dmg);          // NOT exposed -> no effect (shielded)
+    CHECK_EQ(b.hp, KING_DEF.max_hp);
+    b.on_expose_hit(SpellId::Light);
+    b.on_wound(KING_DEF.wound_dmg);          // exposed -> subtract
+    CHECK_EQ(b.hp, KING_DEF.max_hp - KING_DEF.wound_dmg);
 }
 
 TEST(boss_wound_ends_expose_and_sets_iframes){
-    BossState b; b.reset();
-    b.on_light_hit();
+    BossState b; b.reset(KING_DEF);
+    b.on_expose_hit(SpellId::Light);
     CHECK(b.exposed());
-    b.on_wound(WOUND_DMG);
+    b.on_wound(KING_DEF.wound_dmg);
     CHECK(!b.exposed());                       // a wound ends the expose window
-    CHECK_EQ(b.hit_iframes, HIT_IFRAMES);
-    CHECK_EQ(b.hp, KING_MAX_HP - WOUND_DMG);
+    CHECK_EQ(b.hit_iframes, KING_DEF.hit_iframes);
+    CHECK_EQ(b.hp, KING_DEF.max_hp - KING_DEF.wound_dmg);
 }
 
 TEST(boss_one_wound_per_expose){
-    BossState b; b.reset();
-    b.on_light_hit();
-    b.on_wound(WOUND_DMG);                     // lands
-    b.on_wound(WOUND_DMG);                     // blocked (expose ended + i-frames)
-    CHECK_EQ(b.hp, KING_MAX_HP - WOUND_DMG);
+    BossState b; b.reset(KING_DEF);
+    b.on_expose_hit(SpellId::Light);
+    b.on_wound(KING_DEF.wound_dmg);                     // lands
+    b.on_wound(KING_DEF.wound_dmg);                     // blocked (expose ended + i-frames)
+    CHECK_EQ(b.hp, KING_DEF.max_hp - KING_DEF.wound_dmg);
 }
 
 TEST(boss_cannot_reexpose_during_iframes){
-    BossState b; b.reset();
-    b.on_light_hit(); b.on_wound(WOUND_DMG);   // now in i-frames
-    b.on_light_hit();                          // blocked while i-frames > 0
+    BossState b; b.reset(KING_DEF);
+    b.on_expose_hit(SpellId::Light); b.on_wound(KING_DEF.wound_dmg);   // now in i-frames
+    b.on_expose_hit(SpellId::Light);                          // blocked while i-frames > 0
     CHECK(!b.exposed());
-    for(int i = 0; i < HIT_IFRAMES; ++i) b.tick();   // i-frames decay
+    for(int i = 0; i < KING_DEF.hit_iframes; ++i) b.tick();   // i-frames decay
     CHECK_EQ(b.hit_iframes, 0);
-    b.on_light_hit();                          // works again
+    b.on_expose_hit(SpellId::Light);                          // works again
     CHECK(b.exposed());
 }
 
 TEST(boss_wound_crossing_threshold_advances_phase){
-    BossState b; b.reset();
-    while(b.hp > P1_END_HP) wound_once(b);     // 90 -> 60 (crosses), one wound per Light
-    CHECK_EQ(b.hp, P1_END_HP);
-    CHECK_EQ((int)b.exposed_return, (int)BossPhase::P2); // underlying phase advanced
-    CHECK_EQ(b.phase_start_hp, P1_END_HP);
+    BossState b; b.reset(KING_DEF);
+    while(b.hp > KING_PHASES[0].end_hp) wound_once(b);  // 90 -> 60 (crosses), one wound per Light
+    CHECK_EQ(b.hp, KING_PHASES[0].end_hp);
+    CHECK_EQ(b.phase, 1); // underlying phase advanced to index 1 (P2)
+    CHECK_EQ(b.phase_start_hp, KING_PHASES[0].end_hp);
 }
 
 TEST(boss_wound_to_zero_defeats){
-    BossState b; b.reset();
+    BossState b; b.reset(KING_DEF);
     int guard = 0;
     while(!b.defeated() && guard++ < 100) wound_once(b);
     CHECK(b.defeated());
-    CHECK_EQ((int)b.phase, (int)BossPhase::Defeated);
-    CHECK_EQ(guard, KING_MAX_HP / WOUND_DMG);  // exactly 9 wounds (one per Light) to kill
+    CHECK_EQ(guard, KING_DEF.max_hp / KING_DEF.wound_dmg);  // exactly 9 wounds (one per Light) to kill
 }
 
 TEST(boss_player_death_restarts_full_fight){
-    BossState b; b.reset();
-    while(b.hp > P2_END_HP) wound_once(b);     // deep into the fight (P3)
+    BossState b; b.reset(KING_DEF);
+    while(b.hp > KING_PHASES[1].end_hp) wound_once(b);  // deep into the fight (P3)
     b.on_player_death();
-    CHECK_EQ((int)b.phase, (int)BossPhase::P1);
-    CHECK_EQ(b.hp, KING_MAX_HP);
-    CHECK_EQ(b.phase_start_hp, KING_MAX_HP);
+    CHECK_EQ(b.phase, 0);
+    CHECK_EQ(b.hp, KING_DEF.max_hp);
+    CHECK_EQ(b.phase_start_hp, KING_DEF.max_hp);
     CHECK_EQ(b.expose_timer, 0);
     CHECK_EQ(b.attack_timer, 0);
     CHECK_EQ(b.hit_iframes, 0);
@@ -150,22 +148,80 @@ TEST(switch_budget_invariant_all_windows){
     // No telegraph window and no expose window may be tighter than the worst-case
     // time to cycle (L) to the right spell + react + cast. If this fails, a window
     // was set below SWITCH_BUDGET -> the phase would be unfair regardless of skill.
-    for(int i = 0; i < 3; ++i)
-        CHECK(PHASE_PATTERNS[i].telegraph_frames >= SWITCH_BUDGET);
-    CHECK(EXPOSE_FRAMES >= SWITCH_BUDGET);
+    for(int i = 0; i < KING_DEF.phase_count; ++i)
+        CHECK(KING_PHASES[i].pattern.telegraph_frames >= SWITCH_BUDGET);
+    CHECK(KING_DEF.expose_frames >= SWITCH_BUDGET);
 }
 
 TEST(phase_pattern_escalates_but_respects_budget){
     // Telegraph shrinks each phase (escalation) but never below the floor.
-    CHECK(PHASE_PATTERNS[0].telegraph_frames >= PHASE_PATTERNS[1].telegraph_frames);
-    CHECK(PHASE_PATTERNS[1].telegraph_frames >= PHASE_PATTERNS[2].telegraph_frames);
-    CHECK(PHASE_PATTERNS[2].telegraph_frames >= SWITCH_BUDGET);
+    CHECK(KING_PHASES[0].pattern.telegraph_frames >= KING_PHASES[1].pattern.telegraph_frames);
+    CHECK(KING_PHASES[1].pattern.telegraph_frames >= KING_PHASES[2].pattern.telegraph_frames);
+    CHECK(KING_PHASES[2].pattern.telegraph_frames >= SWITCH_BUDGET);
 }
 
 TEST(boss_phase_step_is_deterministic){
     // Same phase + same attack_timer -> same pattern step (no hidden state/RNG).
-    BossState a; a.reset(); BossState b; b.reset();
+    BossState a; a.reset(KING_DEF); BossState b; b.reset(KING_DEF);
     for(int i=0;i<40;++i){ a.tick(); b.tick(); }
     CHECK_EQ(a.attack_timer, b.attack_timer);
     CHECK_EQ((int)a.current_step(), (int)b.current_step());
 }
+
+// ---------------------------------------------------------------------------
+// M12 P1.1 — data model sanity (def-driven BossState; phase as an index).
+// ---------------------------------------------------------------------------
+TEST(bossdef_king_reset_initial_state){
+    BossState b; b.reset(KING_DEF);
+    CHECK_EQ(b.hp, KING_DEF.max_hp);          // 90
+    CHECK_EQ(b.phase, 0);
+    CHECK_EQ(b.phase_start_hp, KING_DEF.max_hp);
+    CHECK_EQ(b.expose_timer, 0);
+    CHECK_EQ(b.hit_iframes, 0);
+    CHECK(!b.exposed()); CHECK(!b.defeated());
+}
+TEST(bossdef_king_has_three_phases){ CHECK_EQ(KING_DEF.phase_count, 3); }
+TEST(bossdef_d1_has_two_phases_always_vulnerable){
+    CHECK_EQ(D1_DEF.phase_count, 2);
+    CHECK((int)D1_DEF.vuln == (int)VulnMode::AlwaysVulnerable);
+}
+
+// ---------------------------------------------------------------------------
+// M12 P1.3 — D1_DEF AlwaysVulnerable behaviour.
+// ---------------------------------------------------------------------------
+TEST(d1_wound_lands_without_expose){
+    BossState b; b.reset(D1_DEF);
+    CHECK(b.vulnerable());                       // always vulnerable, no Light needed
+    b.on_wound(D1_DEF.wound_dmg);
+    CHECK_EQ(b.hp, D1_DEF.max_hp - D1_DEF.wound_dmg);
+}
+TEST(d1_hit_iframes_cap_wound_rate){
+    BossState b; b.reset(D1_DEF);
+    b.on_wound(D1_DEF.wound_dmg);                // lands
+    b.on_wound(D1_DEF.wound_dmg);                // blocked by i-frames
+    CHECK_EQ(b.hp, D1_DEF.max_hp - D1_DEF.wound_dmg);
+    for(int i=0;i<D1_DEF.hit_iframes;++i) b.tick();
+    b.on_wound(D1_DEF.wound_dmg);                // lands again after i-frames
+    CHECK_EQ(b.hp, D1_DEF.max_hp - 2*D1_DEF.wound_dmg);
+}
+TEST(d1_no_expose_on_spell){
+    BossState b; b.reset(D1_DEF);
+    b.on_expose_hit(SpellId::Light);             // AlwaysVulnerable -> no-op
+    CHECK_EQ(b.expose_timer, 0);
+}
+TEST(d1_two_phase_advance_and_defeat){
+    BossState b; b.reset(D1_DEF);
+    int guard=0;
+    while(!b.defeated() && guard++<100){ b.on_wound(D1_DEF.wound_dmg); for(int i=0;i<D1_DEF.hit_iframes;++i) b.tick(); }
+    CHECK(b.defeated());
+    CHECK_EQ(guard, D1_DEF.max_hp / D1_DEF.wound_dmg);   // exact hit count to kill
+}
+
+// ---------------------------------------------------------------------------
+// M12 P1.4 — per-def SWITCH_BUDGET invariant (non-vacuous; see commit notes).
+// ---------------------------------------------------------------------------
+static void check_budget(const BossDef& d){
+    for(int i=0;i<d.phase_count;++i) CHECK(d.phases[i].pattern.telegraph_frames >= SWITCH_BUDGET);
+    if(d.vuln==VulnMode::SpellExpose) CHECK(d.expose_frames >= SWITCH_BUDGET);
+}
+TEST(switch_budget_holds_for_all_defs){ check_budget(KING_DEF); check_budget(D1_DEF); }
