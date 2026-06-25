@@ -34,6 +34,7 @@
 #include "engine/avatar.h"
 #include "engine/bolts.h"
 #include "engine/spell_pool.h"
+#include "engine/boss_attacks.h"   // engine::AttackPool / SpiralEmitter / TelegraphCue / BossHpBar / spawn_attack / resolve_damage
 #include "engine/hud.h"
 #include "engine/fade.h"
 #include "engine/save.h"         // write_world (persist refilled lives)
@@ -70,15 +71,6 @@ namespace
         logic::Body b{}; b.half_w = fx(hw); b.half_h = fx(hh);
         b.pos = { fx(tx * 8), fx(ty * 8) }; return b;
     }
-
-    // One placeholder attack hitbox: a moving logic::Body + a reused bolt-sprite VFX.
-    // Spawned at the start of AttackStep::Active; cleared at Recovery / while exposed.
-    struct AttackInst {
-        bool active = false;
-        logic::Body body;
-        logic::Vec2 vel{};
-        bn::optional<bn::sprite_ptr> sprite;
-    };
 }
 
 BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic::PlayerState& ps)
@@ -143,68 +135,29 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
     }
 
     // ---- King HP bar: violet King-HP pips along the BOTTOM-centre (screen-space, no camera), one
-    //      per wound. Bottom + dedicated art so it never overlaps the player's top-left HUD. ----
-    constexpr int KING_HP_PIPS = logic::KING_DEF.max_hp / logic::KING_DEF.wound_dmg;  // 9
-    bn::vector<bn::sprite_ptr, 9> king_hp_pips;
-    for(int i = 0; i < KING_HP_PIPS; ++i)
-        king_hp_pips.push_back(bn::sprite_items::king_hp.create_sprite(-32 + i * 8, 68));
-    auto refresh_king_hp = [&]{
-        int alive = (b.hp + logic::KING_DEF.wound_dmg - 1) / logic::KING_DEF.wound_dmg;  // ceil(hp / wound_dmg)
-        for(int i = 0; i < king_hp_pips.size(); ++i)
-            king_hp_pips[i].set_visible(i < alive);
-    };
-    refresh_king_hp();
+    //      per wound. Bottom + dedicated art so it never overlaps the player's top-left HUD. Derived
+    //      from KING_DEF (max_hp / wound_dmg = 9) via the shared boss_attacks library. ----
+    engine::BossHpBar king_hp_bar(logic::KING_DEF, bn::sprite_items::king_hp);
+    king_hp_bar.refresh(b.hp);
 
-    // ---- attack projectiles (pool; EVERY attack is emitted FROM the King) ----
-    bn::vector<AttackInst, 8> attacks;
-    for(int i = 0; i < 8; ++i){
-        attacks.push_back(AttackInst{});
-        attacks[i].sprite = bn::sprite_items::bolt.create_sprite(0, 0);
-        attacks[i].sprite->set_camera(cam);
-        attacks[i].sprite->set_visible(false);
-        attacks[i].sprite->set_scale(2.0);
-    }
+    // ---- attack projectiles (shared library pool; EVERY attack is emitted FROM the King) ----
+    engine::AttackPool attacks(bn::sprite_items::bolt, cam, lvl.view.map_px_w, lvl.view.map_px_h);
+    engine::SpiralEmitter spiral;           // one arm sweeping toward the player during a spiral window
     bool atk_spawned_this_active = false;   // edge-detect the Active step
-    int attack_variant = 0;                 // NEXT attack to fire: 0 aimed, 1 spiral, 2 spread/fan
-    int current_attack = 0;                 // the attack firing during the CURRENT Active window
-    int spiral_idx = 0, spiral_cd = 0, spiral_rot = 1;   // spiral emitter state (one arm toward player)
-    // 8 rotating directions for the spiral (integer approx of a circle, ~3 px/frame).
-    static const int SPIRAL_DIRS[8][2] = { {0,-3},{2,-2},{3,0},{2,2},{0,3},{-2,2},{-3,0},{-2,-2} };
+    // Attack SELECTION (King-only rotation; reproduces today's 3-attack cycle aimed->spiral->fan over
+    // KING_PHASES[b.phase].attacks, which is the full KING_ATTACKS mask in every phase).
+    static constexpr int KING_ATTACK_CYCLE[3] = {
+        logic::BOSS_ATK_AIMED, logic::BOSS_ATK_SPIRAL, logic::BOSS_ATK_FAN };
+    int attack_slot = 0;                     // NEXT slot in the rotation (0 aimed, 1 spiral, 2 fan)
+    int current_attack = logic::BOSS_ATK_AIMED;  // the attack firing during the CURRENT Active window
 
     // Telegraph cue: a coloured charge orb shown AT the King during the wind-up so the incoming attack
-    // is READABLE — red (fire) = aimed, gold (light) = spiral, cyan (ice) = spread.
-    bn::sprite_ptr telegraph_orb = bn::sprite_items::fire_proj.create_sprite(0, 0);
-    telegraph_orb.set_camera(cam);
-    telegraph_orb.set_visible(false);
+    // is READABLE — red (fire) = aimed, gold (light) = spiral, cyan (ice) = spread (shared library cue).
+    engine::TelegraphCue telegraph(bn::sprite_items::fire_proj, cam,
+                                   lvl.view.map_px_w, lvl.view.map_px_h);
 
     auto king_cx = [&]{ return king_body.pos.x.to_int() + king_body.half_w.to_int(); };
     auto king_cy = [&]{ return king_body.pos.y.to_int() + king_body.half_h.to_int(); };
-    auto clear_attacks = [&]{
-        for(AttackInst& a : attacks){ a.active = false; if(a.sprite) a.sprite->set_visible(false); }
-    };
-    // NOTE: variants address fixed pool slots (fan: 0-2, spiral: 0-4). Safe because only ONE attack
-    // variant is live per Active window and clear_attacks() runs on expose/recovery/teleport — so the
-    // slots are always free at spawn. A future overlapping-attack design must allocate free slots.
-    auto launch = [&](int idx, int cx_px, int cy_px, int vx, int vy){
-        attacks[idx].active = true;
-        attacks[idx].body.half_w = fx(6); attacks[idx].body.half_h = fx(6);
-        attacks[idx].body.pos = { fx(cx_px - 6), fx(cy_px - 6) };
-        attacks[idx].vel = { fx(vx), fx(vy) };
-    };
-    // Aimed (0) + spread (2) fire once at the Active edge, FROM the King toward the player. The spiral
-    // (1) is emitted continuously during Active (in the loop). Speed scales with the phase.
-    auto spawn_attack = [&](int variant){
-        int pcx_ = player.body.pos.x.to_int() + player.body.half_w.to_int();
-        int dir  = (pcx_ >= king_cx()) ? 1 : -1;
-        int spd  = (b.phase == 0) ? 2 : 3;
-        if(variant == 0){
-            launch(0, king_cx(), king_cy(), spd * dir, 0);                 // aimed bolt at the player
-        } else if(variant == 2){
-            launch(0, king_cx(), king_cy(), spd * dir, 0);                 // 3-bolt fan from the King
-            launch(1, king_cx(), king_cy(), spd * dir, -2);
-            launch(2, king_cx(), king_cy(), spd * dir, 2);
-        }
-    };
 
     // ---- magic crystal (M10 pattern: full refill on overlap; reset un-collected each attempt) ----
     bool crystal_collected = false;
@@ -263,9 +216,9 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         player.facing = ent.facing;
         avatar.sync(player);
         invuln = RESPAWN_IFRAMES;
-        clear_attacks(); atk_spawned_this_active = false;
-        attack_variant = 0; current_attack = 0; spiral_idx = 0; spiral_cd = 0;
-        telegraph_orb.set_visible(false);
+        attacks.clear(); atk_spawned_this_active = false;
+        attack_slot = 0; current_attack = logic::BOSS_ATK_AIMED; spiral = engine::SpiralEmitter{};
+        telegraph.hide();
         set_king_perch(0); teleport_timer = TELEPORT_PERIOD; teleport_flash = 0;
         last_phase = 0;
         crystal_collected = false;
@@ -332,7 +285,7 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
                 set_king_perch((perch_idx + 1) % KING_PERCH_COUNT);
                 teleport_timer = TELEPORT_PERIOD;
                 teleport_flash = 12;
-                clear_attacks();                 // don't leave a bolt flying from the old position
+                attacks.clear();                 // don't leave a bolt flying from the old position
                 atk_spawned_this_active = false;
             }
         }
@@ -358,56 +311,40 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         //   Telegraph: a coloured charge orb at the King reads the incoming attack. Active: aimed/spread
         //   fire once from the King; the spiral streams orbs from the King in rotating directions.
         if(b.exposed()){
-            clear_attacks(); atk_spawned_this_active = false; telegraph_orb.set_visible(false);
+            attacks.clear(); atk_spawned_this_active = false; telegraph.hide();
         } else {
             logic::AttackStep step = b.current_step();
             if(step == logic::AttackStep::Telegraph){
                 atk_spawned_this_active = false;
-                if(attack_variant == 0)      telegraph_orb.set_item(bn::sprite_items::fire_proj);   // aimed
-                else if(attack_variant == 1) telegraph_orb.set_item(bn::sprite_items::light_proj);  // spiral
-                else                         telegraph_orb.set_item(bn::sprite_items::ice_proj);    // spread
-                telegraph_orb.set_position(wx(king_cx()), wy(king_cy() - 14));   // charge above the King
-                telegraph_orb.set_visible((b.attack_timer / 6) % 2 == 0);       // pulse the cue
+                // colour the cue by the NEXT attack in the rotation (fire=aimed, light=spiral, ice=fan).
+                telegraph.show(KING_ATTACK_CYCLE[attack_slot], king_cx(), king_cy(), b.attack_timer,
+                               bn::sprite_items::fire_proj, bn::sprite_items::light_proj,
+                               bn::sprite_items::ice_proj);
             } else if(step == logic::AttackStep::Active){
-                telegraph_orb.set_visible(false);
+                telegraph.hide();
                 if(!atk_spawned_this_active){
-                    current_attack = attack_variant;            // lock the attack for this window
-                    attack_variant = (attack_variant + 1) % 3;  // advance for next time
-                    spiral_idx = 0; spiral_cd = 0;
+                    current_attack = KING_ATTACK_CYCLE[attack_slot];   // lock the attack for this window
+                    attack_slot = (attack_slot + 1) % 3;               // advance for next time
                     int pcx0 = player.body.pos.x.to_int() + player.body.half_w.to_int();
-                    spiral_rot = (pcx0 >= king_cx()) ? 1 : -1;  // sweep toward the player's side
-                    if(current_attack != 1) spawn_attack(current_attack);  // aimed/spread fire now
+                    spiral.begin(king_cx(), pcx0);                      // sweep toward the player's side
+                    if(current_attack != logic::BOSS_ATK_SPIRAL){      // aimed/fan fire now (FROM the King)
+                        int spd = (b.phase == 0) ? 2 : 3;
+                        engine::spawn_attack(attacks, current_attack, king_cx(), king_cy(),
+                                             pcx0, spd, b.phase);
+                    }
                     atk_spawned_this_active = true;
                 }
-                if(current_attack == 1 && spiral_idx < 5){   // spiral: ONE arm sweeping up->down on the
-                    if(spiral_cd <= 0){                       // player's side (rot picks left vs right)
-                        int di = ((spiral_rot * spiral_idx) % 8 + 8) % 8;
-                        launch(spiral_idx, king_cx(), king_cy(), SPIRAL_DIRS[di][0], SPIRAL_DIRS[di][1]);
-                        ++spiral_idx; spiral_cd = 5;
-                    } else --spiral_cd;
-                }
+                if(current_attack == logic::BOSS_ATK_SPIRAL)           // spiral streams during Active
+                    spiral.tick(attacks, king_cx(), king_cy());
             } else { // Recovery
-                clear_attacks(); atk_spawned_this_active = false; telegraph_orb.set_visible(false);
+                attacks.clear(); atk_spawned_this_active = false; telegraph.hide();
             }
         }
 
-        // ---- attack advance + render + contact (all active projectiles) ----
-        for(AttackInst& a : attacks){
-            if(!a.active) continue;
-            a.body.pos.x = a.body.pos.x + a.vel.x;
-            a.body.pos.y = a.body.pos.y + a.vel.y;
-            int ax = a.body.pos.x.to_int() + a.body.half_w.to_int();
-            int ay = a.body.pos.y.to_int() + a.body.half_h.to_int();
-            if(ax < 0 || ax > level.w * 8 || ay < 0 || ay > level.h * 8){   // expire off-arena
-                a.active = false;
-                if(a.sprite) a.sprite->set_visible(false);
-            } else {
-                if(a.sprite){ a.sprite->set_position(wx(ax), wy(ay)); a.sprite->set_visible(true); }
-                if(invuln == 0 && !player.dash.invincible() && logic::aabb_overlap(player.body, a.body)){
-                    health.damage(20); invuln = 45;
-                }
-            }
-        }
+        // ---- attack advance + render + contact (all active projectiles, via the library pool) ----
+        bool proj_hit = attacks.advance(player.body, level.w * 8, level.h * 8,
+                                        invuln != 0 || player.dash.invincible());
+        if(proj_hit){ health.damage(20); invuln = 45; }   // 20-dmg / 45-iframe contact tuning is King-scene
 
         // ---- King contact damage: touching the King's body hurts (fight from range) ----
         if(invuln == 0 && !player.dash.invincible() && logic::aabb_overlap(player.body, king_body)){
@@ -425,34 +362,13 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         // ---- DEFENSE: the player's bolt / Fire / Ice DESTROYS an incoming boss projectile on contact
         //      (block). The shot is consumed by the block, so it can't also reach the King. (Light is
         //      NOT a blocker — it must pass through to expose.) Runs BEFORE the King-damage check so a
-        //      blocked shot never doubles as a wound. ----
-        for(AttackInst& a : attacks){
-            if(!a.active) continue;
-            if(bolts.consume_hit(a.body)
-               || spells.consume_hit(a.body, logic::SpellId::Fire)
-               || spells.consume_hit(a.body, logic::SpellId::Ice)){
-                a.active = false; if(a.sprite) a.sprite->set_visible(false);
-            }
-        }
+        //      blocked shot never doubles as a wound. (Shared library block defense.) ----
+        attacks.block_player_shots(bolts, spells);
 
-        int hp_before = b.hp;   // detect a wound this frame -> the King teleports away (see below)
-
-        // ---- damage resolution (mirrors the dungeon's consume_hit hooks; King is a logic::Body) ----
-        // Light ALWAYS exposes/refreshes — runs every frame regardless of phase (M10 Light-clears
-        // hook, repointed to expose). on_expose_hit() is a no-op once defeated/i-framed.
-        if(spells.consume_hit(king_body, logic::SpellId::Light)) b.on_expose_hit(logic::SpellId::Light);
-        // Wounding lands ONLY while EXPOSED (the King is immune while shielded). on_wound() itself
-        // also guards on exposed(), but we gate here so a shot never silently vanishes off the King
-        // mid-shield. An ELEMENTAL wound also refills magic (sustains casts; dungeon kill-refill feel).
-        if(b.exposed()){
-            if(bolts.consume_hit(king_body)){
-                b.on_wound(logic::KING_DEF.wound_dmg);
-            } else if(spells.consume_hit(king_body, logic::SpellId::Fire)
-                   || spells.consume_hit(king_body, logic::SpellId::Ice)){
-                b.on_wound(logic::KING_DEF.wound_dmg);
-                magic.heal(25);
-            }
-        }
+        // ---- damage resolution (shared library; Light exposes, bolt/Fire/Ice wounds while exposed,
+        //      elemental wound refills magic 25). Returns whether a wound landed THIS frame -> the King
+        //      reacts by teleporting away (King-only side effect, applied below). ----
+        bool wounded = engine::resolve_damage(b, king_body, bolts, spells, magic, /*magic_heal=*/25);
         // ---- phase-change dialogue (the King taunts as he escalates — in-character, not a banner) ----
         {
             int cp = combat_phase();
@@ -469,11 +385,11 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         //      new perch, clear in-flight attacks, and restart the attack cycle (fresh telegraph) so it
         //      winds up at the new spot rather than striking instantly. (BossState i-frames already
         //      prevent an immediate re-expose.) ----
-        if(b.hp < hp_before){
+        if(wounded){
             set_king_perch((perch_idx + 1) % KING_PERCH_COUNT);
             teleport_timer = TELEPORT_PERIOD;
             teleport_flash = 12;
-            clear_attacks();
+            attacks.clear();
             atk_spawned_this_active = false;
             b.attack_timer = 0;
         }
@@ -514,7 +430,7 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         }
 
         refresh_spell_icon();
-        refresh_king_hp();
+        king_hp_bar.refresh(b.hp);
         hud.update(health, magic, world.lives);
         set_clamped_cam(player.body.pos.x.to_int() + player.body.half_w.to_int(),
                         player.body.pos.y.to_int() + player.body.half_h.to_int());
