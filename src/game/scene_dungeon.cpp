@@ -373,10 +373,12 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         bolts.update(in.fire_pressed, muzzle, player.facing, lvl.map);
         spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);
 
-        // ---- DEFENSE: player shots block incoming boss projectiles (Light passes through) ----
-        attacks.block_player_shots(bolts, spells);
+        // NOTE: the D1 boss does NOT use the block defense (that's a King mechanic). Letting the player's
+        // free bolt destroy incoming boss bolts meant spamming B auto-blocked everything (the boss's
+        // bolts "didn't travel wall-to-wall") AND won the fight — QA r2. D1 must be DODGED: the boss's
+        // bolts now pass the player's shots and travel until a wall/floor, so the player must move.
 
-        // ---- damage resolution (AlwaysVulnerable: bolt/Fire/Ice wounds anytime; elemental refills magic) ----
+        // ---- damage resolution (bolt/Fire/Ice wounds while vulnerable; elemental refills magic) ----
         engine::resolve_damage(b, boss_body, bolts, spells, magic, /*magic_heal=*/25);
 
         if(b.defeated()){ boss_say(level.boss->death_line); return BossRoomOutcome::Victory; }
