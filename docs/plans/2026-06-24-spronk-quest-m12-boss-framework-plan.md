@@ -65,7 +65,7 @@ notes and commit messages.
 |---|---|---|---|
 | 1 — Pure-logic framework (BossDef/BossState + KING_DEF + D1_DEF) | ✅ Shipped | `2bcbfff` (P1.1–1.4), `7b5c59d` (P1.5) | 427/427; King regression guard held; ROM builds |
 | 2 — Engine attack library + shared helpers | ✅ Shipped | `51a43f6` | `engine/boss_attacks` (AttackPool/SpiralEmitter/TelegraphCue/BossHpBar + templated block/resolve_damage); ROM builds, 427/427, no game/ include |
-| 3 — King refactor onto the framework | ⬜ Not started | — | — |
+| 3 — King refactor onto the framework | ✅ Shipped | `985aec5` | King uses `boss_attacks` (inline copies deleted, −84 lines); constants verified faithful (telegraph/pips/spiral); ROM builds, 427/427 |
 | 4 — D1 boss + integration + invariants + QA | ⬜ Not started | — | — |
 
 ### Deviations
@@ -333,7 +333,7 @@ BEFORE marking complete: ROM builds; the library is self-contained (no game/ inc
 
 ## Phase 3 — King refactor onto the framework
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `985aec5` on 2026-06-24 — King's inline attack/telegraph/hp-bar/block/damage code replaced by `engine::boss_attacks` (teleport + dialogue + aim + pause stay local); `scene_boss.cpp` 525→441 lines. Library constants verified to match the shipped King exactly (telegraph −14/pulse-6, pips (−32+i·8, 68), spiral STEPS 5/cd 5 + 8-dir table). ROM builds, 427/427. (Behaviour identity to be confirmed in 4.6 emulator QA.)
 
 **Why this matters:** proves the King reuses the framework with NO behaviour change. Highest regression risk — the King had 9 QA rounds. The Phase-1 host tests guard the logic; this phase guards the scene via ROM + manual QA.
 
