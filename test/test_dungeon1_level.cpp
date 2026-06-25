@@ -114,6 +114,25 @@ static std::vector<uint8_t> reachable(const Grid& g, int sx, int sy, int climb){
                 else if(g.standable(nx, y)) push(nx, y);
             }
         }
+        // Horizontal double-jump OVER a floor-level hazard/gap (D1's bolt+double-jump kit). From a
+        // standable cell, reach a standable cell up to `climb` tiles away at the SAME height IF the air
+        // corridor above the whole span is clear of SOLID (the player arcs over spikes / a pit at the
+        // floor row). Conservative: a solid obstacle taller than the floor row blocks the corridor, so
+        // this never crosses a real wall (the break tests' full walls stay unreachable).
+        for(int dir = -1; dir <= 1; dir += 2){
+            for(int k = 2; k <= climb; ++k){
+                int nx = x + dir * k;
+                if(nx < 0 || nx + PW - 1 >= g.w) break;
+                if(!g.standable(nx, y)) continue;
+                int c0 = (dir < 0) ? nx : x;
+                int c1 = (dir < 0) ? x + PW - 1 : nx + PW - 1;
+                bool corridor = true;
+                for(int cx = c0; cx <= c1 && corridor; ++cx)
+                    for(int cy = y - PH + 1; cy <= y - 1; ++cy)
+                        if(g.blk(cx, cy)){ corridor = false; break; }
+                if(corridor) push(nx, y);
+            }
+        }
     }
     return seen;
 }
