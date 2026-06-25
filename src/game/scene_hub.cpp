@@ -27,6 +27,7 @@
 #include "engine/avatar.h"
 #include "engine/fade.h"
 #include "engine/hud.h"
+#include "engine/pause.h"        // check_pause (START -> GAME PAUSED; global pause)
 #include "game/levels/hub.h"
 
 namespace game
@@ -42,7 +43,8 @@ namespace {
             || (n == 5 && w.spronk_freed(4))
             || (n == 6 && w.spronk_freed(5))
             || (n == 7 && w.spronk_freed(6))
-            || (n == 8 && w.spronk_freed(7));
+            || (n == 8 && w.spronk_freed(7))
+            || (n == 9 && logic::spronk_count(w) == 8); // Door 9 (finale) opens only when ALL 8 spronks are freed
     }
 }
 
@@ -163,6 +165,7 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
 
     while(true)
     {
+        engine::check_pause();   // START -> freeze + "GAME PAUSED" until START again (global pause)
         logic::InputFrame in = engine::read_input();
         // Full ability parity with the dungeon: every earned movement ability is live in the hub.
         player.abilities.featherleap = world.has(logic::Ability::Featherleap);
@@ -193,8 +196,9 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
             miss_vine_dir = player.facing;
         }
 
+        // Shot aim (Zelda II style, shared with the boss/dungeon): UP = high, DOWN = low, else medium.
         logic::Vec2 muzzle = { player.body.pos.x + player.body.half_w,
-                               player.body.pos.y + player.body.half_h };
+                               player.body.pos.y + player.body.half_h + fx(engine::read_aim_dy()) };
         spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);
         spells.despawn_on_solid(lvl.map);
 

@@ -44,6 +44,7 @@
 #include "engine/level_view.h"    // set_level_tile
 #include "engine/avatar.h"
 #include "engine/bolts.h"
+#include "engine/pause.h"        // check_pause (START -> GAME PAUSED; global pause)
 #include "engine/spell_pool.h"
 #include "engine/hud.h"
 #include "engine/fade.h"
@@ -448,11 +449,17 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     int grapple_pull_cd = 0;
     int miss_vine_t   = 0;  // counts down from 10; >0 => miss-vine animation active
     int miss_vine_dir = 1;  // facing direction when the miss was fired
+    int lr_restart_hold = 0; // frames L+R held — anti-soft-lock manual restart (moved off START)
 
     while(true)
     {
+        engine::check_pause();   // START -> freeze + "GAME PAUSED" until START again (global pause)
         if(bn::keypad::select_pressed()) { return RoomOutcome{ RoomOutcome::Quit }; }
-        if(bn::keypad::start_pressed())  { return RoomOutcome{ RoomOutcome::Restart }; }  // anti-soft-lock level reset
+        // Anti-soft-lock manual restart: HOLD L+R for ~30 frames. Moved off START (now the pause key);
+        // a deliberate hold so the constant L=cycle / R=fire taps can't trigger it accidentally.
+        if(bn::keypad::l_held() && bn::keypad::r_held()){
+            if(++lr_restart_hold >= 30) return RoomOutcome{ RoomOutcome::Restart };
+        } else lr_restart_hold = 0;
         if(bn::keypad::up_pressed()){
             if(const logic::RoomDoorSpawn* dr = logic::room_door_at(level, player.body)){
                 // target_room == -1 is the sentinel "exit-to-hub" door: a diegetic Up-press
@@ -654,8 +661,9 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             }
         }
 
+        // Shot aim (Zelda II style, shared with the boss/hub): UP = high, DOWN = low, else medium.
         logic::Vec2 muzzle = { player.body.pos.x + player.body.half_w,
-                               player.body.pos.y + player.body.half_h };
+                               player.body.pos.y + player.body.half_h + fx(engine::read_aim_dy()) };
         bolts.update(in.fire_pressed, muzzle, player.facing, lvl.map);
 
         logic::SpellId fired = spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);

@@ -8,7 +8,7 @@ Usage: python tools/build_level.py <in.txt> <out.h>
 
 Grid symbols (collision tile in parens):
   #=solid(1)  .=empty(0)  ^=one-way(2)  ~=lava(3)  w=water(4)  u=updraft(6)  <=wind-left(7)  >=wind-right(8)  s=spikes(9)  g=grapple-anchor(10)
-  @=spawn(one)  C=cage  E=exit  o=enemy  G=gate  1-8=dungeon door
+  @=spawn(one)  C=cage  E=exit  o=enemy  G=gate  1-9=dungeon door
   V=vine gate  I=ice gate  W=water gate  X=fire-wall gate  K=cracked-wall gate(Dash)
   F=ability shrine  B=pushable block  P=pullable block  ==pressure plate
   ?=hidden button  *=brazier
@@ -47,7 +47,7 @@ ABILITY_ENUM = {
     'featherleap': 'Featherleap', 'fire': 'Fire', 'ice': 'Ice', 'glide': 'Glide',
     'dash': 'Dash', 'grapple': 'Grapple', 'stone': 'Stone', 'light': 'Light',
 }
-CONTENT = set('@CEoG12345678VIWXFBPK=?*NDQHkO:h$')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door, 'Q' exit-to-hub door (target_room=-1); 'H' heart container; 'k' cracked-floor gate (M8, Stone); 'O' boulder (M8); ':' loose platform (M8); 'h' hidden platform (M10); '$' magic crystal (M10)
+CONTENT = set('@CEoG123456789VIWXFBPK=?*NDQHkO:h$')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door, 'Q' exit-to-hub door (target_room=-1); 'H' heart container; 'k' cracked-floor gate (M8, Stone); 'O' boulder (M8); ':' loose platform (M8); 'h' hidden platform (M10); '$' magic crystal (M10)
 
 
 class LevelError(Exception):
@@ -57,7 +57,9 @@ class LevelError(Exception):
 def compile_level(txt_path, json_path):
     with open(txt_path, 'r', encoding='utf-8') as f:
         rows = [line.rstrip('\n').rstrip('\r') for line in f]
-    rows = [r for r in rows if r != '']  # ignore blank lines
+    # ignore blank lines and ';'-prefixed comment lines (';' is not a grid symbol, so a leading ';'
+    # is unambiguously a comment — distinct from '#', which is the solid-wall tile).
+    rows = [r for r in rows if r != '' and not r.lstrip().startswith(';')]
     if not rows:
         raise LevelError("empty level")
     w = len(rows[0])
@@ -217,7 +219,7 @@ def compile_level(txt_path, json_path):
             elif c == '$':
                 # M10: a magic crystal — fully refills the magic meter on touch (respawns each attempt). No JSON needed.
                 magic_crystals.append((x, y))
-            elif c in '12345678':
+            elif c in '123456789':
                 doors.append((x, y, int(c)))
 
     if len(spawns) != 1:

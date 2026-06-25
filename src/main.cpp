@@ -6,6 +6,8 @@
 #include "game/scene_title.h"
 #include "game/scene_hub.h"
 #include "game/scene_dungeon.h"
+#include "game/scene_boss.h"
+#include "game/scene_victory.h"
 #include "game/levels/dungeons.h"
 
 int main()
@@ -24,7 +26,35 @@ int main()
     while(true)
     {
         game::HubResult hr = game::run_hub(world, ps); // returns when a door is entered
-        int n = hr.enter_dungeon;                     // 1..8; all eight dungeons built (M2-M10)
+        int n = hr.enter_dungeon;                     // 1..9; D1-D8 dungeons + D9 finale (boss)
+
+        // Door 9 (finale) is NOT a normal dungeon: a 2-room approach hands off to the boss arena.
+        if(n == 9)
+        {
+            world.current_dungeon = 9;
+            game::DungeonResult ar = game::run_dungeon(DUNGEON9_APPROACH, world, ps);
+            if(ar == game::DungeonResult::Cleared)
+            {
+                game::BossResult br = game::run_boss(DUNGEON9_ARENA, world, ps);
+                if(br == game::BossResult::Victory)
+                {
+                    world.beaten = true;
+                    engine::write_world(world);       // persist completion before the ending
+                    game::run_victory(world);         // "THE END" screen
+                }
+                // Victory (post-ending) and QuitToTitle both fall through to the title.
+                game::run_title(world);
+            }
+            else if(ar == game::DungeonResult::QuitToTitle)
+            {
+                game::run_title(world);
+            }
+            // A DungeonResult::Quit from the approach (hub-return 'Q' door) falls through to
+            // the shared reset below and resumes the hub, same as the other dungeons.
+            world.current_dungeon = 0;
+            continue;
+        }
+
         const logic::DungeonData* lvl = nullptr;
         if(n == 1) lvl = &DUNGEON1_DUNGEON;
         else if(n == 2) lvl = &DUNGEON2_DUNGEON;

@@ -1,0 +1,45 @@
+; M11 D9 arena (Nightmare King boss room) — intentionally minimal (framework/testing pass), may be expanded later.
+; Fixed-screen flat-ish combat arena. NO exit 'E', NO cage 'C' (the fight ends via boss defeat in
+; run_boss code, NOT by an exit tile). Player entrance id 0 on the left floor. Exactly ONE magic crystal
+; '$' on the base floor (reachable by base movement — no magic/abilities needed to reach it).
+;
+; The King has no level-data spawn type; scene_boss.cpp drives its position. QA r4: the King TELEPORTS
+; between several perches (KING_PERCHES in scene_boss.cpp), all at a FLOOR-HITTABLE height (row ~27)
+; spread across the arena, so it roams "around the platforms" but is always shootable from the ground
+; (spell bolts travel HORIZONTALLY, so the King must share the player's standing height). It pauses on
+; a perch while EXPOSED (the player's wound window). The platforms are for DODGING (jump up to clear a
+; ground attack). Firing position is the open floor, so the Task-4.5 expose-reachability invariant holds.
+;
+; Standard floor: entities row 28, solid rows 30-31. Grid rows 0..31 (40x32, matching the approach rooms).
+########################################
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#..................g...................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#..............######......###.........#
+#............##..........##............#
+#......................................#
+#......................................#
+#......................................#
+#......................................#
+#..........##..........##..............#
+#......................................#
+#......................................#
+#.....N@.....$.........................#
+#......................................#
+########################################
+########################################

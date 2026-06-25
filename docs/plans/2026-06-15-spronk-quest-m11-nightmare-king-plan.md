@@ -59,14 +59,14 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started. Branch: `feat/m11-nightmare-king` (recommended; create from `main`).
+**Overall:** 4/4 phases shipped; emulator QA (4.6) complete after 9 rounds; ready for final review + merge. Branch: `feat/m11-nightmare-king` (off `main`, 33 commits).
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 1 — Pure logic: BossState + attack table + SWITCH_BUDGET | ⬜ Not started | — | — |
-| 2 — Save v5: World.beaten + migrations | ⬜ Not started | — | — |
-| 3 — Engine/scene: run_boss() + King + art | ⬜ Not started | — | — |
-| 4 — Content + integration + invariants + QA | ⬜ Not started | — | — |
+| 1 — Pure logic: BossState + attack table + SWITCH_BUDGET | ✅ Shipped | `c6e25df` (P1.1–P1.6) | 14 host tests; 404/404; non-vacuity verified |
+| 2 — Save v5: World.beaten + migrations | ✅ Shipped | `649c7c4`, `20c45ee` | 409/409; sizeof==20; all migrations + clamp ports |
+| 3 — Engine/scene: run_boss() + King + art | ✅ Shipped | `9a8204f`,`021fd4b`,`b565821`,`71c69bb` | ROM builds; scene reviewed vs BossState contract |
+| 4 — Content + integration + invariants + QA | ✅ Shipped | `4e84503`,`6e93f25`,`1424bd1`,`31c2e6c`,`1b02c94` + QA r1–r9 | 4.1–4.5 + 9 emulator QA rounds (419/419, ROM builds) |
 
 ### Recommended execution order (dependency-aware)
 
@@ -77,10 +77,28 @@ Tasks are grouped by phase for readability, but dependencies force this executio
 Reason: 4.2 (content) unblocks the scene; 4.4 (`run_victory`) must exist before 4.3 references it; everything else is intra-phase sequential. Taking this order is NOT a deviation (the phase numbers are organizational, not execution-order); document it only if you diverge from THIS list.
 
 ### Deviations
-- _(none yet)_
+- **Phase 2 (Task 2.1):** also edited `test/test_world_state_v3.cpp` (3 assertions `SAVE_VERSION==4`/make_save-produces-v4 → `==5`), beyond the plan's named file list. Necessary + mechanical (no logic change) — the suite could not go green otherwise. Folded into commit `649c7c4`.
+- **Task 4.2:** extended `tools/build_level.py` to support `;`-prefixed comment lines in level `.txt` files (commit `4e84503`). The level format had no comment syntax, but the plan required documenting `KING_SPAWN_TX/TY` + the per-phase firing tiles inside `dungeon9_arena.txt`. `;` is unambiguous (not a grid symbol; distinct from `#` wall). Verified non-breaking: level-compiler unit tests + all regenerated dungeon headers + host suite stay green (409/409). Task 4.2 also executed BEFORE Phase 3 per the plan's own "Recommended execution order" (not a deviation, but noting the actual order).
+- **Task 4.1:** extended `tools/build_level.py` to accept the `9` door digit (CONTENT set + door scan + docstring) — the compiler previously only handled doors 1–8. Mechanical, non-breaking (commit `6e93f25`). Hub kept at width 58, door pitch 6 (2-wide archway + 4-tile gap), 9 doors cols 3..51 on row 15.
+- **Task 4.5:** also modified the Task-4.2 arena (`dungeon9_arena.txt`) to fix completability (see Discoveries) and made the `reaches_forward_exit` test helper room-index-aware so a backtrack room-door can't mask a walled-off forward exit (needed for the room1 non-vacuity break). Committed in `1b02c94`.
+- **Task 4.6 (emulator QA r1–r2) — significant deviations from the written scene design, driven by playtest:**
+  - **Camera:** the plan specified a FIXED arena camera; the arena is larger than the GBA screen, so a corner spawn was off-screen. Switched to scene_dungeon's clamped follow-camera (`fix(boss): clamped follow-camera...`).
+  - **King position + attacks:** the spec's hovering King + 3 attack types (incl. a player-height-tracking sweep) were unhittable (horizontal-only player projectiles) and unfair. Redesigned: King at FLOOR-centre (directly shootable from the ground) + ONE readable fixed-height ground bolt the player jumps over (`fix(boss): QA r2 ...`). The Task-4.5 `d9_arena_expose_positions_reachable` invariant now passes via the open floor (firing is from the ground, not the platforms); the platform-tile checks are over-specified but still hold — a follow-up could retarget them.
+  - **New features (user-requested in QA):** King contact damage; a 9-pip King HP bar; magic crystal now respawns when magic < one cast (repeatable recharge); King intro/death dialogue ("YOU FINALLY MADE IT" / "NOOOOO!").
+  - **Global pause (control-scheme change):** new `engine::check_pause()` (START → "GAME PAUSED") in boss + dungeon + hub. START was the dungeon's manual "restart room"; that anti-soft-lock reset moved to a deliberate **L+R hold (~30 frames)**. SELECT=quit unchanged. New files `include/engine/pause.h` + `src/engine/pause.cpp`.
+- **Task 4.6 QA rounds r3–r9** (all in `scene_boss.cpp` unless noted) — combat polish from playtest:
+  - r2: King lowered to floor-hittable + 3 attacks + spawn-on-floor + crystal-respawn + contact damage + King HP bar.
+  - r3: dedicated `king_hp` pip sprite (`make_placeholder_art.py`) + boss HP bar moved to the bottom (no HUD overlap).
+  - r4: King **teleports** between perches (was a sitting duck); attacks moved to a pool.
+  - r5: **telegraph cue** orb at the King (red/gold/cyan per attack) + all attacks King-sourced + **spiral** + phase **banners**.
+  - r6: **King hit i-frames** (logic — `boss.h` + tests, 419/419): a wound ends the expose + grants i-frames → ONE wound per Light (fixes the stun-spam exploit); King teleports onto **platforms**; spiral two-sided; banners → in-character **dialogue** ("NOW YOU'RE GETTING ME ANGRY" / "I'M DONE TOYING WITH YOU").
+  - r7: spiral back to **one arm, aimed at the player's side**; **block defense** (bolt/Fire/Ice destroy boss projectiles on contact; Light exempt); King **teleports away after a wound** (no instant retaliation).
+  - r8–r9: **Zelda II high/mid/low shot aim** (`engine::read_aim_dy()`, UP/DOWN+B) — boss first, then universal across dungeon + hub + boss; low shot raised to clear the floor.
 
 ### Discoveries
-- _(none yet)_
+- `test/test_world_state_v3.cpp` pins the CURRENT save version (asserts `SAVE_VERSION==4` in 3 places), not just v3-on-disk migration. Any future save-version bump must update it too (the plan's Phase 2 only anticipated `test_world_state_v4.cpp`). Fixed in `649c7c4`.
+- **Task 4.5:** the committed Task-4.2 arena had the P1/P3 firing platforms (row 19) floating ~11 tiles above the floor with the grapple anchor beyond grapple RANGE — the documented firing tiles were unreachable, so the arena was not completable. Fixed in `1b02c94` by adding two-step staircases (solid stubs at rows 20+25, staggered per the M10 overhead-clip lesson, ≤5-tile steps) so P1(19,18)/P3(26,18) are base-reachable. The `d9_arena_expose_positions_reachable` invariant now guards this.
+- **RESOLVED (4.6 QA) — King projectile-reach:** spell projectiles travel purely horizontally, so a high King was unhittable. Resolved over the QA rounds: the King now floats at floor-hittable height and **teleports** between floor + platform perches (player repositions to its height), plus the **Zelda II high/mid/low shot aim** lets the player line up shots vertically. The static-unwinnable risk is gone (the fight is winnable + was played end-to-end in QA).
 
 ---
 
@@ -146,7 +164,7 @@ inline constexpr PhasePattern PHASE_PATTERNS[3] = {
 
 ## Phase 1 — Pure logic: BossState + attack table + SWITCH_BUDGET
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `c6e25df` on 2026-06-15 (tasks P1.1–P1.6; `include/logic/boss.h` + `test/test_boss.cpp`, 14 tests, 404/404 green, SWITCH_BUDGET + expose-decay non-vacuity verified)
 
 **Why this matters:** the boss's entire decision logic is pure and host-tested here, so Phase 3's scene is "just rendering." This is also the M12-extraction seed — keep naming generic (`BossPhase`, not `KingRage`) and attacks data-described.
 
@@ -503,7 +521,7 @@ Review the batch from multiple perspectives. Minimum 3 review rounds. If round 3
 
 ## Phase 2 — Save v5: World.beaten + migrations
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `649c7c4`, `20c45ee` on 2026-06-15 (World.beaten in padding byte [17]; SAVE_VERSION 5; checksum_v5; v1–v4→v5 migrations; sizeof==20; 409/409 green. See Deviations re: test_world_state_v3.cpp.)
 
 **Why this matters:** the game's first persisted completion flag. The change MUST keep `sizeof(SaveData)==20` (store `beaten` in existing padding) and cover EVERY migration (TEST-4).
 
@@ -623,6 +641,8 @@ Review the batch (min 3 rounds). Confirm: `sizeof(SaveData)==20`; every migratio
 
 **Execution Status:** ⬜ NOT STARTED
 
+**Execution Status:** ✅ SHIPPED at `9a8204f`,`021fd4b`,`b565821`,`71c69bb` on 2026-06-15 (King art; `scene_boss.{h,cpp}` run_boss — Light-expose, wound-only-while-exposed, attacks-frozen-while-exposed, M9 death/lives/full-fight-restart, magic crystal, fixed camera; ROM builds; reviewed against the BossState contract. Deviations: P3 uses a single descending projectile placeholder (not 2–3) per "keep minimal"; added a 60-frame respawn i-frame grace; persists `lose_life` immediately.)
+
 **Why this matters:** the playable fight. The DECISIONS are already host-tested in Phase 1 — this scene only renders `BossState` and routes input/damage through existing pools. Scene code is NOT host-testable (it uses `bn::`), so correctness rides on the Phase-1 logic tests + manual emulator QA (Phase 4). Keep ALL new decision logic in `BossState` — do NOT add gameplay branching here that isn't backed by a logic test.
 
 **Pitfalls:** IMPL-1 (`bn::` is allowed here, NOT in logic), IMPL-2 (integer math), IMPL-3 (mutate sprites only via Butano APIs). Build gate per task: `bash tools/build_rom.sh` → `ROM fixed!` (host tests still run for any logic touched).
@@ -714,7 +734,7 @@ Review the batch (min 3 rounds). Confirm: NO decision logic in the scene that is
 
 ## Phase 4 — Content + integration + invariants + QA
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED — 4.1–4.5 at `4e84503`,`6e93f25`,`1424bd1`,`31c2e6c`,`1b02c94`; 4.6 emulator QA complete after 9 rounds (combat polish — see Deviations). 419/419 host tests, ROM builds, user-confirmed.
 
 **Why this matters:** wires Door 9 → approach → arena → ending into a playable, winnable game, and guards it with the no-soft-lock invariant harness. Includes the balance QA pass.
 
