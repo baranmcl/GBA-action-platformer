@@ -70,6 +70,7 @@ notes and commit messages.
 
 ### Deviations
 - **Phase 1:** tasks 1.1–1.4 landed as ONE commit (`2bcbfff`) not four — same two files, and four commits would have left misleading partially-broken intermediate states. **Task 1.5** also re-pointed `KING_MAX_HP`/`WOUND_DMG` → `KING_DEF.*` in `scene_boss.cpp`'s HP-pip + damage code (beyond the plan's enumerated API-call swaps) — required since those globals were removed in 1.1; identical mechanical mapping, zero behaviour change.
+- **QA r1 (emulator):** the D1 boss changed from `AlwaysVulnerable` (spam-to-win) to a NEW **`VulnMode::TiredWindow`** (third vuln model — invulnerable while attacking, opens a vulnerable "tired" window after `tired_after` attack cycles, shown by a 2-frame Guardian animation). `BossDef` gained `tired_after` + `intro_line`/`death_line` (data-driven dialogue). Also: boss bolts now despawn on solid walls/floor (pass through one-way) — affects the King too; hub Light-spell icon+cast bug fixed; D1 arena gained a spike+platform hazard. `AlwaysVulnerable` retained as a valid mode (synthetic test). Commits `d6549a1`,`1553da1`,`3d3a9e3`,`f25f924`,`2a6f47a`. Framework now proves THREE vuln models.
 
 ### Discoveries
 - _(none yet)_
