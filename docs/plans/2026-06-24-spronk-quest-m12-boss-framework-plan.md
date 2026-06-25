@@ -59,17 +59,17 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started. Branch: `feat/m12-boss-framework` (recommended; create from `main`).
+**Overall:** 1/4 phases shipped. Branch: `feat/m12-boss-framework` (off `main`).
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 1 — Pure-logic framework (BossDef/BossState + KING_DEF + D1_DEF) | ⬜ Not started | — | — |
+| 1 — Pure-logic framework (BossDef/BossState + KING_DEF + D1_DEF) | ✅ Shipped | `2bcbfff` (P1.1–1.4), `7b5c59d` (P1.5) | 427/427; King regression guard held; ROM builds |
 | 2 — Engine attack library + shared helpers | ⬜ Not started | — | — |
 | 3 — King refactor onto the framework | ⬜ Not started | — | — |
 | 4 — D1 boss + integration + invariants + QA | ⬜ Not started | — | — |
 
 ### Deviations
-- _(none yet)_
+- **Phase 1:** tasks 1.1–1.4 landed as ONE commit (`2bcbfff`) not four — same two files, and four commits would have left misleading partially-broken intermediate states. **Task 1.5** also re-pointed `KING_MAX_HP`/`WOUND_DMG` → `KING_DEF.*` in `scene_boss.cpp`'s HP-pip + damage code (beyond the plan's enumerated API-call swaps) — required since those globals were removed in 1.1; identical mechanical mapping, zero behaviour change.
 
 ### Discoveries
 - _(none yet)_
@@ -109,7 +109,7 @@ notes and commit messages.
 
 ## Phase 1 — Pure-logic framework
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `2bcbfff` (P1.1–1.4) + `7b5c59d` (P1.5) on 2026-06-24 — def-driven BossState + KING_DEF (regression guard held, all King tests re-pointed with unchanged values) + D1_DEF + per-def SWITCH_BUDGET invariant + minimal King-scene API migration. 427/427 host tests, purity OK, ROM builds.
 
 **Why this matters:** the data-described core is the whole point of M12 + the M12-extraction seed realized. It MUST keep the King behaviour-identical (regression guard) while supporting a different-shaped boss (D1). This is the project's "discover the abstraction from a working example" discipline.
 
