@@ -181,40 +181,90 @@ TEST(bossdef_king_reset_initial_state){
     CHECK(!b.exposed()); CHECK(!b.defeated());
 }
 TEST(bossdef_king_has_three_phases){ CHECK_EQ(KING_DEF.phase_count, 3); }
-TEST(bossdef_d1_has_two_phases_always_vulnerable){
+TEST(bossdef_d1_has_two_phases_tired_window){
     CHECK_EQ(D1_DEF.phase_count, 2);
-    CHECK((int)D1_DEF.vuln == (int)VulnMode::AlwaysVulnerable);
+    CHECK((int)D1_DEF.vuln == (int)VulnMode::TiredWindow);
+    CHECK_EQ(D1_DEF.tired_after, 3);
+    CHECK(D1_DEF.expose_frames >= SWITCH_BUDGET);   // the tired window doubles as the safe window
 }
 
 // ---------------------------------------------------------------------------
-// M12 P1.3 — D1_DEF AlwaysVulnerable behaviour.
+// M12 QA r1 — D1_DEF TiredWindow behaviour. The Guardian is INVULNERABLE while
+// attacking and tires (a vulnerable window) after `tired_after` completed cycles.
 // ---------------------------------------------------------------------------
-TEST(d1_wound_lands_without_expose){
+
+// Advance one full attack cycle (period frames). Returns nothing; the boss may tire
+// on the wrapping tick (the last frame of the cycle).
+static void run_one_cycle(BossState& b){
+    int period = b.phase_period();
+    for(int i = 0; i < period; ++i) b.tick();
+}
+
+TEST(d1_not_vulnerable_initially){
     BossState b; b.reset(D1_DEF);
-    CHECK(b.vulnerable());                       // always vulnerable, no Light needed
-    b.on_wound(D1_DEF.wound_dmg);
+    CHECK(!b.vulnerable());                       // TiredWindow: invulnerable while attacking
+    CHECK(!b.exposed());
+    b.on_wound(D1_DEF.wound_dmg);                 // a wound while not tired is shielded -> no effect
+    CHECK_EQ(b.hp, D1_DEF.max_hp);
+}
+TEST(d1_tires_after_tired_after_cycles){
+    BossState b; b.reset(D1_DEF);
+    for(int c = 0; c < D1_DEF.tired_after - 1; ++c){ run_one_cycle(b); CHECK(!b.exposed()); }
+    run_one_cycle(b);                             // the tired_after-th cycle opens the window
+    CHECK(b.exposed());                           // TIRED -> exposed()
+    CHECK(b.vulnerable());                        // exposed() => vulnerable()
+    CHECK_EQ(b.expose_timer, D1_DEF.expose_frames);
+    CHECK_EQ(b.attack_cycles, 0);                 // reset on tiring
+}
+TEST(d1_wound_during_tired_window_lands_and_ends_it){
+    BossState b; b.reset(D1_DEF);
+    for(int c = 0; c < D1_DEF.tired_after; ++c) run_one_cycle(b);
+    CHECK(b.exposed());
+    b.on_wound(D1_DEF.wound_dmg);                 // lands during the tired window
+    CHECK_EQ(b.hp, D1_DEF.max_hp - D1_DEF.wound_dmg);
+    CHECK(!b.exposed());                          // a wound ends the tired window
+    CHECK_EQ(b.hit_iframes, D1_DEF.hit_iframes);  // and grants i-frames (one wound per window)
+}
+TEST(d1_one_wound_per_tired_window){
+    BossState b; b.reset(D1_DEF);
+    for(int c = 0; c < D1_DEF.tired_after; ++c) run_one_cycle(b);
+    b.on_wound(D1_DEF.wound_dmg);                 // lands
+    b.on_wound(D1_DEF.wound_dmg);                 // blocked (window ended + i-frames)
     CHECK_EQ(b.hp, D1_DEF.max_hp - D1_DEF.wound_dmg);
 }
-TEST(d1_hit_iframes_cap_wound_rate){
+TEST(d1_attack_frozen_while_tired){
     BossState b; b.reset(D1_DEF);
-    b.on_wound(D1_DEF.wound_dmg);                // lands
-    b.on_wound(D1_DEF.wound_dmg);                // blocked by i-frames
-    CHECK_EQ(b.hp, D1_DEF.max_hp - D1_DEF.wound_dmg);
-    for(int i=0;i<D1_DEF.hit_iframes;++i) b.tick();
-    b.on_wound(D1_DEF.wound_dmg);                // lands again after i-frames
-    CHECK_EQ(b.hp, D1_DEF.max_hp - 2*D1_DEF.wound_dmg);
+    for(int c = 0; c < D1_DEF.tired_after; ++c) run_one_cycle(b);
+    CHECK(b.exposed());
+    int frozen = b.attack_timer;
+    for(int i = 0; i < 10; ++i) b.tick();        // ticks during the tired window
+    CHECK_EQ(b.attack_timer, frozen);            // attack pattern frozen while tired
 }
-TEST(d1_no_expose_on_spell){
+TEST(d1_light_is_noop_for_tired_window){
     BossState b; b.reset(D1_DEF);
-    b.on_expose_hit(SpellId::Light);             // AlwaysVulnerable -> no-op
+    b.on_expose_hit(SpellId::Light);             // TiredWindow ignores Light (no expose mechanic)
     CHECK_EQ(b.expose_timer, 0);
+    CHECK(!b.exposed());
 }
-TEST(d1_two_phase_advance_and_defeat){
-    BossState b; b.reset(D1_DEF);
-    int guard=0;
-    while(!b.defeated() && guard++<100){ b.on_wound(D1_DEF.wound_dmg); for(int i=0;i<D1_DEF.hit_iframes;++i) b.tick(); }
+
+// ---------------------------------------------------------------------------
+// M12 QA r1 — AlwaysVulnerable still works (no shipped boss uses it now, so a
+// small synthetic test-only def). Guards the mode against accidental removal.
+// ---------------------------------------------------------------------------
+static constexpr BossPhaseDef AV_PHASES[1] = { { 0, { 60, 30, 30 }, BOSS_ATK_AIMED } };
+static constexpr BossDef AV_DEF{
+    20, 10, 30, 0, VulnMode::AlwaysVulnerable, SpellId::None, AV_PHASES, 1
+};
+TEST(always_vulnerable_wound_lands_without_expose){
+    BossState b; b.reset(AV_DEF);
+    CHECK(b.vulnerable());                        // always vulnerable, no expose needed
+    b.on_wound(AV_DEF.wound_dmg);
+    CHECK_EQ(b.hp, AV_DEF.max_hp - AV_DEF.wound_dmg);
+    b.on_wound(AV_DEF.wound_dmg);                 // blocked by i-frames
+    CHECK_EQ(b.hp, AV_DEF.max_hp - AV_DEF.wound_dmg);
+    for(int i=0;i<AV_DEF.hit_iframes;++i) b.tick();
+    b.on_wound(AV_DEF.wound_dmg);                 // lands again after i-frames -> defeated
     CHECK(b.defeated());
-    CHECK_EQ(guard, D1_DEF.max_hp / D1_DEF.wound_dmg);   // exact hit count to kill
 }
 
 // ---------------------------------------------------------------------------
@@ -223,5 +273,6 @@ TEST(d1_two_phase_advance_and_defeat){
 static void check_budget(const BossDef& d){
     for(int i=0;i<d.phase_count;++i) CHECK(d.phases[i].pattern.telegraph_frames >= SWITCH_BUDGET);
     if(d.vuln==VulnMode::SpellExpose) CHECK(d.expose_frames >= SWITCH_BUDGET);
+    if(d.vuln==VulnMode::TiredWindow) CHECK(d.expose_frames >= SWITCH_BUDGET);
 }
-TEST(switch_budget_holds_for_all_defs){ check_budget(KING_DEF); check_budget(D1_DEF); }
+TEST(switch_budget_holds_for_all_defs){ check_budget(KING_DEF); check_budget(D1_DEF); check_budget(AV_DEF); }

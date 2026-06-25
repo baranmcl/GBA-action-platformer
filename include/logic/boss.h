@@ -16,8 +16,11 @@ enum class AttackStep : uint8_t { Telegraph=0, Active, Recovery };
 
 // --- Vulnerability model. SpellExpose: the boss is only woundable during an
 //     expose window opened by the expose spell (the King). AlwaysVulnerable: the
-//     boss is woundable any time (i-frames still pace wounds) — no expose gate. ---
-enum class VulnMode : uint8_t { SpellExpose, AlwaysVulnerable };
+//     boss is woundable any time (i-frames still pace wounds) — no expose gate.
+//     TiredWindow: the boss is INVULNERABLE while attacking and periodically gets
+//     TIRED (a vulnerable window, `expose_frames` long) after `tired_after` completed
+//     attack cycles — the player must wait out the pattern and strike when it tires. ---
+enum class VulnMode : uint8_t { SpellExpose, AlwaysVulnerable, TiredWindow };
 
 // --- Attack-bit scheme (SINGLE SOURCE — the engine attack library #includes this
 //     header and uses these SAME constants to interpret a phase's `attacks` mask.
@@ -35,11 +38,15 @@ struct BossDef {
     int max_hp;
     int wound_dmg;
     int hit_iframes;
-    int expose_frames;            // unused (0) for AlwaysVulnerable
+    int expose_frames;            // SpellExpose: expose window length. TiredWindow: tired window length.
+                                  // unused (0) for AlwaysVulnerable.
     VulnMode vuln;
-    SpellId expose_spell;         // unused (None) for AlwaysVulnerable
+    SpellId expose_spell;         // unused (None) for AlwaysVulnerable / TiredWindow
     const BossPhaseDef* phases;
     int phase_count;
+    int tired_after = 0;          // TiredWindow only: completed attack cycles before the boss tires
+    const char* intro_line = nullptr;   // optional pre-fight dialogue (null = none)
+    const char* death_line = nullptr;   // optional on-defeat dialogue (null = none)
 };
 
 // --- King attack masks + phase table (reproduces the SHIPPED Nightmare King). ---
@@ -53,7 +60,8 @@ inline constexpr BossDef KING_DEF{
     90, 10, 45, 75, VulnMode::SpellExpose, SpellId::Light, KING_PHASES, 3
 };
 
-// --- D1 Whispering Woods Guardian (AlwaysVulnerable, 2 phases). ---
+// --- D1 Whispering Woods Guardian (TiredWindow, 2 phases). Invulnerable while attacking;
+//     tires (a 90-frame vulnerable window) after 3 completed attack cycles. ---
 inline constexpr uint8_t D1_ATTACKS_P1 = BOSS_ATK_AIMED;
 inline constexpr uint8_t D1_ATTACKS_P2 = BOSS_ATK_AIMED | BOSS_ATK_FAN;
 inline constexpr BossPhaseDef D1_PHASES[2] = {
@@ -61,7 +69,10 @@ inline constexpr BossPhaseDef D1_PHASES[2] = {
     {  0, { 70, 30, 30 }, D1_ATTACKS_P2 },
 };
 inline constexpr BossDef D1_DEF{
-    60, 10, 30, 0, VulnMode::AlwaysVulnerable, SpellId::None, D1_PHASES, 2
+    60, 10, 30, 90, VulnMode::TiredWindow, SpellId::None, D1_PHASES, 2,
+    /*tired_after=*/3,
+    /*intro_line=*/"So, you seek the spronks?",
+    /*death_line=*/"Fool...you can't stop him"
 };
 
 // Def-driven boss state. `phase` is an integer INDEX (0..phase_count-1) so the
@@ -71,13 +82,14 @@ struct BossState {
     int hp = 0;
     int phase = 0;                // combat-phase index (held across expose)
     int phase_start_hp = 0;       // HP at the active phase's entry
-    int expose_timer = 0;         // >0 while EXPOSED (SpellExpose only)
+    int expose_timer = 0;         // >0 while EXPOSED (SpellExpose) / TIRED (TiredWindow)
     int attack_timer = 0;         // drives the per-phase attack pattern
     int hit_iframes = 0;          // >0 = just wounded: immune, not re-exposable, attacking
+    int attack_cycles = 0;        // TiredWindow: completed attack cycles since the last tired window
 
     void reset(const BossDef& d){
         def = &d; hp = d.max_hp; phase = 0; phase_start_hp = d.max_hp;
-        expose_timer = 0; attack_timer = 0; hit_iframes = 0;
+        expose_timer = 0; attack_timer = 0; hit_iframes = 0; attack_cycles = 0;
     }
     bool exposed() const { return expose_timer > 0; }
     bool defeated() const { return hp <= 0; }
@@ -113,8 +125,8 @@ struct BossState {
         if(defeated() || hit_iframes > 0 || !vulnerable()) return;   // dead / i-frames / shielded -> immune
         hp -= dmg; if(hp < 0) hp = 0;
         advance_phase_for_hp();
-        hit_iframes = def->hit_iframes;                  // ONE wound per expose window, then recover
-        if(def->vuln == VulnMode::SpellExpose) expose_timer = 0;  // a wound ends the expose window
+        hit_iframes = def->hit_iframes;                  // ONE wound per expose/tired window, then recover
+        if(def->vuln != VulnMode::AlwaysVulnerable) expose_timer = 0;  // a wound ends the expose/tired window
     }
 
     void tick(){
@@ -126,7 +138,18 @@ struct BossState {
             --expose_timer;
             return;
         }
-        if(++attack_timer >= phase_period()) attack_timer = 0;
+        if(++attack_timer >= phase_period()){
+            attack_timer = 0;
+            // TiredWindow: a completed attack cycle. After `tired_after` cycles the boss tires —
+            // open a vulnerable window (expose_timer) which the existing branch above then freezes.
+            // Skip if already tired/in i-frames so a cycle boundary mid-recovery doesn't double-count.
+            if(def->vuln == VulnMode::TiredWindow && expose_timer == 0 && hit_iframes == 0){
+                if(++attack_cycles >= def->tired_after){
+                    expose_timer = def->expose_frames;
+                    attack_cycles = 0;
+                }
+            }
+        }
     }
 
     // Player died: full-fight restart (spec design decision). Own named method so the
