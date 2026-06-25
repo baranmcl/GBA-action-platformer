@@ -64,7 +64,7 @@ notes and commit messages.
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure-logic framework (BossDef/BossState + KING_DEF + D1_DEF) | ✅ Shipped | `2bcbfff` (P1.1–1.4), `7b5c59d` (P1.5) | 427/427; King regression guard held; ROM builds |
-| 2 — Engine attack library + shared helpers | ⬜ Not started | — | — |
+| 2 — Engine attack library + shared helpers | ✅ Shipped | `51a43f6` | `engine/boss_attacks` (AttackPool/SpiralEmitter/TelegraphCue/BossHpBar + templated block/resolve_damage); ROM builds, 427/427, no game/ include |
 | 3 — King refactor onto the framework | ⬜ Not started | — | — |
 | 4 — D1 boss + integration + invariants + QA | ⬜ Not started | — | — |
 
@@ -309,7 +309,7 @@ Review the batch (min 3 rounds). Confirm: NO `bn::` in `boss.h`; the King is beh
 
 ## Phase 2 — Engine attack library + shared helpers
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `51a43f6` on 2026-06-24 — `engine/boss_attacks.{h,cpp}` (faithful extraction of the King's aimed/spiral/fan + telegraph + HP-bar + block + damage-resolution, driven by `logic::BossState`; block/resolve_damage templated on the pool/meter types so engine stays game/-free). ROM builds, 427/427, `scene_boss.cpp` untouched (King inline copies remain for Phase 3).
 
 **Why this matters:** the reusable scene-side combat — extracting the King's primitives so a new boss is mostly data. Engine code is NOT host-testable (uses `bn::`), so correctness rides on the Phase-1 logic + Phase-3/4 ROM builds + QA. Do NOT add decision logic here that belongs in `BossState`.
 
