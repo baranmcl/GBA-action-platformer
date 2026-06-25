@@ -484,6 +484,40 @@ def gen_king_hp():
     px(im, 1, 1, 1); px(im, 6, 1, 1); px(im, 1, 6, 1); px(im, 6, 6, 1)  # outline corners
     write(im, "king_hp", {"type": "sprite"})
 
+def gen_guardian():
+    """D1 Whispering Woods Guardian boss placeholder 32x32 (M12) — a broad, rooted forest
+    sentinel: a wide mossy stone/wood torso with two leafy shoulder canopies, a carved mask
+    face with glowing gold eyes, stubby root legs. Built from the shared 16-colour palette:
+    green canopy (pal 4) + dark green (pal 5), brown trunk/bark (pal 10) + dark bark (pal 11),
+    skin/mask wood (pal 3), gold glowing eyes (pal 6), near-black outline (pal 1), white glints
+    (pal 15). 32x32 is a Butano-supported sprite size (4bpp/16-colour). Deliberately SQUAT and
+    leafy so its silhouette reads as a forest guardian, distinct from the tall horned King."""
+    im = new_img(32, 32)
+    # ---- leafy crown canopy across the top (green, with a darker underside) ----
+    rect(im, 8, 1, 23, 6, 4)             # broad leaf canopy
+    rect(im, 6, 4, 25, 7, 4)             # canopy spreads wider at the base
+    rect(im, 6, 7, 25, 8, 5)             # darker green canopy underside
+    px(im, 10, 2, 15); px(im, 21, 3, 15)  # white leaf glints
+    px(im, 9, 5, 5); px(im, 22, 5, 5)     # dark leaf speckle
+    # ---- carved wooden mask face (skin/wood tone) with glowing gold eyes ----
+    rect(im, 11, 9, 20, 17, 3)           # face block (mask)
+    rect(im, 11, 9, 20, 9, 1)            # near-black brow line
+    rect(im, 13, 12, 14, 13, 6); rect(im, 17, 12, 18, 13, 6)  # gold glowing eyes
+    px(im, 13, 12, 15); px(im, 17, 12, 15)  # eye glints
+    rect(im, 15, 15, 16, 16, 11)         # carved nose/mouth groove (dark bark)
+    # ---- broad bark torso (brown trunk) with vertical bark grooves ----
+    rect(im, 9, 18, 22, 28, 10)          # wide trunk body
+    rect(im, 7, 21, 24, 27, 10)          # trunk flares to broad shoulders/base
+    for cx in (11, 15, 19):
+        rect(im, cx, 18, cx, 27, 11)     # dark vertical bark grooves
+    px(im, 13, 20, 15); px(im, 18, 22, 15)  # bark highlight glints
+    # ---- mossy shoulder pads (green) bridging canopy to trunk ----
+    rect(im, 6, 17, 9, 20, 4); rect(im, 22, 17, 25, 20, 4)
+    # ---- stubby root legs + a near-black ground-line ----
+    rect(im, 9, 28, 12, 30, 11); rect(im, 19, 28, 22, 30, 11)   # two root feet (dark bark)
+    rect(im, 7, 30, 24, 30, 1)           # base shadow line
+    write(im, "guardian", {"type": "sprite"})
+
 def gen_grapple_icon():
     """Grapple HUD icon 8x8 — a green hook glyph, clearly distinct from the cyan Ice orb.
     Uses bright green (pal 4) + dark green (pal 5) + near-black outline (pal 1).
@@ -520,5 +554,6 @@ if __name__ == "__main__":
     gen_grapple_icon()
     gen_king()
     gen_king_hp()
+    gen_guardian()
     gen_heart_container()
     print("placeholder sprites + bg tiles + hud + ember art generated.")
