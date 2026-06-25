@@ -1,6 +1,8 @@
 #pragma once
 #include "logic/level_data.h"
-#include "game/levels/dungeon1.h"
+#include "game/levels/dungeon1_room0.h"
+#include "game/levels/dungeon1_room1.h"
+#include "game/levels/dungeon1_room2.h"
 #include "game/levels/dungeon2.h"
 #include "game/levels/dungeon3.h"
 #include "game/levels/dungeon4.h"
@@ -18,8 +20,13 @@
 #include "game/levels/dungeon9_room1.h"
 #include "game/levels/dungeon9_arena.h"
 
-inline constexpr const logic::LevelData* DUNGEON1_ROOMS[] = { &DUNGEON1_DATA };
-inline constexpr logic::DungeonData DUNGEON1_DUNGEON{ DUNGEON1_ROOMS, 1, 0 };
+// DUNGEON1 — Whispering Woods (M12 restructure): a 3-room boss dungeon. Room 0 (entry) holds the
+// Featherleap shrine + the '@' spawn and leads to Room 1 (the Whispering Woods Guardian boss arena —
+// D1_DEF, AlwaysVulnerable, fought on entry; victory opens the onward door) and Room 2 (the spronk +
+// exit). The old single-room D1 (cage in the entry) is gone; the cage now lives in Room 2.
+inline constexpr const logic::LevelData* DUNGEON1_ROOMS[] = {
+    &DUNGEON1_ROOM0_DATA, &DUNGEON1_ROOM1_DATA, &DUNGEON1_ROOM2_DATA };
+inline constexpr logic::DungeonData DUNGEON1_DUNGEON{ DUNGEON1_ROOMS, 3, 0 };
 inline constexpr const logic::LevelData* DUNGEON2_ROOMS[] = { &DUNGEON2_DATA };
 inline constexpr logic::DungeonData DUNGEON2_DUNGEON{ DUNGEON2_ROOMS, 1, 0 };
 inline constexpr const logic::LevelData* DUNGEON3_ROOMS[] = { &DUNGEON3_DATA };

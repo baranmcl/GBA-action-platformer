@@ -499,9 +499,9 @@ class TestBuildLevel(unittest.TestCase):
 
     # --- M12 boss key: optional "boss" JSON key -> LevelData.boss field ---
     def test_boss_key_d1_sets_boss_field(self):
-        # A room with "boss":"d1" records the boss symbol "D1_DEF" on the level.
+        # A room with "boss":"d1" records the canonical D1_DEF symbol (namespace-qualified) on the level.
         lvl = compile_str(VALID, {"boss": "d1"})
-        self.assertEqual(lvl['boss'], 'D1_DEF')
+        self.assertEqual(lvl['boss'], 'logic::D1_DEF')
 
     def test_no_boss_key_leaves_boss_none(self):
         # A room without a "boss" key has boss=None (ordinary room).
@@ -519,7 +519,7 @@ class TestBuildLevel(unittest.TestCase):
         lvl = compile_str(VALID, {"boss": "d1"})
         hdr = build_level.emit_header(lvl, "TESTBOSS")
         self.assertIn('#include "logic/boss.h"', hdr)
-        self.assertIn('&D1_DEF', hdr)
+        self.assertIn('&logic::D1_DEF', hdr)
 
     def test_boss_emit_header_absent_is_nullptr(self):
         # No "boss" key -> the boss field is nullptr and no boss.h include is forced.
