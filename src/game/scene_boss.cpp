@@ -120,7 +120,7 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
     engine::Hud hud;
 
     // ---- King ----
-    logic::BossState b; b.reset();
+    logic::BossState b; b.reset(logic::KING_DEF);
     // King hit-body: ~28x32, roughly matching the 32x32 sprite (a forgiving hitbox so the player can
     // reliably land Light/bolt/Fire/Ice from the floor — QA: it was too hard to hit). pos = top-left.
     logic::Body king_body;
@@ -143,13 +143,13 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
     }
 
     // ---- King HP bar: violet King-HP pips along the BOTTOM-centre (screen-space, no camera), one
-    //      per WOUND_DMG. Bottom + dedicated art so it never overlaps the player's top-left HUD. ----
-    constexpr int KING_HP_PIPS = logic::KING_MAX_HP / logic::WOUND_DMG;  // 9
+    //      per wound. Bottom + dedicated art so it never overlaps the player's top-left HUD. ----
+    constexpr int KING_HP_PIPS = logic::KING_DEF.max_hp / logic::KING_DEF.wound_dmg;  // 9
     bn::vector<bn::sprite_ptr, 9> king_hp_pips;
     for(int i = 0; i < KING_HP_PIPS; ++i)
         king_hp_pips.push_back(bn::sprite_items::king_hp.create_sprite(-32 + i * 8, 68));
     auto refresh_king_hp = [&]{
-        int alive = (b.hp + logic::WOUND_DMG - 1) / logic::WOUND_DMG;  // ceil(hp / WOUND_DMG)
+        int alive = (b.hp + logic::KING_DEF.wound_dmg - 1) / logic::KING_DEF.wound_dmg;  // ceil(hp / wound_dmg)
         for(int i = 0; i < king_hp_pips.size(); ++i)
             king_hp_pips[i].set_visible(i < alive);
     };
@@ -196,7 +196,7 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
     auto spawn_attack = [&](int variant){
         int pcx_ = player.body.pos.x.to_int() + player.body.half_w.to_int();
         int dir  = (pcx_ >= king_cx()) ? 1 : -1;
-        int spd  = (b.phase == logic::BossPhase::P1) ? 2 : 3;
+        int spd  = (b.phase == 0) ? 2 : 3;
         if(variant == 0){
             launch(0, king_cx(), king_cy(), spd * dir, 0);                 // aimed bolt at the player
         } else if(variant == 2){
@@ -248,8 +248,8 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
 
     // Phase-transition announcement so the player feels progression (the fight has 3 HP-gated phases,
     // shown by the King HP bar — every 3 pips). combat_phase() = the underlying phase even mid-expose.
-    auto combat_phase = [&]{ return b.exposed() ? b.exposed_return : b.phase; };
-    logic::BossPhase last_phase = logic::BossPhase::P1;
+    auto combat_phase = [&]{ return b.phase; };   // phase-as-index: b.phase holds the combat phase even mid-expose
+    int last_phase = 0;
 
     // restart_fight: every restart path (death-with-lives, Game-Over Continue) runs this.
     auto restart_fight = [&]{
@@ -267,7 +267,7 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
         attack_variant = 0; current_attack = 0; spiral_idx = 0; spiral_cd = 0;
         telegraph_orb.set_visible(false);
         set_king_perch(0); teleport_timer = TELEPORT_PERIOD; teleport_flash = 0;
-        last_phase = logic::BossPhase::P1;
+        last_phase = 0;
         crystal_collected = false;
         if(crystal_sprite) crystal_sprite->set_visible(true);
     };
@@ -439,27 +439,27 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
 
         // ---- damage resolution (mirrors the dungeon's consume_hit hooks; King is a logic::Body) ----
         // Light ALWAYS exposes/refreshes — runs every frame regardless of phase (M10 Light-clears
-        // hook, repointed to expose). on_light_hit() is a no-op once defeated/i-framed.
-        if(spells.consume_hit(king_body, logic::SpellId::Light)) b.on_light_hit();
+        // hook, repointed to expose). on_expose_hit() is a no-op once defeated/i-framed.
+        if(spells.consume_hit(king_body, logic::SpellId::Light)) b.on_expose_hit(logic::SpellId::Light);
         // Wounding lands ONLY while EXPOSED (the King is immune while shielded). on_wound() itself
         // also guards on exposed(), but we gate here so a shot never silently vanishes off the King
         // mid-shield. An ELEMENTAL wound also refills magic (sustains casts; dungeon kill-refill feel).
         if(b.exposed()){
             if(bolts.consume_hit(king_body)){
-                b.on_wound(logic::WOUND_DMG);
+                b.on_wound(logic::KING_DEF.wound_dmg);
             } else if(spells.consume_hit(king_body, logic::SpellId::Fire)
                    || spells.consume_hit(king_body, logic::SpellId::Ice)){
-                b.on_wound(logic::WOUND_DMG);
+                b.on_wound(logic::KING_DEF.wound_dmg);
                 magic.heal(25);
             }
         }
         // ---- phase-change dialogue (the King taunts as he escalates — in-character, not a banner) ----
         {
-            logic::BossPhase cp = combat_phase();
-            if(cp != last_phase && cp != logic::BossPhase::Defeated){
+            int cp = combat_phase();
+            if(cp != last_phase && !b.defeated()){
                 last_phase = cp;
-                if(cp == logic::BossPhase::P2)      boss_say("NOW YOU'RE GETTING ME ANGRY");
-                else if(cp == logic::BossPhase::P3) boss_say("I'M DONE TOYING WITH YOU");
+                if(cp == 1)      boss_say("NOW YOU'RE GETTING ME ANGRY");
+                else if(cp == 2) boss_say("I'M DONE TOYING WITH YOU");
             }
         }
 
