@@ -59,14 +59,14 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** 3/4 phases shipped (+ Task 4.2 content shipped early). Branch: `feat/m11-nightmare-king` (off `main`).
+**Overall:** 4/4 phases shipped; emulator QA (4.6) complete after 9 rounds; ready for final review + merge. Branch: `feat/m11-nightmare-king` (off `main`, 33 commits).
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure logic: BossState + attack table + SWITCH_BUDGET | ✅ Shipped | `c6e25df` (P1.1–P1.6) | 14 host tests; 404/404; non-vacuity verified |
 | 2 — Save v5: World.beaten + migrations | ✅ Shipped | `649c7c4`, `20c45ee` | 409/409; sizeof==20; all migrations + clamp ports |
 | 3 — Engine/scene: run_boss() + King + art | ✅ Shipped | `9a8204f`,`021fd4b`,`b565821`,`71c69bb` | ROM builds; scene reviewed vs BossState contract |
-| 4 — Content + integration + invariants + QA | 🚧 In progress | `4e84503`,`6e93f25`,`1424bd1`,`31c2e6c`,`1b02c94` | 4.1/4.2/4.3/4.4/4.5 shipped (416/416, ROM builds); **4.6 emulator QA pending** — see Discovery re: King projectile-reach |
+| 4 — Content + integration + invariants + QA | ✅ Shipped | `4e84503`,`6e93f25`,`1424bd1`,`31c2e6c`,`1b02c94` + QA r1–r9 | 4.1–4.5 + 9 emulator QA rounds (419/419, ROM builds) |
 
 ### Recommended execution order (dependency-aware)
 
@@ -86,11 +86,19 @@ Reason: 4.2 (content) unblocks the scene; 4.4 (`run_victory`) must exist before 
   - **King position + attacks:** the spec's hovering King + 3 attack types (incl. a player-height-tracking sweep) were unhittable (horizontal-only player projectiles) and unfair. Redesigned: King at FLOOR-centre (directly shootable from the ground) + ONE readable fixed-height ground bolt the player jumps over (`fix(boss): QA r2 ...`). The Task-4.5 `d9_arena_expose_positions_reachable` invariant now passes via the open floor (firing is from the ground, not the platforms); the platform-tile checks are over-specified but still hold — a follow-up could retarget them.
   - **New features (user-requested in QA):** King contact damage; a 9-pip King HP bar; magic crystal now respawns when magic < one cast (repeatable recharge); King intro/death dialogue ("YOU FINALLY MADE IT" / "NOOOOO!").
   - **Global pause (control-scheme change):** new `engine::check_pause()` (START → "GAME PAUSED") in boss + dungeon + hub. START was the dungeon's manual "restart room"; that anti-soft-lock reset moved to a deliberate **L+R hold (~30 frames)**. SELECT=quit unchanged. New files `include/engine/pause.h` + `src/engine/pause.cpp`.
+- **Task 4.6 QA rounds r3–r9** (all in `scene_boss.cpp` unless noted) — combat polish from playtest:
+  - r2: King lowered to floor-hittable + 3 attacks + spawn-on-floor + crystal-respawn + contact damage + King HP bar.
+  - r3: dedicated `king_hp` pip sprite (`make_placeholder_art.py`) + boss HP bar moved to the bottom (no HUD overlap).
+  - r4: King **teleports** between perches (was a sitting duck); attacks moved to a pool.
+  - r5: **telegraph cue** orb at the King (red/gold/cyan per attack) + all attacks King-sourced + **spiral** + phase **banners**.
+  - r6: **King hit i-frames** (logic — `boss.h` + tests, 419/419): a wound ends the expose + grants i-frames → ONE wound per Light (fixes the stun-spam exploit); King teleports onto **platforms**; spiral two-sided; banners → in-character **dialogue** ("NOW YOU'RE GETTING ME ANGRY" / "I'M DONE TOYING WITH YOU").
+  - r7: spiral back to **one arm, aimed at the player's side**; **block defense** (bolt/Fire/Ice destroy boss projectiles on contact; Light exempt); King **teleports away after a wound** (no instant retaliation).
+  - r8–r9: **Zelda II high/mid/low shot aim** (`engine::read_aim_dy()`, UP/DOWN+B) — boss first, then universal across dungeon + hub + boss; low shot raised to clear the floor.
 
 ### Discoveries
 - `test/test_world_state_v3.cpp` pins the CURRENT save version (asserts `SAVE_VERSION==4` in 3 places), not just v3-on-disk migration. Any future save-version bump must update it too (the plan's Phase 2 only anticipated `test_world_state_v4.cpp`). Fixed in `649c7c4`.
 - **Task 4.5:** the committed Task-4.2 arena had the P1/P3 firing platforms (row 19) floating ~11 tiles above the floor with the grapple anchor beyond grapple RANGE — the documented firing tiles were unreachable, so the arena was not completable. Fixed in `1b02c94` by adding two-step staircases (solid stubs at rows 20+25, staggered per the M10 overhead-clip lesson, ≤5-tile steps) so P1(19,18)/P3(26,18) are base-reachable. The `d9_arena_expose_positions_reachable` invariant now guards this.
-- **OPEN (for 4.6 QA) — King projectile-reach:** spell projectiles travel purely horizontally (`spell.h`: `vel={2·facing,0}`). The King is anchored at `KING_SPAWN_TY=7` (hitbox rows ~6–9), ~9–11 tiles ABOVE every reachable firing tile (rows 18–28), so a horizontal Light bolt cannot hit it — the fight is statically unwinnable as positioned. The 4.5 reachability invariant does NOT catch this (it checks the player can stand on the firing tile, not that a horizontal shot connects). Also the phases do not yet move the King between aerial/ground heights (it's static at one tile). RESOLUTION: tune `KING_SPAWN_TX/TY` in `scene_boss.cpp` (and/or raise the firing platforms / add per-phase King movement) during 4.6 emulator QA — a positioning/feel decision. Files: `src/game/scene_boss.cpp` (KING_SPAWN_*), `tools/levels/dungeon9_arena.txt` (platform heights).
+- **RESOLVED (4.6 QA) — King projectile-reach:** spell projectiles travel purely horizontally, so a high King was unhittable. Resolved over the QA rounds: the King now floats at floor-hittable height and **teleports** between floor + platform perches (player repositions to its height), plus the **Zelda II high/mid/low shot aim** lets the player line up shots vertically. The static-unwinnable risk is gone (the fight is winnable + was played end-to-end in QA).
 
 ---
 
@@ -726,7 +734,7 @@ Review the batch (min 3 rounds). Confirm: NO decision logic in the scene that is
 
 ## Phase 4 — Content + integration + invariants + QA
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED — 4.1–4.5 at `4e84503`,`6e93f25`,`1424bd1`,`31c2e6c`,`1b02c94`; 4.6 emulator QA complete after 9 rounds (combat polish — see Deviations). 419/419 host tests, ROM builds, user-confirmed.
 
 **Why this matters:** wires Door 9 → approach → arena → ending into a playable, winnable game, and guards it with the no-soft-lock invariant harness. Includes the balance QA pass.
 
