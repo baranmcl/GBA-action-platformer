@@ -11,4 +11,10 @@ logic::InputFrame read_input(){
     f.down         = bn::keypad::down_held();     // hold Down (+A in air) = Stone ground-pound (M8)
     return f;
 }
+
+int read_aim_dy(){
+    if(bn::keypad::up_held())   return -14;   // fire HIGH (toward the head)
+    if(bn::keypad::down_held()) return 8;     // fire LOW (raised a touch so it clears the floor)
+    return 0;                                 // MEDIUM (centre)
+}
 }

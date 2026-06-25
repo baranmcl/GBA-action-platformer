@@ -196,8 +196,9 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
             miss_vine_dir = player.facing;
         }
 
+        // Shot aim (Zelda II style, shared with the boss/dungeon): UP = high, DOWN = low, else medium.
         logic::Vec2 muzzle = { player.body.pos.x + player.body.half_w,
-                               player.body.pos.y + player.body.half_h };
+                               player.body.pos.y + player.body.half_h + fx(engine::read_aim_dy()) };
         spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);
         spells.despawn_on_solid(lvl.map);
 
