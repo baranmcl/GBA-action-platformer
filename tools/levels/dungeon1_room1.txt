@@ -1,8 +1,13 @@
-; D1 Whispering Woods — Room 1 (BOSS ARENA, M12). The Whispering Woods Guardian (D1_DEF,
-; AlwaysVulnerable) is fought here on entry (JSON "boss":"d1"). No cage / no exit: scene_dungeon
-; runs the fight on entry and opens the way onward (the room-door to room 2) on victory. A wide,
-; flat arena so the bolt + double-jump kit can dodge/strafe. 'N' (id 0) is the arrival from room 0
-; with an adjacent return door 'D' back to room 0; a second 'D' on the right leads on to room 2.
+; D1 Whispering Woods — Room 1 (BOSS ARENA, M12; spikes+platform added M12 QA r1). The Whispering
+; Woods Guardian (D1_DEF, TiredWindow) is fought here on entry (JSON "boss":"d1"). No cage / no exit:
+; scene_dungeon runs the fight on entry and opens the way onward (the room-door to room 2) on victory.
+; A spike strip 's' (cols 16-18) on the floor must be cleared with a double-jump up onto the solid
+; platform '#' (cols 16-21, row 14) — from that platform the player can shoot the boss (Up/Down aim)
+; and drop down on the far (right) side past the spikes to continue to the onward door. Fair + solvable
+; with bolt + double-jump only; the boss stands stationary centred on the floor. 'N' (id 0) is the
+; arrival from room 0 with an adjacent return door 'D' back to room 0; a second 'ND' on the right
+; leads on to room 2. The spikes do NOT block the onward path: a SAFE standable route (jump platform ->
+; drop right) reaches the door (host test d1_room1_arena_traversable_onward_reachable).
 ################################################
 #..............................................#
 #..............................................#
@@ -17,9 +22,9 @@
 #..............................................#
 #..............................................#
 #..............................................#
+#...............######.........................#
 #..............................................#
 #..............................................#
-#..............................................#
-#..@.ND....................................ND..#
+#..@.ND..........sss.......................ND..#
 ################################################
 ################################################
