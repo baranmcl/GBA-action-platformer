@@ -182,6 +182,9 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
     auto clear_attacks = [&]{
         for(AttackInst& a : attacks){ a.active = false; if(a.sprite) a.sprite->set_visible(false); }
     };
+    // NOTE: variants address fixed pool slots (fan: 0-2, spiral: 0-4). Safe because only ONE attack
+    // variant is live per Active window and clear_attacks() runs on expose/recovery/teleport — so the
+    // slots are always free at spawn. A future overlapping-attack design must allocate free slots.
     auto launch = [&](int idx, int cx_px, int cy_px, int vx, int vy){
         attacks[idx].active = true;
         attacks[idx].body.half_w = fx(6); attacks[idx].body.half_h = fx(6);
