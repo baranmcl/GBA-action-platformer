@@ -17,6 +17,7 @@
 #include "bn_sprite_items_ice_proj.h"
 #include "bn_sprite_items_light_proj.h"
 #include "bn_sprite_items_bolt.h"
+#include "bn_sprite_items_boss_bolt.h"   // M12: distinct red boss-attack projectile (D1)
 #include "bn_sprite_items_grapple_icon.h"
 #include "bn_sprite_items_heart_container.h"
 #include "bn_sprite_items_magic_crystal.h"
@@ -199,7 +200,7 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
     hp_bar.refresh(b.hp);
 
     // ---- attacks (shared library pool) ----
-    engine::AttackPool attacks(bn::sprite_items::bolt, cam, lvl.view.map_px_w, lvl.view.map_px_h);
+    engine::AttackPool attacks(bn::sprite_items::boss_bolt, cam, lvl.view.map_px_w, lvl.view.map_px_h);
     engine::SpiralEmitter spiral;
     bool atk_spawned_this_active = false;
     int current_attack = logic::BOSS_ATK_AIMED;   // the attack firing during the CURRENT Active window
@@ -342,11 +343,12 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
                 if(!atk_spawned_this_active){
                     current_attack = next_attack_for_phase(attack_slot);   // lock + advance
                     int pcx0 = player.body.pos.x.to_int() + player.body.half_w.to_int();
+                    int pcy0 = player.body.pos.y.to_int() + player.body.half_h.to_int();
                     spiral.begin(boss_cx(), pcx0);
                     if(current_attack != logic::BOSS_ATK_SPIRAL){
-                        int spd = (b.phase == 0) ? 2 : 3;
+                        int spd = (b.phase == 0) ? 3 : 4;   // a touch faster than the King — harder to outrun
                         engine::spawn_attack(attacks, current_attack, boss_cx(), boss_cy(),
-                                             pcx0, spd, b.phase);
+                                             pcx0, pcy0, spd, b.phase, /*aim_full=*/true);  // aim AT the player
                     }
                     atk_spawned_this_active = true;
                 }

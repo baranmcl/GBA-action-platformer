@@ -72,11 +72,23 @@ bool AttackPool::advance(const logic::Body& player_body, int arena_w, int arena_
 // spawn_attack — aimed / fan (the spiral is streamed via SpiralEmitter)
 // ---------------------------------------------------------------------------
 void spawn_attack(AttackPool& pool, int variant,
-                  int boss_cx, int boss_cy, int player_cx, int speed, int phase){
+                  int boss_cx, int boss_cy, int player_cx, int player_cy,
+                  int speed, int phase, bool aim_full){
     (void)phase;   // speed already encodes the per-phase scaling (caller passes it in)
     int dir = (player_cx >= boss_cx) ? 1 : -1;
     if(variant == logic::BOSS_ATK_AIMED){
-        pool.launch(0, boss_cx, boss_cy, speed * dir, 0);                 // aimed bolt at the player
+        if(aim_full){
+            // Aim a velocity VECTOR (magnitude ~speed) straight at the player's position, so the bolt
+            // heads to wherever they stand — they must MOVE to dodge, not just stand in a dead spot.
+            int dx = player_cx - boss_cx, dy = player_cy - boss_cy;
+            int adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+            int vx, vy;
+            if(adx >= ady){ vx = (dx >= 0 ? 1 : -1) * speed; vy = adx ? dy * speed / adx : 0; }
+            else          { vy = (dy >= 0 ? 1 : -1) * speed; vx = ady ? dx * speed / ady : 0; }
+            pool.launch(0, boss_cx, boss_cy, vx, vy);
+        } else {
+            pool.launch(0, boss_cx, boss_cy, speed * dir, 0);             // horizontal (King — unchanged)
+        }
     } else if(variant == logic::BOSS_ATK_FAN){
         pool.launch(0, boss_cx, boss_cy, speed * dir, 0);                 // 3-bolt fan from the boss
         pool.launch(1, boss_cx, boss_cy, speed * dir, -2);

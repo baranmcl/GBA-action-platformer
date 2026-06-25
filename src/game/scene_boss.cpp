@@ -330,7 +330,7 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
                     if(current_attack != logic::BOSS_ATK_SPIRAL){      // aimed/fan fire now (FROM the King)
                         int spd = (b.phase == 0) ? 2 : 3;
                         engine::spawn_attack(attacks, current_attack, king_cx(), king_cy(),
-                                             pcx0, spd, b.phase);
+                                             pcx0, king_cy(), spd, b.phase, /*aim_full=*/false);
                     }
                     atk_spawned_this_active = true;
                 }

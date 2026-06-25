@@ -103,13 +103,16 @@ private:
 // spawn_attack — fire one attack variant FROM the boss toward the player.
 //   variant: use logic::BOSS_ATK_AIMED / BOSS_ATK_FAN (the spiral is streamed
 //            per-frame via SpiralEmitter, not spawned here).
-//   aimed (BOSS_ATK_AIMED): one bolt straight at the player.
+//   aimed (BOSS_ATK_AIMED): one bolt at the player. If `aim_full`, it's aimed at the player's actual
+//            (player_cx, player_cy) — a velocity VECTOR toward the player, so a standing player can't
+//            sit in a dead spot (they must MOVE to dodge). If !aim_full, it's a horizontal bolt at the
+//            boss's height toward the player's side (the King's original behaviour — unchanged).
 //   fan   (BOSS_ATK_FAN):   3-bolt vertical spread.
 //   speed: px/frame (the King uses 2 in phase 0, 3 otherwise).
-// Mirrors scene_boss.cpp's `spawn_attack` (aimed/fan branches).
 // -----------------------------------------------------------------------------
 void spawn_attack(AttackPool& pool, int variant,
-                  int boss_cx, int boss_cy, int player_cx, int speed, int phase);
+                  int boss_cx, int boss_cy, int player_cx, int player_cy,
+                  int speed, int phase, bool aim_full);
 
 // -----------------------------------------------------------------------------
 // SpiralEmitter — the rotating spiral: ONE arm sweeping over BOSS_SPIRAL_STEPS

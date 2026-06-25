@@ -114,6 +114,16 @@ def gen_bolt():
     px(im, 1, 3, 8); px(im, 6, 4, 8); px(im, 3, 1, 8); px(im, 4, 6, 8)
     write(im, "bolt", {"type": "sprite"})
 
+def gen_boss_bolt():
+    # M12: the boss's attack projectile — RED orb (pal 13), deliberately distinct from the player's
+    # CYAN bolt so it reads as "incoming enemy attack" (and a cue that, for the D1 boss, it is NOT
+    # blockable — you must dodge it).
+    im = new_img(8, 8)
+    rect(im, 2, 2, 5, 5, 13)                 # red body
+    rect(im, 3, 3, 4, 4, 6)                  # gold-hot core
+    px(im, 1, 3, 13); px(im, 6, 4, 13); px(im, 3, 1, 13); px(im, 4, 6, 13)  # red sparks
+    write(im, "boss_bolt", {"type": "sprite"})
+
 def gen_tiles():
     """Background tileset: 26 tiles of 8x8 in a horizontal strip. Index order:
     0 blank, 1 ground, 2 one-way, 3 gate(closed wall), 4 cage, 5 door-open, 6 door-locked,
@@ -563,6 +573,7 @@ if __name__ == "__main__":
     gen_enemy()
     gen_spronk()
     gen_bolt()
+    gen_boss_bolt()
     gen_tiles()
     gen_bg_palette()
     gen_hud()
