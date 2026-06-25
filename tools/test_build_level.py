@@ -497,6 +497,37 @@ class TestBuildLevel(unittest.TestCase):
         self.assertIn("TESTNOMC_MAGIC_CRYSTALS, 0", hdr)
         self.assertEqual(lvl['magic_crystals'], [])
 
+    # --- M12 boss key: optional "boss" JSON key -> LevelData.boss field ---
+    def test_boss_key_d1_sets_boss_field(self):
+        # A room with "boss":"d1" records the boss symbol "D1_DEF" on the level.
+        lvl = compile_str(VALID, {"boss": "d1"})
+        self.assertEqual(lvl['boss'], 'D1_DEF')
+
+    def test_no_boss_key_leaves_boss_none(self):
+        # A room without a "boss" key has boss=None (ordinary room).
+        lvl = compile_str(VALID, {})
+        self.assertIsNone(lvl['boss'])
+
+    def test_unknown_boss_name_errors(self):
+        # An unknown boss name is a compile error (explicit name->symbol dict).
+        with self.assertRaises(build_level.LevelError):
+            compile_str(VALID, {"boss": "nope"})
+
+    def test_boss_emit_header_d1(self):
+        # emit_header wires &D1_DEF into the LevelData initializer's boss field and
+        # #includes "logic/boss.h" so the generated header resolves D1_DEF.
+        lvl = compile_str(VALID, {"boss": "d1"})
+        hdr = build_level.emit_header(lvl, "TESTBOSS")
+        self.assertIn('#include "logic/boss.h"', hdr)
+        self.assertIn('&D1_DEF', hdr)
+
+    def test_boss_emit_header_absent_is_nullptr(self):
+        # No "boss" key -> the boss field is nullptr and no boss.h include is forced.
+        lvl = compile_str(VALID, {})
+        hdr = build_level.emit_header(lvl, "TESTNOBOSS")
+        self.assertIn('nullptr', hdr)
+        self.assertNotIn('logic/boss.h', hdr)
+
     def test_hidden_platform_and_magic_crystal_together(self):
         # Both symbols in the same level compile without interfering with each other
         txt = "########\n#@.h.$..#\n########\n"
