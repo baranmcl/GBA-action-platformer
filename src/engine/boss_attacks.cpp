@@ -44,7 +44,7 @@ void AttackPool::clear(){
 }
 
 bool AttackPool::advance(const logic::Body& player_body, int arena_w, int arena_h,
-                         bool player_iframed){
+                         bool player_iframed, const logic::Tilemap& map){
     bool hit = false;
     for(AttackInst& a : _pool){
         if(!a.active) continue;
@@ -52,7 +52,10 @@ bool AttackPool::advance(const logic::Body& player_body, int arena_w, int arena_
         a.body.pos.y = a.body.pos.y + a.vel.y;
         int ax = a.body.pos.x.to_int() + a.body.half_w.to_int();
         int ay = a.body.pos.y.to_int() + a.body.half_h.to_int();
-        if(ax < 0 || ax > arena_w || ay < 0 || ay > arena_h){   // expire off-arena
+        // Despawn on a SOLID wall/floor (centre tile); pass through one-way platforms + empty.
+        // Arena-bounds check stays as a backstop below.
+        if(ax < 0 || ax > arena_w || ay < 0 || ay > arena_h
+           || map.is_solid(ax / 8, ay / 8)){   // expire off-arena OR into solid geometry
             a.active = false;
             if(a.sprite) a.sprite->set_visible(false);
         } else {

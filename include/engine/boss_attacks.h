@@ -6,6 +6,7 @@
 #include "bn_vector.h"
 #include "logic/physics.h"   // logic::Body
 #include "logic/vec2.h"      // logic::Vec2
+#include "logic/tilemap.h"   // logic::Tilemap (boss bolts despawn on a solid wall/floor)
 #include "logic/boss.h"      // logic::BossState / BossDef / BOSS_ATK_* (SINGLE SOURCE of attack bits)
 
 namespace engine {
@@ -62,11 +63,16 @@ public:
 
     // Advance every active projectile, render it, expire off-arena, and apply
     // contact damage to the player. arena_w/arena_h are level pixel dimensions
-    // (level.w*8, level.h*8). player_iframed = the scene's (invuln || dash-invincible)
-    // gate. On a fresh contact (not i-framed) returns true so the scene applies the
-    // hit; the scene owns the actual health.damage()/invuln assignment.
-    // Mirrors the King's "attack advance + render + contact" loop.
-    bool advance(const logic::Body& player_body, int arena_w, int arena_h, bool player_iframed);
+    // (level.w*8, level.h*8). `map` is the room tilemap: a projectile despawns when
+    // its centre enters a SOLID tile (wall/floor) — it PASSES THROUGH one-way
+    // platforms + empty space (so bolts stop at geometry, not platforms). The
+    // arena-bounds despawn stays as a backstop. player_iframed = the scene's
+    // (invuln || dash-invincible) gate. On a fresh contact (not i-framed) returns
+    // true so the scene applies the hit; the scene owns the actual
+    // health.damage()/invuln assignment. Mirrors the King's "attack advance +
+    // render + contact" loop.
+    bool advance(const logic::Body& player_body, int arena_w, int arena_h,
+                 bool player_iframed, const logic::Tilemap& map);
 
     // DEFENSE/BLOCK: a player bolt or Fire/Ice spell DESTROYS an incoming boss
     // projectile on contact (the shot is consumed). Light is NOT a blocker. Call

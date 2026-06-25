@@ -343,7 +343,7 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
 
         // ---- attack advance + render + contact (all active projectiles, via the library pool) ----
         bool proj_hit = attacks.advance(player.body, level.w * 8, level.h * 8,
-                                        invuln != 0 || player.dash.invincible());
+                                        invuln != 0 || player.dash.invincible(), lvl.map);
         if(proj_hit){ health.damage(20); invuln = 45; }   // 20-dmg / 45-iframe contact tuning is King-scene
 
         // ---- King contact damage: touching the King's body hurts (fight from range) ----
