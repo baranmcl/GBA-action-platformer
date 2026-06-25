@@ -59,14 +59,14 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** 1/4 phases shipped. Branch: `feat/m12-boss-framework` (off `main`).
+**Overall:** Phases 1–3 shipped; Phase 4 code (4.1–4.4) shipped, **4.6 emulator QA pending (handed to user)**. Branch: `feat/m12-boss-framework` (off `main`).
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure-logic framework (BossDef/BossState + KING_DEF + D1_DEF) | ✅ Shipped | `2bcbfff` (P1.1–1.4), `7b5c59d` (P1.5) | 427/427; King regression guard held; ROM builds |
 | 2 — Engine attack library + shared helpers | ✅ Shipped | `51a43f6` | `engine/boss_attacks` (AttackPool/SpiralEmitter/TelegraphCue/BossHpBar + templated block/resolve_damage); ROM builds, 427/427, no game/ include |
 | 3 — King refactor onto the framework | ✅ Shipped | `985aec5` | King uses `boss_attacks` (inline copies deleted, −84 lines); constants verified faithful (telegraph/pips/spiral); ROM builds, 427/427 |
-| 4 — D1 boss + integration + invariants + QA | ⬜ Not started | — | — |
+| 4 — D1 boss + integration + invariants + QA | 🚧 Code shipped, QA pending | `8fae856`,`aef54ff`,`c33e965`,`23d99a8` | 4.1–4.4 shipped (430/430, 75 compiler tests, ROM builds); **4.5 emulator QA = user's next step** |
 
 ### Deviations
 - **Phase 1:** tasks 1.1–1.4 landed as ONE commit (`2bcbfff`) not four — same two files, and four commits would have left misleading partially-broken intermediate states. **Task 1.5** also re-pointed `KING_MAX_HP`/`WOUND_DMG` → `KING_DEF.*` in `scene_boss.cpp`'s HP-pip + damage code (beyond the plan's enumerated API-call swaps) — required since those globals were removed in 1.1; identical mechanical mapping, zero behaviour change.
@@ -357,7 +357,7 @@ BEFORE marking complete: ROM builds; host tests green; the King uses the shared 
 
 ## Phase 4 — D1 boss + integration + invariants + QA
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** 🚧 CODE SHIPPED (4.1–4.4) at `8fae856`,`aef54ff`,`c33e965`,`23d99a8` on 2026-06-24 — `LevelData.boss` + `build_level.py` `"boss":"d1"`→`&logic::D1_DEF`; Guardian art; D1 restructured to entry→boss→spronk rooms; `run_room_boss` in `scene_dungeon` (gated on `level.boss`, reuses the existing Game-Over flow, D2–D8/King no-op); D1 no-soft-lock invariants (fail-on-broken verified). 430/430 host + 75 compiler tests, ROM builds, purity OK. **4.5 emulator QA (D1 boss fair w/ bolt+double-jump; King unregressed) = pending, handed to user.**
 
 **Why this matters:** proves the framework with a different-shaped boss in a real dungeon, and wires the boss room into the dungeon flow. Restructures D1 into 3 rooms.
 
