@@ -1,0 +1,141 @@
+#include "engine/boss_attacks.h"
+
+#include "logic/collision.h"   // aabb_overlap
+#include "logic/fixed.h"
+
+namespace engine {
+namespace {
+    logic::Fixed fx(int v){ return logic::Fixed::from_int(v); }
+}
+
+// 8 rotating directions for the spiral (integer approx of a circle, ~3 px/frame).
+const int BOSS_SPIRAL_DIRS[BOSS_SPIRAL_DIR_COUNT][2] = {
+    {0,-3},{2,-2},{3,0},{2,2},{0,3},{-2,2},{-3,0},{-2,-2}
+};
+
+// ---------------------------------------------------------------------------
+// AttackPool
+// ---------------------------------------------------------------------------
+AttackPool::AttackPool(const bn::sprite_item& bolt_item, const bn::camera_ptr& cam,
+                       int map_px_w, int map_px_h)
+    : _half_w_px(map_px_w / 2), _half_h_px(map_px_h / 2)
+{
+    for(int i = 0; i < CAP; ++i){
+        _pool[i].sprite = bolt_item.create_sprite(0, 0);
+        _pool[i].sprite->set_camera(cam);
+        _pool[i].sprite->set_visible(false);
+        _pool[i].sprite->set_scale(2.0);
+    }
+}
+
+void AttackPool::launch(int idx, int cx_px, int cy_px, int vx, int vy){
+    _pool[idx].active = true;
+    _pool[idx].body.half_w = fx(6);
+    _pool[idx].body.half_h = fx(6);
+    _pool[idx].body.pos = { fx(cx_px - 6), fx(cy_px - 6) };
+    _pool[idx].vel = { fx(vx), fx(vy) };
+}
+
+void AttackPool::clear(){
+    for(AttackInst& a : _pool){
+        a.active = false;
+        if(a.sprite) a.sprite->set_visible(false);
+    }
+}
+
+bool AttackPool::advance(const logic::Body& player_body, int arena_w, int arena_h,
+                         bool player_iframed){
+    bool hit = false;
+    for(AttackInst& a : _pool){
+        if(!a.active) continue;
+        a.body.pos.x = a.body.pos.x + a.vel.x;
+        a.body.pos.y = a.body.pos.y + a.vel.y;
+        int ax = a.body.pos.x.to_int() + a.body.half_w.to_int();
+        int ay = a.body.pos.y.to_int() + a.body.half_h.to_int();
+        if(ax < 0 || ax > arena_w || ay < 0 || ay > arena_h){   // expire off-arena
+            a.active = false;
+            if(a.sprite) a.sprite->set_visible(false);
+        } else {
+            if(a.sprite){ a.sprite->set_position(ax - _half_w_px, ay - _half_h_px); a.sprite->set_visible(true); }
+            if(!player_iframed && logic::aabb_overlap(player_body, a.body)){
+                hit = true;
+            }
+        }
+    }
+    return hit;
+}
+
+// ---------------------------------------------------------------------------
+// spawn_attack — aimed / fan (the spiral is streamed via SpiralEmitter)
+// ---------------------------------------------------------------------------
+void spawn_attack(AttackPool& pool, int variant,
+                  int boss_cx, int boss_cy, int player_cx, int speed, int phase){
+    (void)phase;   // speed already encodes the per-phase scaling (caller passes it in)
+    int dir = (player_cx >= boss_cx) ? 1 : -1;
+    if(variant == logic::BOSS_ATK_AIMED){
+        pool.launch(0, boss_cx, boss_cy, speed * dir, 0);                 // aimed bolt at the player
+    } else if(variant == logic::BOSS_ATK_FAN){
+        pool.launch(0, boss_cx, boss_cy, speed * dir, 0);                 // 3-bolt fan from the boss
+        pool.launch(1, boss_cx, boss_cy, speed * dir, -2);
+        pool.launch(2, boss_cx, boss_cy, speed * dir, 2);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SpiralEmitter
+// ---------------------------------------------------------------------------
+void SpiralEmitter::tick(AttackPool& pool, int boss_cx, int boss_cy){
+    if(idx >= STEPS) return;
+    if(cd <= 0){
+        int di = ((rot * idx) % BOSS_SPIRAL_DIR_COUNT + BOSS_SPIRAL_DIR_COUNT) % BOSS_SPIRAL_DIR_COUNT;
+        pool.launch(idx, boss_cx, boss_cy, BOSS_SPIRAL_DIRS[di][0], BOSS_SPIRAL_DIRS[di][1]);
+        ++idx;
+        cd = 5;
+    } else {
+        --cd;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TelegraphCue
+// ---------------------------------------------------------------------------
+TelegraphCue::TelegraphCue(const bn::sprite_item& fallback_item, const bn::camera_ptr& cam,
+                           int map_px_w, int map_px_h)
+    : _orb(fallback_item.create_sprite(0, 0)),
+      _half_w_px(map_px_w / 2), _half_h_px(map_px_h / 2)
+{
+    _orb.set_camera(cam);
+    _orb.set_visible(false);
+}
+
+void TelegraphCue::show(int variant, int boss_cx, int boss_cy, int attack_timer,
+                        const bn::sprite_item& aimed_item, const bn::sprite_item& spiral_item,
+                        const bn::sprite_item& fan_item){
+    if(variant == logic::BOSS_ATK_AIMED)        _orb.set_item(aimed_item);
+    else if(variant == logic::BOSS_ATK_SPIRAL)  _orb.set_item(spiral_item);
+    else                                        _orb.set_item(fan_item);
+    _orb.set_position(boss_cx - _half_w_px, (boss_cy - 14) - _half_h_px);   // charge above the boss
+    _orb.set_visible((attack_timer / 6) % 2 == 0);                          // pulse the cue
+}
+
+void TelegraphCue::hide(){ _orb.set_visible(false); }
+
+// ---------------------------------------------------------------------------
+// BossHpBar
+// ---------------------------------------------------------------------------
+BossHpBar::BossHpBar(const logic::BossDef& def, const bn::sprite_item& pip_item)
+    : _wound_dmg(def.wound_dmg)
+{
+    int pips = def.max_hp / def.wound_dmg;
+    if(pips > MAX_PIPS) pips = MAX_PIPS;
+    for(int i = 0; i < pips; ++i)
+        _pips.push_back(pip_item.create_sprite(-32 + i * 8, 68));
+}
+
+void BossHpBar::refresh(int hp){
+    int alive = (hp + _wound_dmg - 1) / _wound_dmg;   // ceil(hp / wound_dmg)
+    for(int i = 0; i < _pips.size(); ++i)
+        _pips[i].set_visible(i < alive);
+}
+
+}  // namespace engine
