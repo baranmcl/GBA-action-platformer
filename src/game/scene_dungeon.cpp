@@ -20,7 +20,11 @@
 #include "bn_sprite_items_grapple_icon.h"
 #include "bn_sprite_items_heart_container.h"
 #include "bn_sprite_items_magic_crystal.h"
-#include "bn_sprite_items_guardian.h"   // M12: per-dungeon boss sprite (D1 Whispering Woods Guardian)
+#include "bn_sprite_items_guardian.h"   // M12: per-dungeon boss sprite (D1 Whispering Woods Guardian, 2 frames)
+#include "bn_sprite_tiles_item.h"       // M12 QA r1: swap guardian frame 1 (tired pose) during the tired window
+#include "bn_sprite_tiles_ptr.h"        // complete type for set_tiles(create_tiles(...))
+#include "bn_sprite_text_generator.h"   // M12 QA r1: data-driven boss intro/death dialogue (run_room_boss)
+#include "common_variable_8x16_sprite_font.h"
 #include "bn_sprite_items_king_hp.h"    // M12: reuse the boss HP-pip art for the room boss bar
 
 #include "logic/reveal.h"
@@ -189,6 +193,7 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
     bn::sprite_ptr boss_spr = bn::sprite_items::guardian.create_sprite(0, 0);
     boss_spr.set_camera(cam);
     boss_spr.set_position(wx(boss_cx()), wy(boss_cy()));
+    int boss_frame = 0;   // 0 = normal, 1 = tired/slumped (shown while exposed); track to swap tiles only on change
 
     engine::BossHpBar hp_bar(*level.boss, bn::sprite_items::king_hp);
     hp_bar.refresh(b.hp);
@@ -240,6 +245,22 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         cam.set_position(camx, camy);
     };
 
+    // ---- boss dialogue (data-driven: def->intro_line / def->death_line; null = silent).
+    //      Mirrors the King's boss_say (scene_boss.cpp): centred text, wait for A/START. ----
+    bn::sprite_text_generator text_gen(common::variable_8x16_sprite_font);
+    text_gen.set_center_alignment();
+    auto boss_say = [&](const char* line){
+        if(line == nullptr) return;
+        bn::vector<bn::sprite_ptr, 32> say;
+        text_gen.generate(0, 54, line, say);   // lower-centre, below the boss, clear of the HUD
+        int t = 0;
+        while(true){
+            if(t > 20 && (bn::keypad::a_pressed() || bn::keypad::start_pressed())) break;
+            ++t;
+            bn::core::update();
+        }
+    };  // 'say' sprites destroyed here -> dialogue clears
+
     // full-fight restart (death with lives left, or Game-Over Continue from the caller's flow)
     auto restart_fight = [&]{
         b.on_player_death();                       // BossState -> phase 0, full HP, timers cleared
@@ -262,8 +283,10 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
     avatar.sync(player);
     set_clamped_cam(player.body.pos.x.to_int() + player.body.half_w.to_int(),
                     player.body.pos.y.to_int() + player.body.half_h.to_int());
-    engine::set_fade(16);
-    int fade_in_t = 16;
+    // Fade in on the player + boss, then the boss's data-driven intro line (if any), BEFORE the fight.
+    engine::fade_in(16);
+    boss_say(level.boss->intro_line);
+    int fade_in_t = 0;   // already faded in; the Game-Over restart path re-arms this
 
     while(true)
     {
@@ -290,8 +313,14 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         // ---- boss logic tick ----
         b.tick();
 
-        // ---- boss render: EXPOSED blink (SpellExpose bosses), then telegraph pulse ----
+        // ---- boss render: swap to the tired/slumped frame while EXPOSED (the tired window), then
+        //      blink/telegraph-pulse for emphasis. Frame swap only on change (no per-frame set_tiles). ----
         boss_spr.set_position(wx(boss_cx()), wy(boss_cy()));
+        int want_frame = b.exposed() ? 1 : 0;   // TiredWindow: exposed() == the tired window
+        if(want_frame != boss_frame){
+            boss_spr.set_tiles(bn::sprite_items::guardian.tiles_item().create_tiles(want_frame));
+            boss_frame = want_frame;
+        }
         if(b.exposed())                                       boss_spr.set_visible((b.expose_timer / 4) % 2 == 0);
         else if(b.current_step() == logic::AttackStep::Telegraph) boss_spr.set_visible((b.attack_timer / 8) % 2 == 0);
         else                                                  boss_spr.set_visible(true);
@@ -330,7 +359,7 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
 
         // ---- attack advance + render + contact ----
         bool proj_hit = attacks.advance(player.body, level.w * 8, level.h * 8,
-                                        invuln != 0 || player.dash.invincible());
+                                        invuln != 0 || player.dash.invincible(), lvl.map);
         if(proj_hit){ health.damage(20); invuln = 45; }
 
         // ---- boss contact damage ----
@@ -350,7 +379,7 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         // ---- damage resolution (AlwaysVulnerable: bolt/Fire/Ice wounds anytime; elemental refills magic) ----
         engine::resolve_damage(b, boss_body, bolts, spells, magic, /*magic_heal=*/25);
 
-        if(b.defeated()) return BossRoomOutcome::Victory;
+        if(b.defeated()){ boss_say(level.boss->death_line); return BossRoomOutcome::Victory; }
 
         spells.despawn_on_solid(lvl.map);
 
