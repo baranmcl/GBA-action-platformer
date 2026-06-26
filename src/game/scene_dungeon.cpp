@@ -22,6 +22,7 @@
 #include "bn_sprite_items_heart_container.h"
 #include "bn_sprite_items_magic_crystal.h"
 #include "bn_sprite_items_guardian.h"   // M12: per-dungeon boss sprite (D1 Whispering Woods Guardian, 2 frames)
+#include "bn_sprite_items_slagshell.h" // M13: D2 Ember Caverns boss sprite (Slagshell, 2 frames)
 #include "bn_sprite_tiles_item.h"       // M12 QA r1: swap guardian frame 1 (tired pose) during the tired window
 #include "bn_sprite_tiles_ptr.h"        // complete type for set_tiles(create_tiles(...))
 #include "bn_sprite_text_generator.h"   // M12 QA r1: data-driven boss intro/death dialogue (run_room_boss)
@@ -141,6 +142,15 @@ namespace
 }
 
 // ---------------------------------------------------------------------------
+// Map a boss def to its 2-frame sprite (frame 0 = normal/armored, frame 1 = exposed/vulnerable).
+// Pointer-compare against the canonical def symbols (BossDef is pure logic -> can't name bn:: items).
+// Extend per new per-dungeon boss.
+static const bn::sprite_item& boss_sprite_for(const logic::BossDef* def){
+    if(def == &logic::D2_DEF) return bn::sprite_items::slagshell;
+    return bn::sprite_items::guardian;   // D1 (default)
+}
+
+// ---------------------------------------------------------------------------
 // run_room_boss — a self-contained boss fight that uses the dungeon ROOM as the arena, for any room
 // whose LevelData::boss is non-null (M12). It is a NEW thin consumer of the boss framework, PARALLEL
 // to the King's scene_boss.cpp run_boss (NOT a shared monolith): its own fight loop driving
@@ -191,7 +201,8 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
     auto boss_cx = [&]{ return boss_body.pos.x.to_int() + boss_body.half_w.to_int(); };
     auto boss_cy = [&]{ return boss_body.pos.y.to_int() + boss_body.half_h.to_int(); };
 
-    bn::sprite_ptr boss_spr = bn::sprite_items::guardian.create_sprite(0, 0);
+    const bn::sprite_item& boss_item = boss_sprite_for(level.boss);
+    bn::sprite_ptr boss_spr = boss_item.create_sprite(0, 0);
     boss_spr.set_camera(cam);
     boss_spr.set_position(wx(boss_cx()), wy(boss_cy()));
     int boss_frame = 0;   // 0 = normal, 1 = tired/slumped (shown while exposed); track to swap tiles only on change
@@ -209,15 +220,15 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
     engine::TelegraphCue telegraph(bn::sprite_items::fire_proj, cam,
                                    lvl.view.map_px_w, lvl.view.map_px_h);
 
-    // Pick the next attack variant from the bits set in the active phase's mask (cycles AIMED->SPIRAL->FAN,
-    // skipping bits not present). For D1: P1 = {AIMED}, P2 = {AIMED, FAN}.
+    // Pick the next attack variant from the bits set in the active phase's mask (cycles AIMED->SPIRAL->FAN->ROCKFALL,
+    // skipping bits not present). For D1: P1 = {AIMED}, P2 = {AIMED, FAN}. D2: {AIMED, ROCKFALL}.
     auto next_attack_for_phase = [&](int& slot)->int{
         const uint8_t mask = level.boss->phases[b.phase].attacks;
-        static constexpr int ORDER[3] = {
-            logic::BOSS_ATK_AIMED, logic::BOSS_ATK_SPIRAL, logic::BOSS_ATK_FAN };
-        for(int step = 0; step < 3; ++step){
-            int idx = (slot + step) % 3;
-            if(mask & ORDER[idx]){ slot = (idx + 1) % 3; return ORDER[idx]; }
+        static constexpr int ORDER[4] = {
+            logic::BOSS_ATK_AIMED, logic::BOSS_ATK_SPIRAL, logic::BOSS_ATK_FAN, logic::BOSS_ATK_ROCKFALL };
+        for(int step = 0; step < 4; ++step){
+            int idx = (slot + step) % 4;
+            if(mask & ORDER[idx]){ slot = (idx + 1) % 4; return ORDER[idx]; }
         }
         return logic::BOSS_ATK_AIMED;   // mask should never be empty
     };
@@ -319,7 +330,7 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         boss_spr.set_position(wx(boss_cx()), wy(boss_cy()));
         int want_frame = b.exposed() ? 1 : 0;   // TiredWindow: exposed() == the tired window
         if(want_frame != boss_frame){
-            boss_spr.set_tiles(bn::sprite_items::guardian.tiles_item().create_tiles(want_frame));
+            boss_spr.set_tiles(boss_item.tiles_item().create_tiles(want_frame));
             boss_frame = want_frame;
         }
         if(b.exposed())                                       boss_spr.set_visible((b.expose_timer / 4) % 2 == 0);
