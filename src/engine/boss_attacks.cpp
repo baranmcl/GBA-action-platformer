@@ -90,9 +90,18 @@ void spawn_attack(AttackPool& pool, int variant,
             pool.launch(0, boss_cx, boss_cy, speed * dir, 0);             // horizontal (King — unchanged)
         }
     } else if(variant == logic::BOSS_ATK_FAN){
-        pool.launch(0, boss_cx, boss_cy, speed * dir, 0);                 // 3-bolt fan from the boss
-        pool.launch(1, boss_cx, boss_cy, speed * dir, -2);
-        pool.launch(2, boss_cx, boss_cy, speed * dir, 2);
+        if(aim_full){
+            // D1: a 3-bolt HORIZONTAL spread at three heights — all travel straight to the side wall
+            // (no downward drift into the floor, which was despawning mid-arena via the solid-tile
+            // check). The player jumps/moves to dodge the band; every bolt reaches a wall.
+            pool.launch(0, boss_cx, boss_cy - 10, speed * dir, 0);
+            pool.launch(1, boss_cx, boss_cy,      speed * dir, 0);
+            pool.launch(2, boss_cx, boss_cy + 10, speed * dir, 0);
+        } else {
+            pool.launch(0, boss_cx, boss_cy, speed * dir, 0);             // King: angular fan (unchanged)
+            pool.launch(1, boss_cx, boss_cy, speed * dir, -2);
+            pool.launch(2, boss_cx, boss_cy, speed * dir, 2);
+        }
     }
 }
 
