@@ -226,6 +226,20 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
     engine::TelegraphCue telegraph(bn::sprite_items::fire_proj, cam,
                                    lvl.view.map_px_w, lvl.view.map_px_h);
 
+    // Respawning magic crystal (M10/King pattern): full refill on touch; reappears once magic is spent
+    // below one cast, so a SpellExpose room boss (Fire to expose) can never magic-soft-lock.
+    bool crystal_collected = false;
+    bn::optional<bn::sprite_ptr> crystal_sprite;
+    int crystal_tx = 0, crystal_ty = 0;
+    if(level.magic_crystal_count > 0){
+        const logic::MagicCrystalSpawn& mc = level.magic_crystals[0];
+        crystal_tx = mc.tx; crystal_ty = mc.ty;
+        crystal_sprite = bn::sprite_items::magic_crystal.create_sprite(0, 0);
+        crystal_sprite->set_camera(cam);
+        crystal_sprite->set_position(wx(mc.tx * 8 + 8), wy(mc.ty * 8 + 8));
+    }
+    logic::Body crystal_body = tile_body(crystal_tx, crystal_ty, 6, 8);
+
     // Pick the next attack variant from the bits set in the active phase's mask (cycles AIMED->SPIRAL->FAN->ROCKFALL,
     // skipping bits not present). For D1: P1 = {AIMED}, P2 = {AIMED, FAN}. D2: {AIMED, ROCKFALL}.
     auto next_attack_for_phase = [&](int& slot)->int{
@@ -294,6 +308,7 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         attacks.clear(); atk_spawned_this_active = false;
         attack_slot = 0; current_attack = logic::BOSS_ATK_AIMED; spiral = engine::SpiralEmitter{};
         telegraph.hide();
+        crystal_collected = false; if(crystal_sprite) crystal_sprite->set_visible(true);
     };
 
     // Settle the player onto the floor before fading in (parallel to the King intro).
@@ -402,6 +417,17 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
                                player.body.pos.y + player.body.half_h + fx(engine::read_aim_dy()) };
         bolts.update(in.fire_pressed, muzzle, player.facing, lvl.map);
         spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);
+
+        // magic crystal: full refill on overlap; reappears once magic drops below one cast (repeatable).
+        if(level.magic_crystal_count > 0){
+            if(!crystal_collected && logic::aabb_overlap(player.body, crystal_body)){
+                magic.cur = magic.max; crystal_collected = true;
+                if(crystal_sprite) crystal_sprite->set_visible(false);
+            }
+            if(crystal_collected && magic.cur < 10){
+                crystal_collected = false; if(crystal_sprite) crystal_sprite->set_visible(true);
+            }
+        }
 
         // NOTE: the D1 boss does NOT use the block defense (that's a King mechanic). Letting the player's
         // free bolt destroy incoming boss bolts meant spamming B auto-blocked everything (the boss's
