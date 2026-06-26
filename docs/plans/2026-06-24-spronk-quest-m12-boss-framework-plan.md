@@ -59,18 +59,20 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Phases 1–3 shipped; Phase 4 code (4.1–4.4) shipped, **4.6 emulator QA pending (handed to user)**. Branch: `feat/m12-boss-framework` (off `main`).
+**Overall:** ✅ ALL phases shipped + emulator QA (r1–r3) passed (user-confirmed). 435/435 host tests, ROM builds. Branch `feat/m12-boss-framework` (28 commits off `main`), ready for final review + merge.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure-logic framework (BossDef/BossState + KING_DEF + D1_DEF) | ✅ Shipped | `2bcbfff` (P1.1–1.4), `7b5c59d` (P1.5) | 427/427; King regression guard held; ROM builds |
 | 2 — Engine attack library + shared helpers | ✅ Shipped | `51a43f6` | `engine/boss_attacks` (AttackPool/SpiralEmitter/TelegraphCue/BossHpBar + templated block/resolve_damage); ROM builds, 427/427, no game/ include |
 | 3 — King refactor onto the framework | ✅ Shipped | `985aec5` | King uses `boss_attacks` (inline copies deleted, −84 lines); constants verified faithful (telegraph/pips/spiral); ROM builds, 427/427 |
-| 4 — D1 boss + integration + invariants + QA | 🚧 Code shipped, QA pending | `8fae856`,`aef54ff`,`c33e965`,`23d99a8` | 4.1–4.4 shipped (430/430, 75 compiler tests, ROM builds); **4.5 emulator QA = user's next step** |
+| 4 — D1 boss + integration + invariants + QA | ✅ Shipped (QA r1–r3 passed) | `8fae856`,`aef54ff`,`c33e965`,`23d99a8` + QA fixes | D1 boss fair; King unregressed; bolts reach walls (both bosses); HUD start-HP + lives-`xN` fixed. 435/435, ROM builds |
 
 ### Deviations
 - **Phase 1:** tasks 1.1–1.4 landed as ONE commit (`2bcbfff`) not four — same two files, and four commits would have left misleading partially-broken intermediate states. **Task 1.5** also re-pointed `KING_MAX_HP`/`WOUND_DMG` → `KING_DEF.*` in `scene_boss.cpp`'s HP-pip + damage code (beyond the plan's enumerated API-call swaps) — required since those globals were removed in 1.1; identical mechanical mapping, zero behaviour change.
 - **QA r1 (emulator):** the D1 boss changed from `AlwaysVulnerable` (spam-to-win) to a NEW **`VulnMode::TiredWindow`** (third vuln model — invulnerable while attacking, opens a vulnerable "tired" window after `tired_after` attack cycles, shown by a 2-frame Guardian animation). `BossDef` gained `tired_after` + `intro_line`/`death_line` (data-driven dialogue). Also: boss bolts now despawn on solid walls/floor (pass through one-way) — affects the King too; hub Light-spell icon+cast bug fixed; D1 arena gained a spike+platform hazard. `AlwaysVulnerable` retained as a valid mode (synthetic test). Commits `d6549a1`,`1553da1`,`3d3a9e3`,`f25f924`,`2a6f47a`. Framework now proves THREE vuln models.
+- **QA r2 (emulator):** D1 arena redesigned to a FLAT-FLOOR duel (the platform created unhittable camping spots + blocked bolts) with jumpable spike patches; block-defense dropped for D1 (King-only) so the fight must be dodged not spam-blocked; bolts aim AT the player with a distinct red `boss_bolt` sprite; D1 fan is a horizontal 3-height spread. **Root-caused the "bolts vanish before the wall" bug: the Recovery-step `attacks.clear()` wiped in-flight bolts** — removed for D1. Refill health+magic on boss victory (fixes the low-HP post-boss spike-death cascade that read as a "soft-lock"). Added `test_d1_boss_respawn.cpp` proving every D1 entrance respawns grounded (ruling out an embedded-spawn fall-through). Commits `5e31b52`,`f3a41b8`,`71a48eb`,`11e93f7`,`d60ffc4`,`2db30db`,`7a6a38b`.
+- **QA r3 (emulator, user-confirmed PASS):** HUD **boot-at-full-health** fix (`PlayerState` defaults to base 100 but `max_health_for` can be higher via heart containers → the hub bar booted partly-empty; now `cur = max` at session start, no free heal on hub return). HUD **lives shown as one shield + `xN`** instead of one icon per life. **King got the SAME Recovery-clear fix as D1** (its bolts were still vanishing before the wall — Approach-B's two thin consumers each owned the bug). Commits `9d36f0e`,`36c97d0`,`29034c4`. All three confirmed working in the emulator.
 
 ### Discoveries
 - _(none yet)_
@@ -358,7 +360,7 @@ BEFORE marking complete: ROM builds; host tests green; the King uses the shared 
 
 ## Phase 4 — D1 boss + integration + invariants + QA
 
-**Execution Status:** 🚧 CODE SHIPPED (4.1–4.4) at `8fae856`,`aef54ff`,`c33e965`,`23d99a8` on 2026-06-24 — `LevelData.boss` + `build_level.py` `"boss":"d1"`→`&logic::D1_DEF`; Guardian art; D1 restructured to entry→boss→spronk rooms; `run_room_boss` in `scene_dungeon` (gated on `level.boss`, reuses the existing Game-Over flow, D2–D8/King no-op); D1 no-soft-lock invariants (fail-on-broken verified). 430/430 host + 75 compiler tests, ROM builds, purity OK. **4.5 emulator QA (D1 boss fair w/ bolt+double-jump; King unregressed) = pending, handed to user.**
+**Execution Status:** ✅ SHIPPED (4.1–4.4 + QA r1–r3) at `8fae856`,`aef54ff`,`c33e965`,`23d99a8` (code) + QA-round fixes on 2026-06-24…26 — `LevelData.boss` + `build_level.py` `"boss":"d1"`→`&logic::D1_DEF`; Guardian art; D1 restructured to entry→boss→spronk rooms; `run_room_boss` in `scene_dungeon` (gated on `level.boss`, reuses the existing Game-Over flow, D2–D8/King no-op); D1 no-soft-lock invariants (fail-on-broken verified). **4.5 emulator QA PASSED (user-confirmed):** D1 boss is fair with bolt+double-jump, King unregressed, both bosses' bolts reach the walls, HUD start-HP + lives-`xN` correct. 435/435 host + compiler tests, ROM builds, purity OK. See the QA r1–r3 Deviations entries above for the fixes.
 
 **Why this matters:** proves the framework with a different-shaped boss in a real dungeon, and wires the boss room into the dungeon flow. Restructures D1 into 3 rooms.
 
