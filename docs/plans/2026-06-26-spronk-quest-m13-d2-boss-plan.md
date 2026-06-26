@@ -85,11 +85,11 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started.
+**Overall:** Phase 1 shipped 2026-06-26.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 1 — Pure-logic framework (Locomotion + ROCKFALL + D2_DEF + rockfall_columns) | ⬜ Not started | — | host-tested |
+| 1 — Pure-logic framework (Locomotion + ROCKFALL + D2_DEF + rockfall_columns) | ✅ Shipped | d99dc45 (P1.1), 5402620 (P1.2) | host-tested; 445/445 green |
 | 2 — Art + engine rockfall emitter | ⬜ Not started | — | ROM-built |
 | 3 — `run_room_boss` integration (sprite, pacing, crystal, rockfall) | ⬜ Not started | — | ROM-built |
 | 4 — D2 level restructure + invariants + QA | ⬜ Not started | — | host + emulator QA |
@@ -119,7 +119,7 @@ notes and commit messages.
 
 ## Phase 1 — Pure-logic framework (Locomotion + ROCKFALL + D2_DEF + rockfall_columns)
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED — d99dc45 (Task 1.1: BossDef + Locomotion), 5402620 (Task 1.2: rockfall_columns). 2026-06-26. 445/445 tests passed, 0 checks failed. Logic purity OK.
 
 **Why this matters:** the data + the fairness picker are the host-testable heart. Getting `BossDef`'s new field placement right (at the END, defaulted) is what keeps King/D1 byte-for-byte identical.
 
@@ -134,7 +134,7 @@ notes and commit messages.
 
 Follow the Per-Task Protocol.
 
-- [ ] **Step 1: Write the failing tests** in `test/test_boss.cpp` (append; do NOT touch existing King/D1 tests):
+- [x] **Step 1: Write the failing tests** in `test/test_boss.cpp` (append; do NOT touch existing King/D1 tests):
 
 ```cpp
 // --- M13 D2 Slagshell (SpellExpose+Fire, pacing, rockfall, long re-armor anti-spam) ---
@@ -195,12 +195,12 @@ TEST(king_and_d1_are_stationary){
 }
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `bash tools/host_test.sh`
 Expected: FAIL — `D2_DEF` / `Locomotion` / `BOSS_ATK_ROCKFALL` undefined (compile error in `test_boss.cpp`).
 
-- [ ] **Step 3: Implement in `include/logic/boss.h`**
+- [x] **Step 3: Implement in `include/logic/boss.h`**
 
 3a. Add the `Locomotion` enum immediately AFTER the `VulnMode` enum (after line ~23):
 
@@ -249,12 +249,12 @@ inline constexpr BossDef D2_DEF{
 };
 ```
 
-- [ ] **Step 4: Run to verify green**
+- [x] **Step 4: Run to verify green**
 
 Run: `bash tools/host_test.sh` → expect `N/N tests passed, 0 checks failed` (new D2 tests pass; ALL existing King/D1 tests still pass).
 Run: `python tools/check_logic_purity.py` → `logic purity OK`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit** — `d99dc45`
 
 ```bash
 git add include/logic/boss.h test/test_boss.cpp
@@ -274,7 +274,7 @@ git commit -m "feat(logic): D2 Slagshell BossDef (SpellExpose+Fire, Pacing, ROCK
 
 Follow the Per-Task Protocol.
 
-- [ ] **Step 1: Write the failing test** `test/test_rockfall.cpp`:
+- [x] **Step 1: Write the failing test** `test/test_rockfall.cpp`:
 
 ```cpp
 #include "test_framework.h"
@@ -329,11 +329,11 @@ TEST(rockfall_clamps_count_to_max_out){
 }
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `bash tools/host_test.sh` → FAIL (`logic/rockfall.h` missing).
 
-- [ ] **Step 3: Implement** `include/logic/rockfall.h`:
+- [x] **Step 3: Implement** `include/logic/rockfall.h`:
 
 ```cpp
 #pragma once
@@ -383,20 +383,20 @@ inline int rockfall_columns(int player_tx, int arena_w_tiles, int count, int see
 }
 ```
 
-- [ ] **Step 4: Run to verify green**
+- [x] **Step 4: Run to verify green**
 
 Run: `bash tools/host_test.sh` → all green. Run: `python tools/check_logic_purity.py` → `logic purity OK`.
 
 The picker is fully deterministic (no RNG), so tests either pass or fail consistently — never flaky. If `rockfall_seed_varies_layout` is RED because the two chosen seeds happen to produce identical sorted column sets at those exact inputs, the fix is to pick different inputs/seeds that demonstrably differ (a legitimate test-input choice) — **NOT** to delete or weaken the "different seed → different spread" assertion.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit** — `5402620`
 
 ```bash
 git add include/logic/rockfall.h test/test_rockfall.cpp
 git commit -m "feat(logic): rockfall_columns fairness picker (player-biased, always leaves a dodge lane, deterministic) (M13 P1.2)"
 ```
 
-**After Phase 1:** run the 3-round group review (purity; King/D1 regression green; D2_DEF + picker match spec §2). Update this phase's banner to ✅ with the commit SHAs.
+**After Phase 1:** 3-round group review completed (2026-06-26): Round 1 purity OK; Round 2 King/D1 regression all green; Round 3 D2_DEF + picker match spec. Phase banner updated to ✅.
 
 ---
 
