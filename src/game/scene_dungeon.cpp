@@ -385,7 +385,12 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         // ---- damage resolution (bolt/Fire/Ice wounds while vulnerable; elemental refills magic) ----
         engine::resolve_damage(b, boss_body, bolts, spells, magic, /*magic_heal=*/25);
 
-        if(b.defeated()){ boss_say(level.boss->death_line); return BossRoomOutcome::Victory; }
+        if(b.defeated()){
+            boss_say(level.boss->death_line);
+            health.cur = health.max; magic.cur = magic.max;   // exit the fight at FULL vitals (reward +
+                                                              // avoids a low-HP death on the way to the spronk)
+            return BossRoomOutcome::Victory;
+        }
 
         spells.despawn_on_solid(lvl.map);
 
