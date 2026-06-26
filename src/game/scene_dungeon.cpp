@@ -354,8 +354,10 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
                 }
                 if(current_attack == logic::BOSS_ATK_SPIRAL)
                     spiral.tick(attacks, boss_cx(), boss_cy());
-            } else { // Recovery
-                attacks.clear(); atk_spawned_this_active = false; telegraph.hide();
+            } else { // Recovery — do NOT clear in-flight bolts: they must keep flying until they hit a
+                     // wall (else a stationary boss's shots vanish mid-arena when the cycle ends — the QA
+                     // bug where bolts "didn't reach the wall"). They despawn naturally in advance().
+                atk_spawned_this_active = false; telegraph.hide();
             }
         }
 
