@@ -90,7 +90,7 @@ notes and commit messages.
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure-logic framework (Locomotion + ROCKFALL + D2_DEF + rockfall_columns) | ✅ Shipped | d99dc45 (P1.1), 5402620 (P1.2) | host-tested; 445/445 green |
-| 2 — Art + engine rockfall emitter | ⬜ Not started | — | ROM-built |
+| 2 — Art + engine rockfall emitter | ✅ Shipped | 93fcf7c (P2.1), ff28392 (P2.2) | ROM fixed!; 445/445 green; purity OK |
 | 3 — `run_room_boss` integration (sprite, pacing, crystal, rockfall) | ⬜ Not started | — | ROM-built |
 | 4 — D2 level restructure + invariants + QA | ⬜ Not started | — | host + emulator QA |
 
@@ -402,7 +402,7 @@ git commit -m "feat(logic): rockfall_columns fairness picker (player-biased, alw
 
 ## Phase 2 — Art + engine rockfall emitter
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED — 93fcf7c (Task 2.1: art), ff28392 (Task 2.2: RockfallEmitter). 2026-06-26. ROM fixed!; 445/445 tests; purity OK.
 
 **Why this matters:** the rock/marker/slagshell sprites and the `RockfallEmitter` are what Phase 3 wires in. ROM-built (these touch `bn::`); the fairness logic they call is already host-covered (Task 1.2).
 
@@ -415,9 +415,9 @@ git commit -m "feat(logic): rockfall_columns fairness picker (player-biased, alw
 
 Follow the Per-Task Protocol. (Art has no host test; the "test" is the sprite header appearing + the ROM building in Phase 3. Verify each new generator runs without error and writes a `.json`.)
 
-- [ ] **Step 1: Add `gen_slagshell`** (2 stacked 32×32 frames: frame 0 dark cooled-lava crust = armored; frame 1 cracked, glowing molten = exposed). Model it on `gen_guardian`'s structure (a `draw_slagshell_frame(im, oy, exposed)` helper + a `gen_slagshell` that draws frame 0 normal, frame 1 exposed, then `write(im, "slagshell", {"type":"sprite","height":32})`). Use the shared 16-colour palette: dark rock (pal 11/1), crust grey (pal 2), molten orange/red (pal 13) + gold-hot (pal 6) for the exposed frame's glowing cracks, white glints (pal 15). Exposed frame = brighter cracks + glowing core so the player reads the wound window.
+- [x] **Step 1: Add `gen_slagshell`** (2 stacked 32×32 frames: frame 0 dark cooled-lava crust = armored; frame 1 cracked, glowing molten = exposed). Model it on `gen_guardian`'s structure (a `draw_slagshell_frame(im, oy, exposed)` helper + a `gen_slagshell` that draws frame 0 normal, frame 1 exposed, then `write(im, "slagshell", {"type":"sprite","height":32})`). Use the shared 16-colour palette: dark rock (pal 11/1), crust grey (pal 2), molten orange/red (pal 13) + gold-hot (pal 6) for the exposed frame's glowing cracks, white glints (pal 15). Exposed frame = brighter cracks + glowing core so the player reads the wound window.
 
-- [ ] **Step 2: Add `gen_rock`** (a single 8×8 chunky grey/brown boulder; the rock pool scales it 2×, so 8×8 → 16×16 on screen — matches `gen_boss_bolt`'s size convention):
+- [x] **Step 2: Add `gen_rock`** (a single 8×8 chunky grey/brown boulder; the rock pool scales it 2×, so 8×8 → 16×16 on screen — matches `gen_boss_bolt`'s size convention):
 
 ```python
 def gen_rock():
@@ -431,7 +431,7 @@ def gen_rock():
     write(im, "rock", {"type": "sprite"})
 ```
 
-- [ ] **Step 3: Add `gen_rock_marker`** (an 8×8 ground telegraph — a red crack/shadow shown where a rock will land):
+- [x] **Step 3: Add `gen_rock_marker`** (an 8×8 ground telegraph — a red crack/shadow shown where a rock will land):
 
 ```python
 def gen_rock_marker():
@@ -444,14 +444,14 @@ def gen_rock_marker():
     write(im, "rock_marker", {"type": "sprite"})
 ```
 
-- [ ] **Step 4: Register the three generators.** In `tools/make_placeholder_art.py`'s `if __name__ == "__main__":` block (~lines 571-588, the sequence of `gen_*()` calls), add `gen_slagshell()`, `gen_rock()`, `gen_rock_marker()` after the `gen_guardian()` call.
+- [x] **Step 4: Register the three generators.** In `tools/make_placeholder_art.py`'s `if __name__ == "__main__":` block (~lines 571-588, the sequence of `gen_*()` calls), add `gen_slagshell()`, `gen_rock()`, `gen_rock_marker()` after the `gen_guardian()` call.
 
-- [ ] **Step 5: Run the art generator EXPLICITLY.** It is **NOT** run by `tools/build_rom.sh` or `tools/host_test.sh` (those only run `build_level.py`). Run it directly:
+- [x] **Step 5: Run the art generator EXPLICITLY.** It is **NOT** run by `tools/build_rom.sh` or `tools/host_test.sh` (those only run `build_level.py`). Run it directly:
 
 Run: `python tools/make_placeholder_art.py`
 Expected: it completes without error and writes `graphics/slagshell.json` + `graphics/slagshell.bmp`, `graphics/rock.json` + `.bmp`, `graphics/rock_marker.json` + `.bmp` (Butano compiles these into `bn::sprite_items::slagshell` / `::rock` / `::rock_marker` on the next ROM build). Then `bash tools/build_rom.sh` → `ROM fixed!` to confirm the sprites compile.
 
-- [ ] **Step 6: Commit** (commit the generated art outputs — they're checked in, like the existing `graphics/*.json`):
+- [x] **Step 6: Commit** (commit the generated art outputs — they're checked in, like the existing `graphics/*.json`):
 
 ```bash
 git add tools/make_placeholder_art.py graphics/slagshell.* graphics/rock.* graphics/rock_marker.*
@@ -471,7 +471,7 @@ git commit -m "art: Slagshell (2-frame crust/molten) + falling rock + rock groun
 
 Follow the Per-Task Protocol. (Engine `bn::` code — not host-tested; the column logic is already host-covered. Verify by ROM build in Phase 3.)
 
-- [ ] **Step 1: Declare `RockfallEmitter` in `include/engine/boss_attacks.h`** (after `SpiralEmitter`, ~line 134):
+- [x] **Step 1: Declare `RockfallEmitter` in `include/engine/boss_attacks.h`** (after `SpiralEmitter`, ~line 134):
 
 ```cpp
 // -----------------------------------------------------------------------------
@@ -516,7 +516,7 @@ private:
 
 Add `#include "logic/rockfall.h"` near the top of `boss_attacks.h` (it already includes `logic/boss.h`).
 
-- [ ] **Step 2: Implement in `src/engine/boss_attacks.cpp`** (after `SpiralEmitter::tick`):
+- [x] **Step 2: Implement in `src/engine/boss_attacks.cpp`** (after `SpiralEmitter::tick`):
 
 ```cpp
 // ---------------------------------------------------------------------------
@@ -572,9 +572,9 @@ int RockfallEmitter::leap_offset() const {
 }
 ```
 
-- [ ] **Step 3: Verify it builds** (ROM): `bash tools/build_rom.sh` → `ROM fixed!` (the emitter compiles; it's exercised once Phase 3 wires it). Also `python tools/check_logic_purity.py` → `logic purity OK` (engine including logic is fine; ensure no `game/` include crept in).
+- [x] **Step 3: Verify it builds** (ROM): `bash tools/build_rom.sh` → `ROM fixed!` (the emitter compiles; it's exercised once Phase 3 wires it). Also `python tools/check_logic_purity.py` → `logic purity OK` (engine including logic is fine; ensure no `game/` include crept in).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add include/engine/boss_attacks.h src/engine/boss_attacks.cpp
