@@ -67,5 +67,11 @@
         0
       ]
     }
+  ],
+  "entrances": [
+    { "id": 1, "facing": -1 }
+  ],
+  "room_doors": [
+    { "target_room": 1, "target_entrance": 0 }
   ]
 }
