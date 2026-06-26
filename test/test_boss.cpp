@@ -276,3 +276,60 @@ static void check_budget(const BossDef& d){
     if(d.vuln==VulnMode::TiredWindow) CHECK(d.expose_frames >= SWITCH_BUDGET);
 }
 TEST(switch_budget_holds_for_all_defs){ check_budget(KING_DEF); check_budget(D1_DEF); check_budget(AV_DEF); }
+
+// --- M13 D2 Slagshell (SpellExpose+Fire, pacing, rockfall, long re-armor anti-spam) ---
+TEST(bossdef_d2_slagshell_fields){
+    CHECK_EQ(D2_DEF.max_hp, 70);
+    CHECK_EQ(D2_DEF.wound_dmg, 10);
+    CHECK_EQ(D2_DEF.phase_count, 2);
+    CHECK((int)D2_DEF.vuln == (int)VulnMode::SpellExpose);
+    CHECK((int)D2_DEF.expose_spell == (int)SpellId::Fire);     // Fire melts the crust
+    CHECK((int)D2_DEF.locomotion == (int)Locomotion::Pacing);  // the moving boss
+    CHECK(D2_DEF.hit_iframes >= 80);                           // LONG re-armor = anti-spam
+    CHECK_EQ(D2_DEF.phases[0].end_hp, 35);                     // P1 -> P2 at half HP
+    // both phases use AIMED|ROCKFALL; the phase boundary only escalates rockfall intensity
+    CHECK_EQ((int)D2_DEF.phases[0].attacks, (int)(BOSS_ATK_AIMED | BOSS_ATK_ROCKFALL));
+    CHECK_EQ((int)D2_DEF.phases[1].attacks, (int)(BOSS_ATK_AIMED | BOSS_ATK_ROCKFALL));
+    CHECK(D2_DEF.phases[0].pattern.telegraph_frames >= SWITCH_BUDGET);
+    CHECK(D2_DEF.phases[1].pattern.telegraph_frames >= SWITCH_BUDGET);
+}
+// THE anti-spam invariant: after a wound you CANNOT re-expose until hit_iframes drains, and the
+// attack pattern resumes (not frozen) during that window. This is what stops Fire->bolt mashing.
+TEST(d2_no_reexpose_during_rearm){
+    BossState b; b.reset(D2_DEF);
+    b.on_expose_hit(SpellId::Fire);  CHECK(b.exposed());        // Fire opens the window
+    b.on_wound(D2_DEF.wound_dmg);                               // one wound...
+    CHECK_EQ(b.hit_iframes, D2_DEF.hit_iframes);               // ...starts the long re-armor
+    CHECK(!b.exposed());                                        // window closed by the wound
+    b.on_expose_hit(SpellId::Fire);  CHECK(!b.exposed());       // Fire during re-armor: NO re-expose
+    int t = b.attack_timer;
+    b.tick();                                                   // pattern RESUMES during re-armor...
+    CHECK(b.attack_timer == t + 1 || b.attack_timer == 0);     // (advances, or wraps the period) -> not frozen
+    for(int i = 0; i < D2_DEF.hit_iframes; ++i) b.tick();      // drain the re-armor
+    CHECK_EQ(b.hit_iframes, 0);
+    b.on_expose_hit(SpellId::Fire);  CHECK(b.exposed());        // NOW Fire re-exposes
+}
+TEST(d2_takes_seven_wounds){
+    BossState b; b.reset(D2_DEF);
+    int wounds = 0;
+    while(!b.defeated() && wounds < 100){
+        b.on_expose_hit(SpellId::Fire);
+        b.on_wound(D2_DEF.wound_dmg);
+        for(int i = 0; i < D2_DEF.hit_iframes; ++i) b.tick();   // wait out re-armor between wounds
+        ++wounds;
+    }
+    CHECK(b.defeated());
+    CHECK_EQ(wounds, 7);                                        // 70 / 10
+}
+// Bolt/None never expose a SpellExpose boss (only the def's expose spell does).
+TEST(d2_only_fire_exposes){
+    BossState b; b.reset(D2_DEF);
+    b.on_expose_hit(SpellId::Ice);   CHECK(!b.exposed());
+    b.on_expose_hit(SpellId::Light); CHECK(!b.exposed());
+    b.on_expose_hit(SpellId::Fire);  CHECK(b.exposed());
+}
+// REGRESSION: the new locomotion field must default Stationary for King + D1 (unchanged behaviour).
+TEST(king_and_d1_are_stationary){
+    CHECK((int)KING_DEF.locomotion == (int)Locomotion::Stationary);
+    CHECK((int)D1_DEF.locomotion == (int)Locomotion::Stationary);
+}
