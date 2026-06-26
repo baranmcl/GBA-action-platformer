@@ -23,6 +23,8 @@
 #include "bn_sprite_items_magic_crystal.h"
 #include "bn_sprite_items_guardian.h"   // M12: per-dungeon boss sprite (D1 Whispering Woods Guardian, 2 frames)
 #include "bn_sprite_items_slagshell.h" // M13: D2 Ember Caverns boss sprite (Slagshell, 2 frames)
+#include "bn_sprite_items_rock.h"      // M13: falling rock for Slagshell's rockfall attack
+#include "bn_sprite_items_rock_marker.h" // M13: ground crack-telegraph for the rockfall
 #include "bn_sprite_tiles_item.h"       // M12 QA r1: swap guardian frame 1 (tired pose) during the tired window
 #include "bn_sprite_tiles_ptr.h"        // complete type for set_tiles(create_tiles(...))
 #include "bn_sprite_text_generator.h"   // M12 QA r1: data-driven boss intro/death dialogue (run_room_boss)
@@ -218,6 +220,10 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
 
     // ---- attacks (shared library pool) ----
     engine::AttackPool attacks(bn::sprite_items::boss_bolt, cam, lvl.view.map_px_w, lvl.view.map_px_h);
+    engine::AttackPool rocks(bn::sprite_items::rock, cam, lvl.view.map_px_w, lvl.view.map_px_h);
+    engine::RockfallEmitter rockfall(bn::sprite_items::rock_marker, cam,
+                                     lvl.view.map_px_w, lvl.view.map_px_h);
+    int rockfall_seed = 0;   // rolling counter -> varied rock spreads
     engine::SpiralEmitter spiral;
     bool atk_spawned_this_active = false;
     int current_attack = logic::BOSS_ATK_AIMED;   // the attack firing during the CURRENT Active window
@@ -308,6 +314,7 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         attacks.clear(); atk_spawned_this_active = false;
         attack_slot = 0; current_attack = logic::BOSS_ATK_AIMED; spiral = engine::SpiralEmitter{};
         telegraph.hide();
+        rocks.clear(); rockfall.clear();
         crystal_collected = false; if(crystal_sprite) crystal_sprite->set_visible(true);
     };
 
@@ -357,7 +364,7 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
 
         // ---- boss render: swap to the tired/slumped frame while EXPOSED (the tired window), then
         //      blink/telegraph-pulse for emphasis. Frame swap only on change (no per-frame set_tiles). ----
-        boss_spr.set_position(wx(boss_cx()), wy(boss_cy()));
+        boss_spr.set_position(wx(boss_cx()), wy(boss_cy()) - rockfall.leap_offset());
         int want_frame = b.exposed() ? 1 : 0;   // TiredWindow: exposed() == the tired window
         if(want_frame != boss_frame){
             boss_spr.set_tiles(boss_item.tiles_item().create_tiles(want_frame));
@@ -369,7 +376,7 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
 
         // ---- attack telegraph + spawn (skipped while EXPOSED = a clean damage window) ----
         if(b.exposed()){
-            attacks.clear(); atk_spawned_this_active = false; telegraph.hide();
+            attacks.clear(); rockfall.clear(); atk_spawned_this_active = false; telegraph.hide();
         } else {
             logic::AttackStep step = b.current_step();
             if(step == logic::AttackStep::Telegraph){
@@ -386,7 +393,11 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
                     int pcx0 = player.body.pos.x.to_int() + player.body.half_w.to_int();
                     int pcy0 = player.body.pos.y.to_int() + player.body.half_h.to_int();
                     spiral.begin(boss_cx(), pcx0);
-                    if(current_attack != logic::BOSS_ATK_SPIRAL){
+                    if(current_attack == logic::BOSS_ATK_ROCKFALL){
+                        int player_tx = (player.body.pos.x.to_int() + player.body.half_w.to_int()) / 8;
+                        int rock_count = (b.phase == 0) ? 3 : 5;            // escalate in P2
+                        rockfall.begin(player_tx, level.w, level.h, rock_count, rockfall_seed++);
+                    } else if(current_attack != logic::BOSS_ATK_SPIRAL){
                         int spd = (b.phase == 0) ? 3 : 4;   // a touch faster than the King — harder to outrun
                         engine::spawn_attack(attacks, current_attack, boss_cx(), boss_cy(),
                                              pcx0, pcy0, spd, b.phase, /*aim_full=*/true);  // aim AT the player
@@ -395,10 +406,11 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
                 }
                 if(current_attack == logic::BOSS_ATK_SPIRAL)
                     spiral.tick(attacks, boss_cx(), boss_cy());
+                if(current_attack == logic::BOSS_ATK_ROCKFALL) rockfall.tick(rocks);
             } else { // Recovery — do NOT clear in-flight bolts: they must keep flying until they hit a
                      // wall (else a stationary boss's shots vanish mid-arena when the cycle ends — the QA
                      // bug where bolts "didn't reach the wall"). They despawn naturally in advance().
-                atk_spawned_this_active = false; telegraph.hide();
+                atk_spawned_this_active = false; telegraph.hide(); rockfall.clear();
             }
         }
 
@@ -406,6 +418,10 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         bool proj_hit = attacks.advance(player.body, level.w * 8, level.h * 8,
                                         invuln != 0 || player.dash.invincible(), lvl.map);
         if(proj_hit){ health.damage(20); invuln = 45; }
+
+        bool rock_hit = rocks.advance(player.body, level.w * 8, level.h * 8,
+                                      invuln != 0 || player.dash.invincible(), lvl.map);
+        if(rock_hit){ health.damage(20); invuln = 45; }
 
         // ---- boss contact damage ----
         if(invuln == 0 && !player.dash.invincible() && logic::aabb_overlap(player.body, boss_body)){
