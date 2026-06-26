@@ -22,6 +22,12 @@ int main()
     game::run_title(world); // START -> enter the hub
 
     logic::PlayerState ps;  // health/magic persist across hub <-> dungeon for the whole session
+    // Boot at FULL health for the player's CURRENT max. PlayerState defaults to the BASE 100, but a
+    // returning player may have earned heart containers (max_health_for > 100); without this they'd
+    // start with a partly-empty bar (cur=100 < max=150). ps is never saved, so a fresh boot always
+    // starts full — per-session damage still carries across hub<->dungeon (no free heal on hub return).
+    ps.health.max = logic::max_health_for(world);
+    ps.health.cur = ps.health.max;
 
     while(true)
     {
