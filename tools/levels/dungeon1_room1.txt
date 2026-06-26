@@ -1,0 +1,31 @@
+; D1 Whispering Woods — Room 1 (BOSS ARENA, M12; redesigned M12 QA r2). The Whispering Woods Guardian
+; (D1_DEF, TiredWindow) is fought here on entry (JSON "boss":"d1"). No cage / no exit: scene_dungeon
+; runs the fight on entry + opens the way onward (room-door to room 2) on victory.
+; FLAT-FLOOR DUEL: the boss stands stationary, centred on the floor (run_room_boss places it at
+; col w/2). The player fights it FROM THE FLOOR — both at the same height, so horizontal bolts connect
+; both ways (no platform: an elevated player would shoot OVER the floor boss, and the boss's shots would
+; pass UNDER an elevated player — that was the QA r1 "unhittable on the platform" bug). With no mid-air
+; solid platform, the boss's shots travel wall-to-wall (QA r1 item 1 despawns them only on solid
+; walls/floor), so a player can't camp the entrance. Two spike patches 's' on the floor are jump-over
+; hazards while repositioning (≤4 wide = double-jumpable). 'N'(id0)+'D' left = arrival/return to room 0;
+; 'N'(id1)+'D' right = onward to room 2 (opens on victory). A safe standable route reaches the onward
+; door (host test d1_room1_arena_traversable_onward_reachable).
+################################################
+#..............................................#
+#..............................................#
+#..............................................#
+#..............................................#
+#..............................................#
+#..............................................#
+#..............................................#
+#..............................................#
+#..............................................#
+#..............................................#
+#..............................................#
+#..............................................#
+#..............................................#
+#..............................................#
+#..............................................#
+#..@.ND..........sss...........sss.........ND..#
+################################################
+################################################

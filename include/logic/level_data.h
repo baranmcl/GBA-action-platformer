@@ -2,6 +2,7 @@
 #include <cstdint>
 #include "logic/gates.h"
 #include "logic/ability_pickup.h"   // AbilityPickup { tx, ty, ability }
+#include "logic/boss.h"             // BossDef (a boss room sets LevelData::boss = &<DEF>)
 namespace logic {
 struct EntitySpawn { int tx, ty, param0, param1, param2; }; // enemy: param0/1 patrol l/r tile; param2 flags (bit0 = fire_immune)
 struct GateSpawn   { int tx, ty; GateType type; int latch_id = -1; }; // latch_id -1 = not latched
@@ -39,6 +40,7 @@ struct LevelData {
     const LoosePlatformSpawn*  loose_platforms     = nullptr; int loose_platform_count     = 0;
     const HiddenPlatformSpawn* hidden_platforms    = nullptr; int hidden_platform_count    = 0;
     const MagicCrystalSpawn*   magic_crystals      = nullptr; int magic_crystal_count      = 0;
+    const BossDef*             boss                = nullptr;  // M12: non-null = boss room (fight on entry)
 };
 struct DungeonData {
     const LevelData* const* rooms;   // rooms[0..room_count-1]

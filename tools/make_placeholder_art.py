@@ -114,6 +114,16 @@ def gen_bolt():
     px(im, 1, 3, 8); px(im, 6, 4, 8); px(im, 3, 1, 8); px(im, 4, 6, 8)
     write(im, "bolt", {"type": "sprite"})
 
+def gen_boss_bolt():
+    # M12: the boss's attack projectile — RED orb (pal 13), deliberately distinct from the player's
+    # CYAN bolt so it reads as "incoming enemy attack" (and a cue that, for the D1 boss, it is NOT
+    # blockable — you must dodge it).
+    im = new_img(8, 8)
+    rect(im, 2, 2, 5, 5, 13)                 # red body
+    rect(im, 3, 3, 4, 4, 6)                  # gold-hot core
+    px(im, 1, 3, 13); px(im, 6, 4, 13); px(im, 3, 1, 13); px(im, 4, 6, 13)  # red sparks
+    write(im, "boss_bolt", {"type": "sprite"})
+
 def gen_tiles():
     """Background tileset: 26 tiles of 8x8 in a horizontal strip. Index order:
     0 blank, 1 ground, 2 one-way, 3 gate(closed wall), 4 cage, 5 door-open, 6 door-locked,
@@ -484,6 +494,59 @@ def gen_king_hp():
     px(im, 1, 1, 1); px(im, 6, 1, 1); px(im, 1, 6, 1); px(im, 6, 6, 1)  # outline corners
     write(im, "king_hp", {"type": "sprite"})
 
+def draw_guardian_frame(im, oy, tired):
+    """One 32x32 Guardian frame at vertical offset oy. tired=False: upright/alert (gold eyes,
+    raised canopy). tired=True: slumped/exhausted — the canopy droops down a row, the gold eyes
+    dim to dark bark (closed), and the whole body sinks 2px so the player reads "hit me now"."""
+    # When tired, sink the whole figure 2px and droop the canopy.
+    sink = 2 if tired else 0
+    # ---- leafy crown canopy across the top (green, with a darker underside) ----
+    rect(im, 8, oy + 1 + sink, 23, oy + 6 + sink, 4)         # broad leaf canopy
+    rect(im, 6, oy + 4 + sink, 25, oy + 7 + sink, 4)         # canopy spreads wider at the base
+    rect(im, 6, oy + 7 + sink, 25, oy + 8 + sink, 5)         # darker green canopy underside
+    if tired:
+        # drooping leaves hang off the shoulders when exhausted
+        rect(im, 5, oy + 9, 7, oy + 12, 5); rect(im, 24, oy + 9, 26, oy + 12, 5)
+    else:
+        px(im, 10, oy + 2, 15); px(im, 21, oy + 3, 15)       # white leaf glints
+        px(im, 9, oy + 5, 5); px(im, 22, oy + 5, 5)          # dark leaf speckle
+    # ---- carved wooden mask face (skin/wood tone) ----
+    rect(im, 11, oy + 9, 20, oy + 17, 3)                     # face block (mask)
+    rect(im, 11, oy + 9, 20, oy + 9, 1)                      # near-black brow line
+    if tired:
+        # eyes shut to dark bark grooves (no gold glow) — the boss is spent
+        rect(im, 13, oy + 13, 14, oy + 13, 11); rect(im, 17, oy + 13, 18, oy + 13, 11)
+    else:
+        rect(im, 13, oy + 12, 14, oy + 13, 6); rect(im, 17, oy + 12, 18, oy + 13, 6)  # gold glowing eyes
+        px(im, 13, oy + 12, 15); px(im, 17, oy + 12, 15)     # eye glints
+    rect(im, 15, oy + 15, 16, oy + 16, 11)                   # carved nose/mouth groove (dark bark)
+    # ---- broad bark torso (brown trunk) with vertical bark grooves ----
+    rect(im, 9, oy + 18, 22, oy + 28, 10)                    # wide trunk body
+    rect(im, 7, oy + 21, 24, oy + 27, 10)                    # trunk flares to broad shoulders/base
+    for cx in (11, 15, 19):
+        rect(im, cx, oy + 18, cx, oy + 27, 11)               # dark vertical bark grooves
+    if not tired:
+        px(im, 13, oy + 20, 15); px(im, 18, oy + 22, 15)     # bark highlight glints
+    # ---- mossy shoulder pads (green) bridging canopy to trunk ----
+    sh = 2 if tired else 0                                   # shoulders slump when tired
+    rect(im, 6, oy + 17 + sh, 9, oy + 20 + sh, 4); rect(im, 22, oy + 17 + sh, 25, oy + 20 + sh, 4)
+    # ---- stubby root legs + a near-black ground-line ----
+    rect(im, 9, oy + 28, 12, oy + 30, 11); rect(im, 19, oy + 28, 22, oy + 30, 11)   # two root feet (dark bark)
+    rect(im, 7, oy + 30, 24, oy + 30, 1)                     # base shadow line
+
+def gen_guardian():
+    """D1 Whispering Woods Guardian boss placeholder, 32x(32*2) stacked = TWO 32x32 frames (M12):
+    frame 0 = normal/alert (gold eyes, raised canopy), frame 1 = TIRED/slumped (eyes shut, canopy
+    droops, body sinks) — shown during the TiredWindow so the player reads the vulnerable window.
+    A broad, rooted forest sentinel built from the shared 16-colour palette: green canopy (pal 4)
+    + dark green (pal 5), brown trunk/bark (pal 10) + dark bark (pal 11), skin/mask wood (pal 3),
+    gold glowing eyes (pal 6), near-black outline (pal 1), white glints (pal 15). 32x32 is a
+    Butano-supported sprite size (4bpp/16-colour); the .json "height":32 sets the frame height."""
+    im = new_img(32, 32 * 2)
+    draw_guardian_frame(im, 0, tired=False)    # frame 0: normal
+    draw_guardian_frame(im, 32, tired=True)    # frame 1: tired/slumped
+    write(im, "guardian", {"type": "sprite", "height": 32})
+
 def gen_grapple_icon():
     """Grapple HUD icon 8x8 — a green hook glyph, clearly distinct from the cyan Ice orb.
     Uses bright green (pal 4) + dark green (pal 5) + near-black outline (pal 1).
@@ -510,6 +573,7 @@ if __name__ == "__main__":
     gen_enemy()
     gen_spronk()
     gen_bolt()
+    gen_boss_bolt()
     gen_tiles()
     gen_bg_palette()
     gen_hud()
@@ -520,5 +584,6 @@ if __name__ == "__main__":
     gen_grapple_icon()
     gen_king()
     gen_king_hp()
+    gen_guardian()
     gen_heart_container()
     print("placeholder sprites + bg tiles + hud + ember art generated.")

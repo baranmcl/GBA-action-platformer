@@ -47,6 +47,11 @@ ABILITY_ENUM = {
     'featherleap': 'Featherleap', 'fire': 'Fire', 'ice': 'Ice', 'glide': 'Glide',
     'dash': 'Dash', 'grapple': 'Grapple', 'stone': 'Stone', 'light': 'Light',
 }
+# M12: optional room "boss" key -> the BossDef symbol (defined in logic/boss.h). EXPLICIT
+# name->symbol map; an unknown name is a compile error. D1_DEF is THE canonical symbol name.
+BOSS_SYMBOL = {
+    'd1': 'logic::D1_DEF',
+}
 CONTENT = set('@CEoG123456789VIWXFBPK=?*NDQHkO:h$')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door, 'Q' exit-to-hub door (target_room=-1); 'H' heart container; 'k' cracked-floor gate (M8, Stone); 'O' boulder (M8); ':' loose platform (M8); 'h' hidden platform (M10); '$' magic crystal (M10)
 
 
@@ -85,6 +90,13 @@ def compile_level(txt_path, json_path):
     j_loose_platforms = meta.get('loose_platforms', [])
     j_cracked_floors = meta.get('cracked_floors', [])
     j_hidden_platforms = meta.get('hidden_platforms', [])
+    # M12 boss key: an optional "boss" name resolved against the explicit BOSS_SYMBOL map.
+    boss_name = meta.get('boss')
+    boss_symbol = None
+    if boss_name is not None:
+        if boss_name not in BOSS_SYMBOL:
+            raise LevelError(f"unknown boss '{boss_name}' (known: {sorted(BOSS_SYMBOL)})")
+        boss_symbol = BOSS_SYMBOL[boss_name]
 
     tiles = []
     spawns, cages, exits = [], [], []
@@ -248,6 +260,7 @@ def compile_level(txt_path, json_path):
         'heart_containers': heart_containers,
         'boulders': boulders, 'loose_platforms': loose_platforms,
         'hidden_platforms': hidden_platforms, 'magic_crystals': magic_crystals,
+        'boss': boss_symbol,
     }
 
 
@@ -262,7 +275,10 @@ def emit_header(level, name):
             return (f'inline constexpr {cpp_type} {name}_{var}[] = {{ {body} }};', len(items))
         return (f'inline constexpr {cpp_type} {name}_{var}[] = {{ {dummy} }};', 0)
 
-    L = ['#pragma once', '#include "logic/level_data.h"', '']
+    L = ['#pragma once', '#include "logic/level_data.h"']
+    if level.get('boss'):
+        L.append('#include "logic/boss.h"')   # the boss room references &<DEF> below
+    L.append('')
     L.append(f'inline constexpr unsigned char {name}_TILES[] = {{ {arr(level["tiles"])} }};')
 
     line, ecount = emit_array('logic::EntitySpawn', 'ENEMIES',
@@ -317,6 +333,7 @@ def emit_header(level, name):
     sx, sy = level['spawn']
     cx, cy = level['cage'] if level['cage'] else (0, 0)
     ex, ey = level['exit'] if level['exit'] else (0, 0)
+    boss_init = f'&{level["boss"]}' if level.get('boss') else 'nullptr'
     L.append(
         f'inline constexpr logic::LevelData {name}_DATA = {{ '
         f'{name}_TILES, {level["w"]}, {level["h"]}, {sx}, {sy}, '
@@ -329,7 +346,8 @@ def emit_header(level, name):
         f'{name}_ENTRANCES, {encount}, {name}_ROOM_DOORS, {rdcount}, '
         f'{name}_HEART_CONTAINERS, {hccount}, '
         f'{name}_BOULDERS, {bocount}, {name}_LOOSE_PLATFORMS, {lpcount}, '
-        f'{name}_HIDDEN_PLATFORMS, {hpcount}, {name}_MAGIC_CRYSTALS, {mccount} }};'
+        f'{name}_HIDDEN_PLATFORMS, {hpcount}, {name}_MAGIC_CRYSTALS, {mccount}, '
+        f'{boss_init} }};'
     )
     L.append('')
     return '\n'.join(L)

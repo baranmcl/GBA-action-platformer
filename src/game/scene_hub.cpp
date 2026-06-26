@@ -11,6 +11,7 @@
 #include "bn_sprite_items_ice_proj.h"
 #include "bn_sprite_items_bolt.h"
 #include "bn_sprite_items_grapple_icon.h"
+#include "bn_sprite_items_light_proj.h"
 
 #include "logic/tilemap.h"
 #include "logic/player.h"
@@ -149,6 +150,7 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
             if(spell.selected == logic::SpellId::Ice)          spell_icon.set_item(bn::sprite_items::ice_proj);
             else if(spell.selected == logic::SpellId::Fire)    spell_icon.set_item(bn::sprite_items::fire_proj);
             else if(spell.selected == logic::SpellId::Grapple) spell_icon.set_item(bn::sprite_items::grapple_icon);
+            else if(spell.selected == logic::SpellId::Light)   spell_icon.set_item(bn::sprite_items::light_proj);
             last_icon = spell.selected;
         }
         spell_icon.set_visible(spell.selected != logic::SpellId::None);
@@ -185,7 +187,8 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
         bool tried_anchor = want_grapple && in.grapple_fire;
 
         bool cast_spell = si.cast && (spell.selected == logic::SpellId::Fire ||
-                                      spell.selected == logic::SpellId::Ice);
+                                      spell.selected == logic::SpellId::Ice  ||
+                                      spell.selected == logic::SpellId::Light);
 
         player.update(in, lvl.map);
         avatar.sync(player);
