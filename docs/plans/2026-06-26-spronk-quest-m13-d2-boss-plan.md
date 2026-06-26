@@ -85,14 +85,14 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Phases 1–3 shipped 2026-06-26.
+**Overall:** Phases 1–4 shipped 2026-06-26.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure-logic framework (Locomotion + ROCKFALL + D2_DEF + rockfall_columns) | ✅ Shipped | d99dc45 (P1.1), 5402620 (P1.2) | host-tested; 445/445 green |
 | 2 — Art + engine rockfall emitter | ✅ Shipped | 93fcf7c (P2.1), ff28392 (P2.2) | ROM fixed!; 445/445 green; purity OK |
 | 3 — `run_room_boss` integration (sprite, pacing, crystal, rockfall) | ✅ Shipped | 3aa2f24 (P3.1), 597fbba (P3.2), 07acf3e (P3.3), a4a39a9 (P3.4) | ROM fixed!; 445/445 green; purity OK |
-| 4 — D2 level restructure + invariants + QA | ⬜ Not started | — | host + emulator QA |
+| 4 — D2 level restructure + invariants + QA | ✅ Shipped | 9eb7498 (P4.1), a13c13d (P4.2), 465be84 (P4.3), a2aa831 (P4.4) | ROM fixed!; 452/452 green; purity OK |
 
 ---
 
@@ -823,7 +823,9 @@ git commit -m "feat(game): wire rockfall into run_room_boss (rock pool + emitter
 
 ## Phase 4 — D2 level restructure + integration + invariants + QA
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED — 9eb7498 (P4.1: build_level.py boss key), a13c13d (P4.2: 3-room level restructure), 465be84 (P4.3: dungeons.h + drop orphaned dungeon2.h), a2aa831 (P4.4: invariant tests + D2 respawn-settle). 2026-06-26. 452/452 tests passed, 0 checks failed. ROM fixed! Logic purity OK. Non-vacuity verified: walling off the right-side ND in room1 turns d2_room1_onward_door_reachable + d2_room_doors_resolve RED; reverting restores green.
+
+**Deviation from plan:** d2_room0_shrine_and_door_reachable was revised to d2_room0_hub_door_reachable_from_spawn because D2 room 0 is a PUZZLE room (the fire shrine and onward door are behind wall pillars unlocked by the brazier/plate/button puzzle). Flood-fill reachability from spawn only covers the left section (cols 1-23); testing shrine + onward door reachability would require gate simulation. The test instead verifies: (1) the hub-return Q's floor position is reachable from spawn within the left section, and (2) the onward door exists in room 0 (structural check). This is accurate for the actual gameplay flow.
 
 **Why this matters:** wires Slagshell into a real D2 and proves no soft-locks. Order matters: compiler key → level files → dungeons.h → invariants → QA.
 
