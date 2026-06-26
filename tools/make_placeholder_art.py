@@ -547,6 +547,81 @@ def gen_guardian():
     draw_guardian_frame(im, 32, tired=True)    # frame 1: tired/slumped
     write(im, "guardian", {"type": "sprite", "height": 32})
 
+def draw_slagshell_frame(im, oy, exposed):
+    """One 32x32 Slagshell frame at vertical offset oy.
+    exposed=False: frame 0 — dark cooled-lava crust (armored).
+    exposed=True:  frame 1 — cracked/glowing molten core (vulnerable window).
+    Palette: dark rock (pal 11 = dark-brown / near-black), crust grey (pal 12 = stone),
+    molten orange/gold (pal 6), red (pal 13), white glints (pal 15), near-black (pal 1)."""
+    # ---- squat body block: the main lava-golem mass ----
+    rect(im, 6, oy + 8, 25, oy + 28, 12 if not exposed else 10)   # main body (stone grey / brown)
+    rect(im, 8, oy + 4, 23, oy + 9, 12 if not exposed else 10)    # shoulder plate / head block
+    # ---- crust overlay (armored frame) vs glowing cracks (exposed frame) ----
+    if not exposed:
+        # Cooled lava crust: dark rock slabs + stone mortar lines (pal 11, pal 1)
+        rect(im, 6,  oy + 8,  25, oy + 10, 11)   # dark top crust band
+        rect(im, 6,  oy + 18, 25, oy + 20, 11)   # dark mid crust band
+        rect(im, 6,  oy + 27, 25, oy + 28, 11)   # dark bottom crust band
+        # vertical crust cracks (just barely visible — sealed, not glowing)
+        for cx in (10, 16, 22):
+            rect(im, cx, oy + 8, cx, oy + 28, 1)
+        # "face": two dark pits for eyes (cooled, no glow)
+        rect(im, 12, oy + 5, 14, oy + 7, 1); rect(im, 18, oy + 5, 20, oy + 7, 1)
+        # stone-grey shoulder armour ridges
+        rect(im, 7,  oy + 8,  8,  oy + 14, 11)
+        rect(im, 23, oy + 8,  24, oy + 14, 11)
+    else:
+        # Cracked/glowing: molten orange-gold seeps through wide cracks (pal 6 + pal 13)
+        rect(im, 6,  oy + 8,  25, oy + 10, 13)   # red-hot top band
+        rect(im, 6,  oy + 18, 25, oy + 20, 6)    # gold-hot mid band
+        rect(im, 6,  oy + 27, 25, oy + 28, 13)   # red bottom band
+        # wide glowing cracks running top-to-bottom
+        for cx in (10, 16, 22):
+            rect(im, cx, oy + 8, cx + 1, oy + 28, 6)   # gold crack 2px wide
+        # spilling molten patches between the cracks
+        rect(im, 11, oy + 11, 14, oy + 17, 13)   # left molten pool
+        rect(im, 18, oy + 11, 22, oy + 17, 6)    # right gold pool
+        # glowing eyes (gold + white hot core)
+        rect(im, 12, oy + 5,  14, oy + 7, 6);   px(im, 13, oy + 6, 15)   # left eye
+        rect(im, 18, oy + 5,  20, oy + 7, 13);  px(im, 19, oy + 6, 15)   # right eye
+        # white-hot glints at the crack tips
+        px(im, 10, oy + 8, 15); px(im, 16, oy + 8, 15); px(im, 22, oy + 8, 15)
+    # ---- stubby legs / base ----
+    rect(im, 8,  oy + 28, 12, oy + 31, 11)   # left foot
+    rect(im, 19, oy + 28, 23, oy + 31, 11)   # right foot
+    rect(im, 6,  oy + 31, 25, oy + 31, 1)    # base shadow line
+
+def gen_slagshell():
+    """D2 Ember Caverns boss placeholder 32x(32*2) — TWO 32x32 frames (M13):
+    frame 0 = dark cooled-lava crust (armored, SpellExpose not triggered);
+    frame 1 = cracked/glowing molten core (exposed, player can wound).
+    Palette: stone grey (pal 12), dark brown/rock (pal 11), near-black (pal 1),
+    molten orange/gold (pal 6), red (pal 13), white glints (pal 15).
+    The exposed frame's brighter cracks + glowing eyes signal the wound window clearly."""
+    im = new_img(32, 32 * 2)
+    draw_slagshell_frame(im, 0, exposed=False)   # frame 0: armored crust
+    draw_slagshell_frame(im, 32, exposed=True)   # frame 1: cracked/glowing
+    write(im, "slagshell", {"type": "sprite", "height": 32})
+
+def gen_rock():
+    # M13: a falling rock for Slagshell's rockfall. 8x8 (the rock AttackPool scales 2x -> 16x16).
+    # Grey/brown boulder, distinct from the red boss_bolt so "falling debris" reads clearly.
+    im = new_img(8, 8)
+    rect(im, 1, 2, 6, 7, 2)                  # grey body
+    rect(im, 2, 1, 5, 2, 10)                 # brown top
+    px(im, 1, 2, 1); px(im, 6, 7, 1); px(im, 0, 4, 1); px(im, 7, 5, 1)  # dark edges
+    px(im, 3, 3, 15); px(im, 5, 5, 11)       # highlight + crack
+    write(im, "rock", {"type": "sprite"})
+
+def gen_rock_marker():
+    # M13: ground telegraph for the rockfall — a red crack/shadow at the column a rock is about to
+    # hit, shown during the warn delay so the drop is fair/dodgeable.
+    im = new_img(8, 8)
+    rect(im, 0, 6, 7, 7, 1)                  # dark shadow base
+    px(im, 1, 5, 13); px(im, 3, 4, 13); px(im, 5, 5, 13); px(im, 6, 6, 13)  # red crack zig-zag
+    px(im, 2, 6, 6); px(im, 4, 6, 6)         # gold-hot flecks
+    write(im, "rock_marker", {"type": "sprite"})
+
 def gen_grapple_icon():
     """Grapple HUD icon 8x8 — a green hook glyph, clearly distinct from the cyan Ice orb.
     Uses bright green (pal 4) + dark green (pal 5) + near-black outline (pal 1).
@@ -585,5 +660,8 @@ if __name__ == "__main__":
     gen_king()
     gen_king_hp()
     gen_guardian()
+    gen_slagshell()
+    gen_rock()
+    gen_rock_marker()
     gen_heart_container()
     print("placeholder sprites + bg tiles + hud + ember art generated.")
