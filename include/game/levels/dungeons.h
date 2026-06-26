@@ -3,7 +3,9 @@
 #include "game/levels/dungeon1_room0.h"
 #include "game/levels/dungeon1_room1.h"
 #include "game/levels/dungeon1_room2.h"
-#include "game/levels/dungeon2.h"
+#include "game/levels/dungeon2_room0.h"
+#include "game/levels/dungeon2_room1.h"
+#include "game/levels/dungeon2_room2.h"
 #include "game/levels/dungeon3.h"
 #include "game/levels/dungeon4.h"
 #include "game/levels/dungeon5.h"
@@ -27,8 +29,12 @@
 inline constexpr const logic::LevelData* DUNGEON1_ROOMS[] = {
     &DUNGEON1_ROOM0_DATA, &DUNGEON1_ROOM1_DATA, &DUNGEON1_ROOM2_DATA };
 inline constexpr logic::DungeonData DUNGEON1_DUNGEON{ DUNGEON1_ROOMS, 3, 0 };
-inline constexpr const logic::LevelData* DUNGEON2_ROOMS[] = { &DUNGEON2_DATA };
-inline constexpr logic::DungeonData DUNGEON2_DUNGEON{ DUNGEON2_ROOMS, 1, 0 };
+// DUNGEON2 — Ember Caverns (M13 restructure): room 0 = the Fire-spell puzzle (+ '@' spawn, hub-return
+// 'Q'); room 1 = the Slagshell boss arena (D2_DEF, SpellExpose+Fire, pacing, rockfall — fought on
+// entry; victory opens the onward door); room 2 = the spronk + exit.
+inline constexpr const logic::LevelData* DUNGEON2_ROOMS[] = {
+    &DUNGEON2_ROOM0_DATA, &DUNGEON2_ROOM1_DATA, &DUNGEON2_ROOM2_DATA };
+inline constexpr logic::DungeonData DUNGEON2_DUNGEON{ DUNGEON2_ROOMS, 3, 0 };
 inline constexpr const logic::LevelData* DUNGEON3_ROOMS[] = { &DUNGEON3_DATA };
 inline constexpr logic::DungeonData DUNGEON3_DUNGEON{ DUNGEON3_ROOMS, 1, 0 };
 inline constexpr const logic::LevelData* DUNGEON4_ROOMS[] = { &DUNGEON4_DATA };
