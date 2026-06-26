@@ -85,13 +85,13 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Phase 1 shipped 2026-06-26.
+**Overall:** Phases 1–3 shipped 2026-06-26.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure-logic framework (Locomotion + ROCKFALL + D2_DEF + rockfall_columns) | ✅ Shipped | d99dc45 (P1.1), 5402620 (P1.2) | host-tested; 445/445 green |
 | 2 — Art + engine rockfall emitter | ✅ Shipped | 93fcf7c (P2.1), ff28392 (P2.2) | ROM fixed!; 445/445 green; purity OK |
-| 3 — `run_room_boss` integration (sprite, pacing, crystal, rockfall) | ⬜ Not started | — | ROM-built |
+| 3 — `run_room_boss` integration (sprite, pacing, crystal, rockfall) | ✅ Shipped | 3aa2f24 (P3.1), 597fbba (P3.2), 07acf3e (P3.3), a4a39a9 (P3.4) | ROM fixed!; 445/445 green; purity OK |
 | 4 — D2 level restructure + invariants + QA | ⬜ Not started | — | host + emulator QA |
 
 ---
@@ -587,7 +587,7 @@ git commit -m "feat(engine): RockfallEmitter — fair-column ground telegraph + 
 
 ## Phase 3 — `run_room_boss` integration (sprite selector, pacing, magic crystal, rockfall)
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED — 3aa2f24 (Task 3.1: sprite selector), 597fbba (Task 3.2: pacing), 07acf3e (Task 3.3: magic crystal), a4a39a9 (Task 3.4: rockfall). 2026-06-26. ROM fixed!; 445/445 green; purity OK.
 
 **Why this matters:** this is where Slagshell comes alive. All ROM-built; behaviour confirmed in Phase 4 QA.
 
