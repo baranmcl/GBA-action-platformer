@@ -45,8 +45,10 @@ inline int health_fill_pips(int cur, int max){
 }
 
 // --- Lives HUD display --------------------------------------------------------
-// Cap on how many life-icon pips the HUD can show (enough for max_lives with 8
-// spronks: 3 base + 8 = 11; 12 leaves one slot of margin).
+// LEGACY: the HUD now renders lives as a single shield + an "xN" count (see engine/hud.cpp), so
+// these per-icon-cap helpers are no longer used in production. Retained only for the clamp unit test
+// (test/test_hud_math.cpp) and as the documented bound (max_lives with 8 spronks = 3 + 8 = 11; 12
+// leaves a slot of margin). Safe to delete with that test if the clamp is ever needed nowhere else.
 static constexpr int LIVES_HUD_CAP = 12;
 
 // How many life-icon pips to light: clamp lives to [0, cap].
