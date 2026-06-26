@@ -55,7 +55,11 @@ public:
 
     // Launch projectile in slot `idx`, a 12x12 body centred on (cx_px, cy_px) with
     // integer velocity (vx, vy) px/frame. (Slot addressing is safe because only ONE
-    // attack variant is live per Active window; clear() runs on expose/recovery/teleport.)
+    // attack variant is live per Active window; a later window's launch into the same
+    // slot simply overwrites any bolt still lingering there, and clear() runs on
+    // expose/teleport. NOTE: clear() is NOT called at Recovery — both consumers let
+    // in-flight bolts travel to the wall, so a fresh Active window may reuse a slot
+    // whose previous bolt is still mid-flight.)
     void launch(int idx, int cx_px, int cy_px, int vx, int vy);
 
     // Deactivate + hide every projectile (expose / recovery / teleport).

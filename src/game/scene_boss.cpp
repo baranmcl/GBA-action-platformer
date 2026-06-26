@@ -336,8 +336,12 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
                 }
                 if(current_attack == logic::BOSS_ATK_SPIRAL)           // spiral streams during Active
                     spiral.tick(attacks, king_cx(), king_cy());
-            } else { // Recovery
-                attacks.clear(); atk_spawned_this_active = false; telegraph.hide();
+            } else { // Recovery — let in-flight bolts KEEP travelling to the wall (AttackPool::advance
+                     // despawns them on solid geometry / off-arena); only reset the per-window spawn
+                     // latch + hide the cue. Clearing here was the "King bolts vanish before the wall"
+                     // bug — the SAME fix already applied to the D1 room boss. (A teleport / expose
+                     // still clears the pool, and a new Active window's launch overwrites its slots.)
+                atk_spawned_this_active = false; telegraph.hide();
             }
         }
 
