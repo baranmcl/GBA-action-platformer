@@ -404,7 +404,7 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
                         int rock_count = (b.phase == 0) ? 3 : 5;            // escalate in P2
                         rockfall.begin(player_tx, level.w, level.h, rock_count, rockfall_seed++);
                     } else if(current_attack != logic::BOSS_ATK_SPIRAL){
-                        int spd = (b.phase == 0) ? 3 : 4;   // a touch faster than the King — harder to outrun
+                        int spd = (b.phase == 0) ? 2 : 3;   // slower than D1 — readable to dodge alongside the rockfall
                         engine::spawn_attack(attacks, current_attack, boss_cx(), boss_cy(),
                                              pcx0, pcy0, spd, b.phase, /*aim_full=*/true);  // aim AT the player
                     }
@@ -477,8 +477,16 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
             logic::lose_life(world);
             engine::write_world(world);
             if(world.lives > 0){
+                // Full-fight restart on death, mirroring the intro: fade to black, reset player + boss
+                // (restart_fight -> on_player_death resets HP to max, phase 0, all timers), re-centre the
+                // camera, fade back in, then REPLAY the boss intro dialogue (user request).
+                engine::fade_out(16);
                 restart_fight();
-                engine::set_fade(16); fade_in_t = 16;
+                set_clamped_cam(player.body.pos.x.to_int() + player.body.half_w.to_int(),
+                                player.body.pos.y.to_int() + player.body.half_h.to_int());
+                engine::fade_in(16);
+                boss_say(level.boss->intro_line);
+                fade_in_t = 0;   // already faded in above
             } else {
                 return BossRoomOutcome::GameOver;   // caller's run_dungeon flow runs run_game_over
             }
