@@ -205,7 +205,7 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
 
     // M13 pacing: a Pacing boss walks the floor between the interior walls; Stationary bosses never move.
     int pace_dir = 1;                                            // +1 right, -1 left
-    const int PACE_SPEED = 1;                                    // px/frame (slow; tunable in QA)
+    const logic::Fixed PACE_VEL = logic::Fixed::from_raw(128);   // 0.5 px/frame (sub-pixel; slow pace, tunable)
     const int pace_min_cx = 8 + boss_body.half_w.to_int();              // just inside the left wall (col 1)
     const int pace_max_cx = (level.w - 1) * 8 - boss_body.half_w.to_int(); // just inside the right wall
 
@@ -362,10 +362,11 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         // Pacing (data-gated): move horizontally, reverse at the walls. Paused while EXPOSED so the clean
         // wound window doesn't also require tracking a moving target (mirrors the frozen-attack invariant).
         if(level.boss->locomotion == logic::Locomotion::Pacing && !b.exposed()){
-            int cx = boss_cx() + pace_dir * PACE_SPEED;
-            if(cx <= pace_min_cx){ cx = pace_min_cx; pace_dir = 1; }
-            else if(cx >= pace_max_cx){ cx = pace_max_cx; pace_dir = -1; }
-            boss_body.pos.x = fx(cx - boss_body.half_w.to_int());
+            // Sub-pixel accumulation so the pace can be slower than 1 px/frame (smooth, not 1px hops).
+            boss_body.pos.x = boss_body.pos.x + (pace_dir > 0 ? PACE_VEL : -PACE_VEL);
+            int cx = boss_cx();
+            if(cx <= pace_min_cx){ boss_body.pos.x = fx(pace_min_cx - boss_body.half_w.to_int()); pace_dir = 1; }
+            else if(cx >= pace_max_cx){ boss_body.pos.x = fx(pace_max_cx - boss_body.half_w.to_int()); pace_dir = -1; }
         }
 
         // ---- boss render: swap to the tired/slumped frame while EXPOSED (the tired window), then
