@@ -177,7 +177,9 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
     auto wy = [&](int px){ return px - hh; };
 
     // Start the fight at full HEALTH (a fair boss challenge), but CARRY the magic in from the previous
-    // room — magic persists between rooms (continuity); the in-room crystal is the refill safety net.
+    // room — magic persists between rooms (continuity). Magic is regained DURING the fight by blocking
+    // the boss's bolts with the expose spell (see block_spell below); death-restart refills it as the
+    // ultimate safety net.
     health.cur = health.max;
 
     int invuln = 0;
@@ -452,12 +454,17 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
             }
         }
 
-        // ---- defense: a data-described boss may make its bolts blockable by ONE spell (D2 Slagshell:
-        //      Fire). block_spell==None (D1) keeps the boss's bolts dodge-only (the free bolt never
-        //      blocks, so there's no bolt-spam auto-block). A Fire consumed blocking a bolt won't also
-        //      reach the boss to expose it (one cast = one use). Rocks are NOT blockable (dodge only).
-        if(level.boss->block_spell != logic::SpellId::None)
-            attacks.block_with_spell(spells, level.boss->block_spell);
+        // ---- defense + magic economy: a data-described boss may make its bolts blockable by ONE spell
+        //      (D2 Slagshell: Fire). Each block RECHARGES magic (BLOCK_MAGIC_CHARGE per bolt) — so
+        //      blocking IS how you sustain casting (this REPLACES the magic crystal). block_spell==None
+        //      (D1) keeps bolts dodge-only (the free bolt never blocks -> no bolt-spam auto-block). A
+        //      Fire consumed blocking a bolt won't also reach the boss to expose it (one cast = one use).
+        //      Rocks are NOT blockable (dodge only).
+        if(level.boss->block_spell != logic::SpellId::None){
+            constexpr int BLOCK_MAGIC_CHARGE = 25;   // magic regained per blocked bolt (Fire cast costs 10)
+            int blocked = attacks.block_with_spell(spells, level.boss->block_spell);
+            if(blocked) magic.heal(BLOCK_MAGIC_CHARGE * blocked);
+        }
 
         // ---- damage resolution (bolt/Fire/Ice wounds while vulnerable; elemental refills magic) ----
         engine::resolve_damage(b, boss_body, bolts, spells, magic, /*magic_heal=*/25);

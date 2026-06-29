@@ -202,12 +202,11 @@ TEST(d2_room2_has_cage_and_exit){
     CHECK(d2_tile(L, L.exit_tx, L.exit_ty+1) == 1);
 }
 
-// Room 1 has a magic crystal — keeps the player from magic-soft-locking in the boss fight.
-TEST(d2_room1_has_magic_crystal){
-    const LevelData& L = DUNGEON2_ROOM1_DATA;
-    CHECK(L.magic_crystal_count >= 1);
-    // Crystal is on the floor row (grounded).
-    CHECK(d2_tile(L, L.magic_crystals[0].tx, L.magic_crystals[0].ty+1) == 1);
+// Room 1 (boss arena) has NO magic crystal: magic is regained by BLOCKING Slagshell's bolts with Fire
+// (block_with_spell -> magic.heal), with death-restart as the ultimate refill. The crystal was removed
+// in QA in favour of the block-charge economy.
+TEST(d2_room1_no_magic_crystal){
+    CHECK_EQ(DUNGEON2_ROOM1_DATA.magic_crystal_count, 0);
 }
 
 // D2 room 0 has the lava row (the puzzle hallmark of Ember Caverns).
@@ -294,9 +293,8 @@ TEST(d2_room0_hub_door_reachable_from_spawn){
     std::printf("  [room0] hub-door-floor=%s onward-door-exists=%s\n", hub_door?"reach":"NO", onward_exists?"yes":"NO");
 }
 
-// 2. Room 1 (boss arena): from the room-1 entrance the arena floor is traversable and BOTH the
-//    magic crystal AND the onward door to room 2 are reachable (from entrance id 0).
-//    Break test: wall off the onward door -> d2_room1_onward_door_reachable goes RED.
+// 2. Room 1 (boss arena): from the room-1 entrance the arena floor is traversable and the onward door
+//    to room 2 is reachable (from entrance id 0). Break test: wall off the onward door -> RED.
 TEST(d2_room1_onward_door_reachable){
     const LevelData& L = DUNGEON2_ROOM1_DATA;
     int sx = room_start_x(L), sy = room_start_y(L);
@@ -305,10 +303,8 @@ TEST(d2_room1_onward_door_reachable){
     bool onward = false;
     for(int i=0;i<L.room_door_count;++i)
         if(L.room_doors[i].target_room==2 && stands_at(L, seen, L.room_doors[i].tx, L.room_doors[i].ty)) onward=true;
-    bool crystal = stands_at(L, seen, L.magic_crystals[0].tx, L.magic_crystals[0].ty);
     CHECK(onward);
-    CHECK(crystal);
-    std::printf("  [room1] onward-door(to room2)=%s crystal=%s\n", onward?"reach":"NO", crystal?"reach":"NO");
+    std::printf("  [room1] onward-door(to room2)=%s\n", onward?"reach":"NO");
 }
 
 // 3. Room 2 (spronk): from the room-2 entrance BOTH the caged spronk AND the exit are reachable

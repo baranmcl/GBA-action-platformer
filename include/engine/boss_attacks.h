@@ -102,16 +102,21 @@ public:
     // contact (consumes the shot). Unlike block_player_shots, the free BOLT does NOT block — so a
     // data-described boss (BossDef::block_spell) can make its bolts blockable by a single, magic-
     // costing spell (D2 Slagshell: Fire) without the bolt-spam auto-block. SpellId::None = no-op.
+    // Returns the NUMBER of boss projectiles blocked this frame, so the scene can reward the block
+    // (D2 recharges magic per block — the block IS the magic economy, replacing the crystal).
     template<typename SpellLike>
-    void block_with_spell(SpellLike& spells, logic::SpellId which){
-        if(which == logic::SpellId::None) return;
+    int block_with_spell(SpellLike& spells, logic::SpellId which){
+        if(which == logic::SpellId::None) return 0;
+        int blocked = 0;
         for(AttackInst& a : _pool){
             if(!a.active) continue;
             if(spells.consume_hit(a.body, which)){
                 a.active = false;
                 if(a.sprite) a.sprite->set_visible(false);
+                ++blocked;
             }
         }
+        return blocked;
     }
 
 private:
