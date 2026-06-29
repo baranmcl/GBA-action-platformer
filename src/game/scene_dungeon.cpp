@@ -176,9 +176,9 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
     auto wx = [&](int px){ return px - hw; };
     auto wy = [&](int px){ return px - hh; };
 
-    // Start the fight at full vitals (the boss room is its own self-contained challenge).
+    // Start the fight at full HEALTH (a fair boss challenge), but CARRY the magic in from the previous
+    // room — magic persists between rooms (continuity); the in-room crystal is the refill safety net.
     health.cur = health.max;
-    magic.cur  = magic.max;
 
     int invuln = 0;
     constexpr int RESPAWN_IFRAMES = 60;
@@ -452,18 +452,20 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
             }
         }
 
-        // NOTE: the D1 boss does NOT use the block defense (that's a King mechanic). Letting the player's
-        // free bolt destroy incoming boss bolts meant spamming B auto-blocked everything (the boss's
-        // bolts "didn't travel wall-to-wall") AND won the fight — QA r2. D1 must be DODGED: the boss's
-        // bolts now pass the player's shots and travel until a wall/floor, so the player must move.
+        // ---- defense: a data-described boss may make its bolts blockable by ONE spell (D2 Slagshell:
+        //      Fire). block_spell==None (D1) keeps the boss's bolts dodge-only (the free bolt never
+        //      blocks, so there's no bolt-spam auto-block). A Fire consumed blocking a bolt won't also
+        //      reach the boss to expose it (one cast = one use). Rocks are NOT blockable (dodge only).
+        if(level.boss->block_spell != logic::SpellId::None)
+            attacks.block_with_spell(spells, level.boss->block_spell);
 
         // ---- damage resolution (bolt/Fire/Ice wounds while vulnerable; elemental refills magic) ----
         engine::resolve_damage(b, boss_body, bolts, spells, magic, /*magic_heal=*/25);
 
         if(b.defeated()){
             boss_say(level.boss->death_line);
-            health.cur = health.max; magic.cur = magic.max;   // exit the fight at FULL vitals (reward +
-                                                              // avoids a low-HP death on the way to the spronk)
+            health.cur = health.max;   // exit at full HEALTH (reward); magic carries to the next room
+                                       // (continuity — see the entry note)
             return BossRoomOutcome::Victory;
         }
 

@@ -333,3 +333,10 @@ TEST(king_and_d1_are_stationary){
     CHECK((int)KING_DEF.locomotion == (int)Locomotion::Stationary);
     CHECK((int)D1_DEF.locomotion == (int)Locomotion::Stationary);
 }
+// M13 QA: D2's red bolts are blockable by Fire; D1 stays dodge-only and the King keeps its own
+// local block_player_shots (block_spell defaults None for both — regression on the new field).
+TEST(bossdef_block_spell){
+    CHECK((int)D2_DEF.block_spell == (int)SpellId::Fire);
+    CHECK((int)D1_DEF.block_spell == (int)SpellId::None);
+    CHECK((int)KING_DEF.block_spell == (int)SpellId::None);
+}

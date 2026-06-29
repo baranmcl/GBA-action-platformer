@@ -54,6 +54,8 @@ struct BossDef {
     const char* intro_line = nullptr;   // optional pre-fight dialogue (null = none)
     const char* death_line = nullptr;   // optional on-defeat dialogue (null = none)
     Locomotion  locomotion = Locomotion::Stationary;   // M13: Pacing = walks the floor (run_room_boss)
+    SpellId     block_spell = SpellId::None;            // M13: a player cast of this spell DESTROYS the
+                                                       // boss's bolts on contact (None = dodge-only).
 };
 
 // --- King attack masks + phase table (reproduces the SHIPPED Nightmare King). ---
@@ -100,7 +102,8 @@ inline constexpr BossDef D2_DEF{
     /*tired_after=*/0,
     /*intro_line=*/"You'll cook in my caverns.",
     /*death_line=*/"The embers...fade...",
-    /*locomotion=*/Locomotion::Pacing
+    /*locomotion=*/Locomotion::Pacing,
+    /*block_spell=*/SpellId::Fire        // Fire intercepts/destroys Slagshell's red bolts (M13 QA)
 };
 
 // Def-driven boss state. `phase` is an integer INDEX (0..phase_count-1) so the

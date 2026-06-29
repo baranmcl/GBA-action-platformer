@@ -98,6 +98,22 @@ public:
         }
     }
 
+    // Block with ONE spell only: a player cast of `which` destroys an incoming boss projectile on
+    // contact (consumes the shot). Unlike block_player_shots, the free BOLT does NOT block — so a
+    // data-described boss (BossDef::block_spell) can make its bolts blockable by a single, magic-
+    // costing spell (D2 Slagshell: Fire) without the bolt-spam auto-block. SpellId::None = no-op.
+    template<typename SpellLike>
+    void block_with_spell(SpellLike& spells, logic::SpellId which){
+        if(which == logic::SpellId::None) return;
+        for(AttackInst& a : _pool){
+            if(!a.active) continue;
+            if(spells.consume_hit(a.body, which)){
+                a.active = false;
+                if(a.sprite) a.sprite->set_visible(false);
+            }
+        }
+    }
+
 private:
     AttackInst _pool[CAP];
     int _half_w_px;
