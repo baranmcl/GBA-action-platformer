@@ -85,14 +85,24 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Phases 1–4 shipped 2026-06-26.
+**Overall:** ✅ Phases 1–4 shipped + emulator QA r1 passed (user-confirmed "feels good") 2026-06-26..29. 453/453 host tests, ROM builds, purity OK. Ready for final review + merge.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure-logic framework (Locomotion + ROCKFALL + D2_DEF + rockfall_columns) | ✅ Shipped | d99dc45 (P1.1), 5402620 (P1.2) | host-tested; 445/445 green |
 | 2 — Art + engine rockfall emitter | ✅ Shipped | 93fcf7c (P2.1), ff28392 (P2.2) | ROM fixed!; 445/445 green; purity OK |
 | 3 — `run_room_boss` integration (sprite, pacing, crystal, rockfall) | ✅ Shipped | 3aa2f24 (P3.1), 597fbba (P3.2), 07acf3e (P3.3), a4a39a9 (P3.4) | ROM fixed!; 445/445 green; purity OK |
-| 4 — D2 level restructure + invariants + QA | ✅ Shipped | 9eb7498 (P4.1), a13c13d (P4.2), 465be84 (P4.3), a2aa831 (P4.4) | ROM fixed!; 452/452 green; purity OK |
+| 4 — D2 level restructure + invariants + QA | ✅ Shipped + QA passed | 9eb7498 (P4.1), a13c13d (P4.2), 465be84 (P4.3), a2aa831 (P4.4) + QA r1 | ROM fixed!; 453/453 green; purity OK |
+
+### Deviations (QA r1, emulator — user-confirmed)
+- **Magic continuity:** dropped the full-magic refill on boss-room ENTRY and VICTORY — magic now CARRIES between rooms (health still tops up for a fair fight). Death-restart still refills.
+- **Block-to-charge replaces the crystal:** the magic crystal was REMOVED from the D2 arena. Instead, blocking a boss bolt with the expose spell RECHARGES magic — new `BossDef::block_spell` (D2=Fire) + `AttackPool::block_with_spell` (returns block count) + `run_room_boss` heals +25/block. The free bolt never blocks (no spam auto-block). `test_dungeon2_level` now asserts the arena has NO crystal. (Crystal handling kept dormant in `run_room_boss` for future bosses.)
+- **`next_attack_for_phase` ORDER 3→4** (Phase 3): required so `BOSS_ATK_ROCKFALL` (bit 3) can be selected; verified to leave D1/King cycling identical.
+- **Tuning:** fireball speed 3/4→2/3; Slagshell pace 1→0.5 px/frame (sub-pixel `Fixed`); intro dialogue replays on death-restart; `restart_fight` re-centers the pacing boss (no wall-pin respawn); magic crystal grounded (pre-removal fix).
+
+### Discoveries
+- Pacing bosses need their position reset on death-restart (a stationary/teleport boss doesn't) — the "vanished/pinned on death" bug. Fixed via `place_boss()` in `restart_fight`.
+- `objcopy: Invalid argument` on the `.gba` = the file is locked by an open emulator; close mGBA before rebuilding.
 
 ---
 
