@@ -121,6 +121,57 @@ void SpiralEmitter::tick(AttackPool& pool, int boss_cx, int boss_cy){
 }
 
 // ---------------------------------------------------------------------------
+// RockfallEmitter
+// ---------------------------------------------------------------------------
+RockfallEmitter::RockfallEmitter(const bn::sprite_item& marker_item, const bn::camera_ptr& cam,
+                                 int map_px_w, int map_px_h)
+    : _half_w_px(map_px_w / 2), _half_h_px(map_px_h / 2)
+{
+    for(int i = 0; i < MAXCOLS; ++i){
+        _markers.push_back(marker_item.create_sprite(0, 0));
+        _markers[i].set_camera(cam);
+        _markers[i].set_visible(false);
+    }
+}
+
+void RockfallEmitter::begin(int player_tx, int arena_w_tiles, int arena_h_tiles, int count, int seed){
+    _dropped = false;
+    _warn = WARN_FRAMES;
+    if(count > MAXCOLS) count = MAXCOLS;
+    _col_count = logic::rockfall_columns(player_tx, arena_w_tiles, count, seed, _cols, MAXCOLS);
+    // show a ground marker at each target column, resting on the floor surface (row h-2).
+    const int floor_y = (arena_h_tiles - 2) * 8;
+    for(int i = 0; i < MAXCOLS; ++i){
+        bool on = i < _col_count;
+        if(on) _markers[i].set_position(_cols[i] * 8 + 4 - _half_w_px, floor_y - _half_h_px);
+        _markers[i].set_visible(on);
+    }
+}
+
+void RockfallEmitter::tick(AttackPool& rocks){
+    if(_dropped) return;
+    if(--_warn > 0) return;
+    // warn elapsed: drop one rock per column from the ceiling (row 1), hide the markers.
+    for(int i = 0; i < _col_count; ++i)
+        rocks.launch(i, _cols[i] * 8 + 4, 8 + 6, 0, ROCK_VY);   // ceiling, straight down
+    for(int i = 0; i < MAXCOLS; ++i) _markers[i].set_visible(false);
+    _dropped = true;
+}
+
+void RockfallEmitter::clear(){
+    for(int i = 0; i < MAXCOLS; ++i) _markers[i].set_visible(false);
+    _col_count = 0; _warn = 0; _dropped = false;
+}
+
+int RockfallEmitter::leap_offset() const {
+    if(_dropped || _warn <= 0) return 0;
+    int t = WARN_FRAMES - _warn;                 // frames since the leap began (0..WARN_FRAMES)
+    int peak = WARN_FRAMES / 2;
+    int d = (t < peak) ? t : (WARN_FRAMES - t);  // triangle: rise to the peak, fall back down
+    return d;                                     // ~0..13 px (cosmetic)
+}
+
+// ---------------------------------------------------------------------------
 // TelegraphCue
 // ---------------------------------------------------------------------------
 TelegraphCue::TelegraphCue(const bn::sprite_item& fallback_item, const bn::camera_ptr& cam,

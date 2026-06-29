@@ -22,6 +22,9 @@
 #include "bn_sprite_items_heart_container.h"
 #include "bn_sprite_items_magic_crystal.h"
 #include "bn_sprite_items_guardian.h"   // M12: per-dungeon boss sprite (D1 Whispering Woods Guardian, 2 frames)
+#include "bn_sprite_items_slagshell.h" // M13: D2 Ember Caverns boss sprite (Slagshell, 2 frames)
+#include "bn_sprite_items_rock.h"      // M13: falling rock for Slagshell's rockfall attack
+#include "bn_sprite_items_rock_marker.h" // M13: ground crack-telegraph for the rockfall
 #include "bn_sprite_tiles_item.h"       // M12 QA r1: swap guardian frame 1 (tired pose) during the tired window
 #include "bn_sprite_tiles_ptr.h"        // complete type for set_tiles(create_tiles(...))
 #include "bn_sprite_text_generator.h"   // M12 QA r1: data-driven boss intro/death dialogue (run_room_boss)
@@ -141,6 +144,15 @@ namespace
 }
 
 // ---------------------------------------------------------------------------
+// Map a boss def to its 2-frame sprite (frame 0 = normal/armored, frame 1 = exposed/vulnerable).
+// Pointer-compare against the canonical def symbols (BossDef is pure logic -> can't name bn:: items).
+// Extend per new per-dungeon boss.
+static const bn::sprite_item& boss_sprite_for(const logic::BossDef* def){
+    if(def == &logic::D2_DEF) return bn::sprite_items::slagshell;
+    return bn::sprite_items::guardian;   // D1 (default)
+}
+
+// ---------------------------------------------------------------------------
 // run_room_boss — a self-contained boss fight that uses the dungeon ROOM as the arena, for any room
 // whose LevelData::boss is non-null (M12). It is a NEW thin consumer of the boss framework, PARALLEL
 // to the King's scene_boss.cpp run_boss (NOT a shared monolith): its own fight loop driving
@@ -164,9 +176,11 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
     auto wx = [&](int px){ return px - hw; };
     auto wy = [&](int px){ return px - hh; };
 
-    // Start the fight at full vitals (the boss room is its own self-contained challenge).
+    // Start the fight at full HEALTH (a fair boss challenge), but CARRY the magic in from the previous
+    // room — magic persists between rooms (continuity). Magic is regained DURING the fight by blocking
+    // the boss's bolts with the expose spell (see block_spell below); death-restart refills it as the
+    // ultimate safety net.
     health.cur = health.max;
-    magic.cur  = magic.max;
 
     int invuln = 0;
     constexpr int RESPAWN_IFRAMES = 60;
@@ -191,7 +205,14 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
     auto boss_cx = [&]{ return boss_body.pos.x.to_int() + boss_body.half_w.to_int(); };
     auto boss_cy = [&]{ return boss_body.pos.y.to_int() + boss_body.half_h.to_int(); };
 
-    bn::sprite_ptr boss_spr = bn::sprite_items::guardian.create_sprite(0, 0);
+    // M13 pacing: a Pacing boss walks the floor between the interior walls; Stationary bosses never move.
+    int pace_dir = 1;                                            // +1 right, -1 left
+    const logic::Fixed PACE_VEL = logic::Fixed::from_raw(128);   // 0.5 px/frame (sub-pixel; slow pace, tunable)
+    const int pace_min_cx = 8 + boss_body.half_w.to_int();              // just inside the left wall (col 1)
+    const int pace_max_cx = (level.w - 1) * 8 - boss_body.half_w.to_int(); // just inside the right wall
+
+    const bn::sprite_item& boss_item = boss_sprite_for(level.boss);
+    bn::sprite_ptr boss_spr = boss_item.create_sprite(0, 0);
     boss_spr.set_camera(cam);
     boss_spr.set_position(wx(boss_cx()), wy(boss_cy()));
     int boss_frame = 0;   // 0 = normal, 1 = tired/slumped (shown while exposed); track to swap tiles only on change
@@ -201,6 +222,10 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
 
     // ---- attacks (shared library pool) ----
     engine::AttackPool attacks(bn::sprite_items::boss_bolt, cam, lvl.view.map_px_w, lvl.view.map_px_h);
+    engine::AttackPool rocks(bn::sprite_items::rock, cam, lvl.view.map_px_w, lvl.view.map_px_h);
+    engine::RockfallEmitter rockfall(bn::sprite_items::rock_marker, cam,
+                                     lvl.view.map_px_w, lvl.view.map_px_h);
+    int rockfall_seed = 0;   // rolling counter -> varied rock spreads
     engine::SpiralEmitter spiral;
     bool atk_spawned_this_active = false;
     int current_attack = logic::BOSS_ATK_AIMED;   // the attack firing during the CURRENT Active window
@@ -209,15 +234,33 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
     engine::TelegraphCue telegraph(bn::sprite_items::fire_proj, cam,
                                    lvl.view.map_px_w, lvl.view.map_px_h);
 
-    // Pick the next attack variant from the bits set in the active phase's mask (cycles AIMED->SPIRAL->FAN,
-    // skipping bits not present). For D1: P1 = {AIMED}, P2 = {AIMED, FAN}.
+    // Respawning magic crystal (M10/King pattern): full refill on touch; reappears once magic is spent
+    // below one cast, so a SpellExpose room boss (Fire to expose) can never magic-soft-lock.
+    bool crystal_collected = false;
+    bn::optional<bn::sprite_ptr> crystal_sprite;
+    int crystal_tx = 0, crystal_ty = 0;
+    if(level.magic_crystal_count > 0){
+        const logic::MagicCrystalSpawn& mc = level.magic_crystals[0];
+        crystal_tx = mc.tx; crystal_ty = mc.ty;
+        crystal_sprite = bn::sprite_items::magic_crystal.create_sprite(0, 0);
+        crystal_sprite->set_camera(cam);
+        // Ground the 16x16 crystal sprite on the floor surface (bottom rests on it), like the cage/
+        // exit/heart-container do. The King's `mc.ty*8+8` tile-centre assumed a floor-2-below layout;
+        // D2's arena floor is 1 row below the crystal row, so that sank the sprite INTO the floor.
+        int crystal_fr = floor_row_below(lvl.map, mc.tx, mc.ty);
+        crystal_sprite->set_position(wx(mc.tx * 8 + 8), wy(crystal_fr * 8 - 8));
+    }
+    logic::Body crystal_body = tile_body(crystal_tx, crystal_ty, 6, 8);
+
+    // Pick the next attack variant from the bits set in the active phase's mask (cycles AIMED->SPIRAL->FAN->ROCKFALL,
+    // skipping bits not present). For D1: P1 = {AIMED}, P2 = {AIMED, FAN}. D2: {AIMED, ROCKFALL}.
     auto next_attack_for_phase = [&](int& slot)->int{
         const uint8_t mask = level.boss->phases[b.phase].attacks;
-        static constexpr int ORDER[3] = {
-            logic::BOSS_ATK_AIMED, logic::BOSS_ATK_SPIRAL, logic::BOSS_ATK_FAN };
-        for(int step = 0; step < 3; ++step){
-            int idx = (slot + step) % 3;
-            if(mask & ORDER[idx]){ slot = (idx + 1) % 3; return ORDER[idx]; }
+        static constexpr int ORDER[4] = {
+            logic::BOSS_ATK_AIMED, logic::BOSS_ATK_SPIRAL, logic::BOSS_ATK_FAN, logic::BOSS_ATK_ROCKFALL };
+        for(int step = 0; step < 4; ++step){
+            int idx = (slot + step) % 4;
+            if(mask & ORDER[idx]){ slot = (idx + 1) % 4; return ORDER[idx]; }
         }
         return logic::BOSS_ATK_AIMED;   // mask should never be empty
     };
@@ -265,6 +308,8 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
     // full-fight restart (death with lives left, or Game-Over Continue from the caller's flow)
     auto restart_fight = [&]{
         b.on_player_death();                       // BossState -> phase 0, full HP, timers cleared
+        place_boss(); pace_dir = 1;                // re-centre a Pacing boss so the player never
+                                                   // respawns ON TOP of it at the entrance (M13 QA)
         health.cur = health.max; magic.cur = magic.max;
         player.body.pos = spawn_pos; player.body.vel = { fx(0), fx(0) };
         player.body.on_ground = false;
@@ -277,6 +322,8 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         attacks.clear(); atk_spawned_this_active = false;
         attack_slot = 0; current_attack = logic::BOSS_ATK_AIMED; spiral = engine::SpiralEmitter{};
         telegraph.hide();
+        rocks.clear(); rockfall.clear();
+        crystal_collected = false; if(crystal_sprite) crystal_sprite->set_visible(true);
     };
 
     // Settle the player onto the floor before fading in (parallel to the King intro).
@@ -314,12 +361,22 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         // ---- boss logic tick ----
         b.tick();
 
+        // Pacing (data-gated): move horizontally, reverse at the walls. Paused while EXPOSED so the clean
+        // wound window doesn't also require tracking a moving target (mirrors the frozen-attack invariant).
+        if(level.boss->locomotion == logic::Locomotion::Pacing && !b.exposed()){
+            // Sub-pixel accumulation so the pace can be slower than 1 px/frame (smooth, not 1px hops).
+            boss_body.pos.x = boss_body.pos.x + (pace_dir > 0 ? PACE_VEL : -PACE_VEL);
+            int cx = boss_cx();
+            if(cx <= pace_min_cx){ boss_body.pos.x = fx(pace_min_cx - boss_body.half_w.to_int()); pace_dir = 1; }
+            else if(cx >= pace_max_cx){ boss_body.pos.x = fx(pace_max_cx - boss_body.half_w.to_int()); pace_dir = -1; }
+        }
+
         // ---- boss render: swap to the tired/slumped frame while EXPOSED (the tired window), then
         //      blink/telegraph-pulse for emphasis. Frame swap only on change (no per-frame set_tiles). ----
-        boss_spr.set_position(wx(boss_cx()), wy(boss_cy()));
+        boss_spr.set_position(wx(boss_cx()), wy(boss_cy()) - rockfall.leap_offset());
         int want_frame = b.exposed() ? 1 : 0;   // TiredWindow: exposed() == the tired window
         if(want_frame != boss_frame){
-            boss_spr.set_tiles(bn::sprite_items::guardian.tiles_item().create_tiles(want_frame));
+            boss_spr.set_tiles(boss_item.tiles_item().create_tiles(want_frame));
             boss_frame = want_frame;
         }
         if(b.exposed())                                       boss_spr.set_visible((b.expose_timer / 4) % 2 == 0);
@@ -328,7 +385,7 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
 
         // ---- attack telegraph + spawn (skipped while EXPOSED = a clean damage window) ----
         if(b.exposed()){
-            attacks.clear(); atk_spawned_this_active = false; telegraph.hide();
+            attacks.clear(); rockfall.clear(); atk_spawned_this_active = false; telegraph.hide();
         } else {
             logic::AttackStep step = b.current_step();
             if(step == logic::AttackStep::Telegraph){
@@ -345,8 +402,12 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
                     int pcx0 = player.body.pos.x.to_int() + player.body.half_w.to_int();
                     int pcy0 = player.body.pos.y.to_int() + player.body.half_h.to_int();
                     spiral.begin(boss_cx(), pcx0);
-                    if(current_attack != logic::BOSS_ATK_SPIRAL){
-                        int spd = (b.phase == 0) ? 3 : 4;   // a touch faster than the King — harder to outrun
+                    if(current_attack == logic::BOSS_ATK_ROCKFALL){
+                        int player_tx = (player.body.pos.x.to_int() + player.body.half_w.to_int()) / 8;
+                        int rock_count = (b.phase == 0) ? 3 : 5;            // escalate in P2
+                        rockfall.begin(player_tx, level.w, level.h, rock_count, rockfall_seed++);
+                    } else if(current_attack != logic::BOSS_ATK_SPIRAL){
+                        int spd = (b.phase == 0) ? 2 : 3;   // slower than D1 — readable to dodge alongside the rockfall
                         engine::spawn_attack(attacks, current_attack, boss_cx(), boss_cy(),
                                              pcx0, pcy0, spd, b.phase, /*aim_full=*/true);  // aim AT the player
                     }
@@ -354,10 +415,11 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
                 }
                 if(current_attack == logic::BOSS_ATK_SPIRAL)
                     spiral.tick(attacks, boss_cx(), boss_cy());
+                if(current_attack == logic::BOSS_ATK_ROCKFALL) rockfall.tick(rocks);
             } else { // Recovery — do NOT clear in-flight bolts: they must keep flying until they hit a
                      // wall (else a stationary boss's shots vanish mid-arena when the cycle ends — the QA
                      // bug where bolts "didn't reach the wall"). They despawn naturally in advance().
-                atk_spawned_this_active = false; telegraph.hide();
+                atk_spawned_this_active = false; telegraph.hide(); rockfall.clear();
             }
         }
 
@@ -365,6 +427,10 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         bool proj_hit = attacks.advance(player.body, level.w * 8, level.h * 8,
                                         invuln != 0 || player.dash.invincible(), lvl.map);
         if(proj_hit){ health.damage(20); invuln = 45; }
+
+        bool rock_hit = rocks.advance(player.body, level.w * 8, level.h * 8,
+                                      invuln != 0 || player.dash.invincible(), lvl.map);
+        if(rock_hit){ health.damage(20); invuln = 45; }
 
         // ---- boss contact damage ----
         if(invuln == 0 && !player.dash.invincible() && logic::aabb_overlap(player.body, boss_body)){
@@ -377,18 +443,36 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         bolts.update(in.fire_pressed, muzzle, player.facing, lvl.map);
         spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);
 
-        // NOTE: the D1 boss does NOT use the block defense (that's a King mechanic). Letting the player's
-        // free bolt destroy incoming boss bolts meant spamming B auto-blocked everything (the boss's
-        // bolts "didn't travel wall-to-wall") AND won the fight — QA r2. D1 must be DODGED: the boss's
-        // bolts now pass the player's shots and travel until a wall/floor, so the player must move.
+        // magic crystal: full refill on overlap; reappears once magic drops below one cast (repeatable).
+        if(level.magic_crystal_count > 0){
+            if(!crystal_collected && logic::aabb_overlap(player.body, crystal_body)){
+                magic.cur = magic.max; crystal_collected = true;
+                if(crystal_sprite) crystal_sprite->set_visible(false);
+            }
+            if(crystal_collected && magic.cur < 10){
+                crystal_collected = false; if(crystal_sprite) crystal_sprite->set_visible(true);
+            }
+        }
+
+        // ---- defense + magic economy: a data-described boss may make its bolts blockable by ONE spell
+        //      (D2 Slagshell: Fire). Each block RECHARGES magic (BLOCK_MAGIC_CHARGE per bolt) — so
+        //      blocking IS how you sustain casting (this REPLACES the magic crystal). block_spell==None
+        //      (D1) keeps bolts dodge-only (the free bolt never blocks -> no bolt-spam auto-block). A
+        //      Fire consumed blocking a bolt won't also reach the boss to expose it (one cast = one use).
+        //      Rocks are NOT blockable (dodge only).
+        if(level.boss->block_spell != logic::SpellId::None){
+            constexpr int BLOCK_MAGIC_CHARGE = 25;   // magic regained per blocked bolt (Fire cast costs 10)
+            int blocked = attacks.block_with_spell(spells, level.boss->block_spell);
+            if(blocked) magic.heal(BLOCK_MAGIC_CHARGE * blocked);
+        }
 
         // ---- damage resolution (bolt/Fire/Ice wounds while vulnerable; elemental refills magic) ----
         engine::resolve_damage(b, boss_body, bolts, spells, magic, /*magic_heal=*/25);
 
         if(b.defeated()){
             boss_say(level.boss->death_line);
-            health.cur = health.max; magic.cur = magic.max;   // exit the fight at FULL vitals (reward +
-                                                              // avoids a low-HP death on the way to the spronk)
+            health.cur = health.max;   // exit at full HEALTH (reward); magic carries to the next room
+                                       // (continuity — see the entry note)
             return BossRoomOutcome::Victory;
         }
 
@@ -403,8 +487,16 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
             logic::lose_life(world);
             engine::write_world(world);
             if(world.lives > 0){
+                // Full-fight restart on death, mirroring the intro: fade to black, reset player + boss
+                // (restart_fight -> on_player_death resets HP to max, phase 0, all timers), re-centre the
+                // camera, fade back in, then REPLAY the boss intro dialogue (user request).
+                engine::fade_out(16);
                 restart_fight();
-                engine::set_fade(16); fade_in_t = 16;
+                set_clamped_cam(player.body.pos.x.to_int() + player.body.half_w.to_int(),
+                                player.body.pos.y.to_int() + player.body.half_h.to_int());
+                engine::fade_in(16);
+                boss_say(level.boss->intro_line);
+                fade_in_t = 0;   // already faded in above
             } else {
                 return BossRoomOutcome::GameOver;   // caller's run_dungeon flow runs run_game_over
             }

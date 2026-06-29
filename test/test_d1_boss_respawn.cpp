@@ -4,6 +4,9 @@
 #include "game/levels/dungeon1_room0.h"
 #include "game/levels/dungeon1_room1.h"
 #include "game/levels/dungeon1_room2.h"
+#include "game/levels/dungeon2_room0.h"
+#include "game/levels/dungeon2_room1.h"
+#include "game/levels/dungeon2_room2.h"
 using namespace logic;
 
 // M12 QA r2 — the D1 boss arena (room 1) respawn must settle the player ON the floor, not let them
@@ -79,4 +82,13 @@ TEST(d1_all_entrances_settle_on_floor){
     check_entrance_settles(DUNGEON1_ROOM0_DATA, "room0");
     check_entrance_settles(DUNGEON1_ROOM1_DATA, "room1");
     check_entrance_settles(DUNGEON1_ROOM2_DATA, "room2");
+}
+
+// M13 — D2 Slagshell boss arena (room 1) and spronk room (room 2) respawn settle.
+// Mirrors d1_all_entrances_settle_on_floor: every D2 entrance must ground the player body
+// without embedding it in a solid tile (fall-through soft-lock protection).
+TEST(d2_all_entrances_settle_on_floor){
+    check_entrance_settles(DUNGEON2_ROOM0_DATA, "d2-room0");
+    check_entrance_settles(DUNGEON2_ROOM1_DATA, "d2-room1");
+    check_entrance_settles(DUNGEON2_ROOM2_DATA, "d2-room2");
 }

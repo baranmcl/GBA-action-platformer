@@ -51,6 +51,7 @@ ABILITY_ENUM = {
 # name->symbol map; an unknown name is a compile error. D1_DEF is THE canonical symbol name.
 BOSS_SYMBOL = {
     'd1': 'logic::D1_DEF',
+    'd2': 'logic::D2_DEF',
 }
 CONTENT = set('@CEoG123456789VIWXFBPK=?*NDQHkO:h$')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door, 'Q' exit-to-hub door (target_room=-1); 'H' heart container; 'k' cracked-floor gate (M8, Stone); 'O' boulder (M8); ':' loose platform (M8); 'h' hidden platform (M10); '$' magic crystal (M10)
 

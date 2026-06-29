@@ -1,0 +1,5 @@
+{ "tileset": "tiles",
+  "boss": "d2",
+  "entrances": [ { "id": 0, "facing": 1 }, { "id": 1, "facing": -1 } ],
+  "room_doors": [ { "target_room": 0, "target_entrance": 1 },
+                  { "target_room": 2, "target_entrance": 0 } ] }

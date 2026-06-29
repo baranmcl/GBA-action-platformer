@@ -8,6 +8,7 @@
 #include "logic/vec2.h"      // logic::Vec2
 #include "logic/tilemap.h"   // logic::Tilemap (boss bolts despawn on a solid wall/floor)
 #include "logic/boss.h"      // logic::BossState / BossDef / BOSS_ATK_* (SINGLE SOURCE of attack bits)
+#include "logic/rockfall.h"  // logic::rockfall_columns (M13 fair-column picker)
 
 namespace engine {
 
@@ -97,6 +98,27 @@ public:
         }
     }
 
+    // Block with ONE spell only: a player cast of `which` destroys an incoming boss projectile on
+    // contact (consumes the shot). Unlike block_player_shots, the free BOLT does NOT block — so a
+    // data-described boss (BossDef::block_spell) can make its bolts blockable by a single, magic-
+    // costing spell (D2 Slagshell: Fire) without the bolt-spam auto-block. SpellId::None = no-op.
+    // Returns the NUMBER of boss projectiles blocked this frame, so the scene can reward the block
+    // (D2 recharges magic per block — the block IS the magic economy, replacing the crystal).
+    template<typename SpellLike>
+    int block_with_spell(SpellLike& spells, logic::SpellId which){
+        if(which == logic::SpellId::None) return 0;
+        int blocked = 0;
+        for(AttackInst& a : _pool){
+            if(!a.active) continue;
+            if(spells.consume_hit(a.body, which)){
+                a.active = false;
+                if(a.sprite) a.sprite->set_visible(false);
+                ++blocked;
+            }
+        }
+        return blocked;
+    }
+
 private:
     AttackInst _pool[CAP];
     int _half_w_px;
@@ -135,6 +157,44 @@ struct SpiralEmitter {
 
     // Tick: emit the next arm (if due) into `pool` from (boss_cx, boss_cy).
     void tick(AttackPool& pool, int boss_cx, int boss_cy);
+};
+
+// -----------------------------------------------------------------------------
+// RockfallEmitter — Slagshell's jump-rockfall. begin() picks fair columns (logic::rockfall_columns)
+// and shows a ground crack-marker at each for a warn delay; tick() drops rocks from the ceiling into
+// the supplied rock AttackPool when the warn elapses (one drop per window). Markers are screen-fixed
+// to the camera like the bolt VFX. clear() hides markers + resets (call on fight restart).
+// -----------------------------------------------------------------------------
+class RockfallEmitter {
+public:
+    static constexpr int MAXCOLS = 6;     // P2 uses up to 5; one slot of margin
+    static constexpr int WARN_FRAMES = 26;// telegraph before rocks drop. INVARIANT: must be < the
+                                          // rockfall phase's attack_active_frames (D2 = 30) so the
+                                          // drop lands inside the Active window (tick runs only in Active).
+    static constexpr int ROCK_VY = 3;     // downward px/frame
+
+    RockfallEmitter(const bn::sprite_item& marker_item, const bn::camera_ptr& cam,
+                    int map_px_w, int map_px_h);
+
+    // Pick columns + show markers + start the warn timer. count = rocks this window (3 P1 / 5 P2);
+    // seed = a rolling counter for variety. arena_*_tiles = level.w / level.h.
+    void begin(int player_tx, int arena_w_tiles, int arena_h_tiles, int count, int seed);
+    // Advance the warn timer; when it elapses, launch rocks from the ceiling into `rocks` (once) and
+    // hide the markers. Call each frame while the rockfall attack is the live Active attack.
+    void tick(AttackPool& rocks);
+    void clear();
+    // Cosmetic: the boss's "leap" height this frame (a triangle arc peaking mid-warn), 0 when
+    // grounded/idle. run_room_boss subtracts it from the boss sprite's y so the rockfall reads as a
+    // JUMP (the user-requested move). 0 outside a rockfall warn -> applying it always is a no-op then.
+    int leap_offset() const;
+
+private:
+    bn::vector<bn::sprite_ptr, MAXCOLS> _markers;
+    int _cols[MAXCOLS];
+    int _col_count = 0;
+    int _warn = 0;
+    bool _dropped = false;
+    int _half_w_px, _half_h_px;
 };
 
 // -----------------------------------------------------------------------------
