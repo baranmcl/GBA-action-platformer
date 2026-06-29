@@ -242,7 +242,11 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         crystal_tx = mc.tx; crystal_ty = mc.ty;
         crystal_sprite = bn::sprite_items::magic_crystal.create_sprite(0, 0);
         crystal_sprite->set_camera(cam);
-        crystal_sprite->set_position(wx(mc.tx * 8 + 8), wy(mc.ty * 8 + 8));
+        // Ground the 16x16 crystal sprite on the floor surface (bottom rests on it), like the cage/
+        // exit/heart-container do. The King's `mc.ty*8+8` tile-centre assumed a floor-2-below layout;
+        // D2's arena floor is 1 row below the crystal row, so that sank the sprite INTO the floor.
+        int crystal_fr = floor_row_below(lvl.map, mc.tx, mc.ty);
+        crystal_sprite->set_position(wx(mc.tx * 8 + 8), wy(crystal_fr * 8 - 8));
     }
     logic::Body crystal_body = tile_body(crystal_tx, crystal_ty, 6, 8);
 
@@ -302,6 +306,8 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
     // full-fight restart (death with lives left, or Game-Over Continue from the caller's flow)
     auto restart_fight = [&]{
         b.on_player_death();                       // BossState -> phase 0, full HP, timers cleared
+        place_boss(); pace_dir = 1;                // re-centre a Pacing boss so the player never
+                                                   // respawns ON TOP of it at the entrance (M13 QA)
         health.cur = health.max; magic.cur = magic.max;
         player.body.pos = spawn_pos; player.body.vel = { fx(0), fx(0) };
         player.body.on_ground = false;
