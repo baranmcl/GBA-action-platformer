@@ -135,7 +135,6 @@ RockfallEmitter::RockfallEmitter(const bn::sprite_item& marker_item, const bn::c
 }
 
 void RockfallEmitter::begin(int player_tx, int arena_w_tiles, int arena_h_tiles, int count, int seed){
-    _arena_h_tiles = arena_h_tiles;
     _dropped = false;
     _warn = WARN_FRAMES;
     if(count > MAXCOLS) count = MAXCOLS;

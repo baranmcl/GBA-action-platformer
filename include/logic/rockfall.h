@@ -21,7 +21,8 @@ inline int rockfall_columns(int player_tx, int arena_w_tiles, int count, int see
 
     int tmp[16]; int n = 0;
     auto add = [&](int x){
-        if(x < lo) x = lo; if(x > hi) x = hi;
+        if(x < lo) x = lo;
+        if(x > hi) x = hi;
         for(int i = 0; i < n; ++i) if(tmp[i] == x) return;   // distinct
         if(n < 16) tmp[n++] = x;
     };

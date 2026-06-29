@@ -194,7 +194,6 @@ private:
     int _col_count = 0;
     int _warn = 0;
     bool _dropped = false;
-    int _arena_h_tiles = 0;
     int _half_w_px, _half_h_px;
 };
 
