@@ -23,6 +23,7 @@
 #include "bn_sprite_items_magic_crystal.h"
 #include "bn_sprite_items_guardian.h"   // M12: per-dungeon boss sprite (D1 Whispering Woods Guardian, 2 frames)
 #include "bn_sprite_items_slagshell.h" // M13: D2 Ember Caverns boss sprite (Slagshell, 2 frames)
+#include "bn_sprite_items_coldforge.h" // M14: D3 Frost Hollow boss sprite (Coldforge Twins, 4 frames)
 #include "bn_sprite_items_rock.h"      // M13: falling rock for Slagshell's rockfall attack
 #include "bn_sprite_items_rock_marker.h" // M13: ground crack-telegraph for the rockfall
 #include "bn_sprite_tiles_item.h"       // M12 QA r1: swap guardian frame 1 (tired pose) during the tired window
@@ -149,6 +150,7 @@ namespace
 // Extend per new per-dungeon boss.
 static const bn::sprite_item& boss_sprite_for(const logic::BossDef* def){
     if(def == &logic::D2_DEF) return bn::sprite_items::slagshell;
+    if(def == &logic::D3_DEF) return bn::sprite_items::coldforge;
     return bn::sprite_items::guardian;   // D1 (default)
 }
 
@@ -374,7 +376,12 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         // ---- boss render: swap to the tired/slumped frame while EXPOSED (the tired window), then
         //      blink/telegraph-pulse for emphasis. Frame swap only on change (no per-frame set_tiles). ----
         boss_spr.set_position(wx(boss_cx()), wy(boss_cy()) - rockfall.leap_offset());
-        int want_frame = b.exposed() ? 1 : 0;   // TiredWindow: exposed() == the tired window
+        // 4-frame shift boss (D3): frames 0-1 = element A (expose_spell), 2-3 = element B
+        // (expose_spell_alt). Non-shift bosses (expose_spell_alt==None) keep elem_base 0 -> unchanged
+        // 2-frame behaviour. +1 within a pair = the exposed frame.
+        int elem_base = (level.boss->expose_spell_alt != logic::SpellId::None
+                         && b.cur_expose == level.boss->expose_spell_alt) ? 2 : 0;
+        int want_frame = elem_base + (b.exposed() ? 1 : 0);
         if(want_frame != boss_frame){
             boss_spr.set_tiles(boss_item.tiles_item().create_tiles(want_frame));
             boss_frame = want_frame;
@@ -460,9 +467,16 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
         //      (D1) keeps bolts dodge-only (the free bolt never blocks -> no bolt-spam auto-block). A
         //      Fire consumed blocking a bolt won't also reach the boss to expose it (one cast = one use).
         //      Rocks are NOT blockable (dodge only).
-        if(level.boss->block_spell != logic::SpellId::None){
-            constexpr int BLOCK_MAGIC_CHARGE = 25;   // magic regained per blocked bolt (Fire cast costs 10)
-            int blocked = attacks.block_with_spell(spells, level.boss->block_spell);
+        // ---- defense + magic economy: block the boss's bolts with block_spell (and, for a dual-element
+        //      boss, block_spell2) — each block RECHARGES magic. D3: both Fire and Ice block+charge, so
+        //      whichever element you're holding to cycle also refuels you. block_spell(2)==None -> skipped
+        //      (D1 dodge-only; D2 Fire-only). One cast = one use (a blocked shot can't also expose).
+        //      Rocks are NOT blockable (dodge only).
+        {
+            constexpr int BLOCK_MAGIC_CHARGE = 25;
+            int blocked = 0;
+            if(level.boss->block_spell  != logic::SpellId::None) blocked += attacks.block_with_spell(spells, level.boss->block_spell);
+            if(level.boss->block_spell2 != logic::SpellId::None) blocked += attacks.block_with_spell(spells, level.boss->block_spell2);
             if(blocked) magic.heal(BLOCK_MAGIC_CHARGE * blocked);
         }
 
