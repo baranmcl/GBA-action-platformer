@@ -622,6 +622,92 @@ def gen_rock_marker():
     px(im, 2, 6, 6); px(im, 4, 6, 6)         # gold-hot flecks
     write(im, "rock_marker", {"type": "sprite"})
 
+def draw_coldforge_frame(im, oy, fire_active, exposed):
+    """One 32x32 Coldforge Twins frame at vertical offset oy.
+    A two-headed beast: ICE head on the LEFT, FIRE head on the RIGHT — same positions every frame.
+    fire_active: True = fire head is lit (red+gold), ice head is dormant (dark);
+                 False = ice head is lit (cyan+white), fire head is dormant (dark).
+    exposed: when True, the LIT head cracks/brightens to signal the wound window.
+    Palette: ice active = cyan (pal 8) + white (pal 9/15); fire active = red (pal 13) + gold (pal 6);
+    dormant heads = shadow-blue dark (pal 14); body = stone (pal 12); outline = near-black (pal 1);
+    white glints (pal 15) on the lit head. Integer pixel ops only (no floats)."""
+    # ---- central body mass (stone grey) ----
+    rect(im, 8, oy + 10, 23, oy + 27, 12)   # main body block
+    rect(im, 10, oy + 8,  21, oy + 11, 12)  # raised neck/back connector
+    # ---- base shadow line + stubby feet ----
+    rect(im, 8,  oy + 27, 12, oy + 30, 11)  # left foot (dark brown)
+    rect(im, 19, oy + 27, 23, oy + 30, 11)  # right foot (dark brown)
+    rect(im, 6,  oy + 30, 25, oy + 30, 1)   # base shadow line
+
+    # ---- ICE head: always on the LEFT (cols 0-13) ----
+    if fire_active:
+        # ICE head is DORMANT: dark/dim (shadow-blue, pal 14)
+        rect(im, 1, oy + 5, 12, oy + 15, 14)    # dormant head block
+        rect(im, 1, oy + 5, 12, oy + 5, 1)      # near-black brow
+        # dim closed eyes (near-black pits, no glow)
+        rect(im, 3,  oy + 9, 4,  oy + 10, 1)
+        rect(im, 7,  oy + 9, 8,  oy + 10, 1)
+    else:
+        # ICE head is ACTIVE: lit cyan (pal 8) + white highlights (pal 9)
+        rect(im, 1, oy + 5, 12, oy + 15, 8)     # lit ice-blue head block
+        rect(im, 1, oy + 5, 12, oy + 5, 1)      # near-black brow
+        if exposed:
+            # Exposed: cracking/shattered — gold-white fractures seep through
+            rect(im, 2,  oy + 7, 11, oy + 8, 9)     # white frost crack band
+            px(im, 3, oy + 10, 9); px(im, 7, oy + 11, 9)  # scattered white shards
+            px(im, 5, oy + 6, 15); px(im, 9, oy + 8, 15)  # bright white glints (wound window)
+            # eyes glow bright white-hot (exposed)
+            rect(im, 3,  oy + 9, 4,  oy + 10, 15)   # left eye bright white
+            rect(im, 7,  oy + 9, 8,  oy + 10, 15)   # right eye bright white
+        else:
+            # Armored: soft cyan glints + white sheen (healthy, sealed)
+            px(im, 2, oy + 7, 9); px(im, 6, oy + 9, 9)   # white-ish glints (pal 9 = near-white)
+            px(im, 4, oy + 6, 15); px(im, 9, oy + 7, 15)  # pure-white sparkle (pal 15)
+            # cyan-glow eyes (alert/lit, not yet cracked)
+            rect(im, 3,  oy + 9, 4,  oy + 10, 9)    # left eye (white-cyan, pal 9)
+            rect(im, 7,  oy + 9, 8,  oy + 10, 9)    # right eye
+            px(im, 3, oy + 9, 15); px(im, 7, oy + 9, 15)  # glint pixels
+
+    # ---- FIRE head: always on the RIGHT (cols 19-30) ----
+    if not fire_active:
+        # FIRE head is DORMANT: dark/dim (shadow-blue, pal 14)
+        rect(im, 19, oy + 5, 30, oy + 15, 14)   # dormant head block
+        rect(im, 19, oy + 5, 30, oy + 5, 1)     # near-black brow
+        # dim closed eyes (near-black pits)
+        rect(im, 21, oy + 9, 22, oy + 10, 1)
+        rect(im, 25, oy + 9, 26, oy + 10, 1)
+    else:
+        # FIRE head is ACTIVE: lit red (pal 13) + gold (pal 6) core
+        rect(im, 19, oy + 5, 30, oy + 15, 13)   # lit red head block
+        rect(im, 19, oy + 5, 30, oy + 5, 1)     # near-black brow
+        if exposed:
+            # Exposed: crack lines glow gold-white through the red crust
+            rect(im, 20, oy + 7, 29, oy + 8, 6)     # gold fracture band
+            px(im, 21, oy + 10, 6); px(im, 26, oy + 11, 6)  # scattered gold flecks
+            px(im, 23, oy + 6, 15); px(im, 27, oy + 8, 15)  # white-hot glints (wound window)
+            # eyes glow white-hot (exposed)
+            rect(im, 21, oy + 9, 22, oy + 10, 15)   # left eye bright white
+            rect(im, 25, oy + 9, 26, oy + 10, 15)   # right eye bright white
+        else:
+            # Armored: gold ember glow eyes + red-hot glints (active but sealed)
+            px(im, 20, oy + 7, 6); px(im, 27, oy + 9, 6)   # gold ember glints
+            px(im, 23, oy + 6, 15); px(im, 28, oy + 7, 15)  # white-hot sparks (pal 15)
+            # gold-hot eyes (alert/lit, not yet cracked)
+            rect(im, 21, oy + 9, 22, oy + 10, 6)    # left eye (gold, pal 6)
+            rect(im, 25, oy + 9, 26, oy + 10, 6)    # right eye
+            px(im, 21, oy + 9, 15); px(im, 25, oy + 9, 15)  # glint pixels
+
+def gen_coldforge():
+    """D3 Frost Hollow boss placeholder 32x(32*4) — FOUR 32x32 frames (M14) indexed by (active head,
+    exposed): 0 ice-active armored, 1 ice-active exposed, 2 fire-active armored, 3 fire-active exposed.
+    A two-headed beast: one ICE head (blue) + one FIRE head (red); the LIT head is the wound target."""
+    im = new_img(32, 32 * 4)
+    draw_coldforge_frame(im, 0,  fire_active=False, exposed=False)   # 0: ice head lit, armored
+    draw_coldforge_frame(im, 32, fire_active=False, exposed=True)    # 1: ice head lit, exposed
+    draw_coldforge_frame(im, 64, fire_active=True,  exposed=False)   # 2: fire head lit, armored
+    draw_coldforge_frame(im, 96, fire_active=True,  exposed=True)    # 3: fire head lit, exposed
+    write(im, "coldforge", {"type": "sprite", "height": 32})
+
 def gen_grapple_icon():
     """Grapple HUD icon 8x8 — a green hook glyph, clearly distinct from the cyan Ice orb.
     Uses bright green (pal 4) + dark green (pal 5) + near-black outline (pal 1).
@@ -661,6 +747,7 @@ if __name__ == "__main__":
     gen_king_hp()
     gen_guardian()
     gen_slagshell()
+    gen_coldforge()
     gen_rock()
     gen_rock_marker()
     gen_heart_container()
