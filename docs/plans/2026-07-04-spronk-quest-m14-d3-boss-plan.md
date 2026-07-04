@@ -86,14 +86,14 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Phases 1-3 complete.
+**Overall:** Phases 1-4 complete (4.5 emulator QA handed to user).
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure-logic shifting-expose (cur_expose + BossDef fields + D3_DEF) | ✅ Shipped | 76fc541 | host-tested; 458/458 green |
 | 2 — Coldforge 4-frame art | ✅ Shipped | fb39ecc | ROM-built; 458/458 green; purity OK |
 | 3 — Integration (resolve_damage cur_expose + run_room_boss sprite/frame/block2) | ✅ Shipped | 9600604, d917773 | ROM-built; 458/458 green; purity OK |
-| 4 — D3 level restructure + invariants + QA | ⬜ Not started | — | host + emulator QA |
+| 4 — D3 level restructure + invariants + QA | ✅ Shipped (4.5 pending user QA) | bade2f3, 3ff0741, 8ceac8f, 50e2941 | 459/459 green; ROM fixed!; purity OK; non-vacuity verified |
 
 ---
 
@@ -436,7 +436,9 @@ git commit -m "feat(game): run_room_boss — Coldforge sprite + element-aware 4-
 
 ## Phase 4 — D3 level restructure + integration + invariants + QA
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED (4.5 pending user emulator QA) — commits bade2f3 (P4.1) + 3ff0741 (P4.2) + 8ceac8f (P4.3) + 50e2941 (P4.4) (2026-07-04). 459/459 host tests green; ROM fixed!; purity OK. Non-vacuity confirmed: walling col 40 + floor N in room1 made d3_room1_onward_door_reachable go RED; reverted.
+
+**Deviation:** dungeon3_room1.txt keeps `@` spawn (required by build_level.py's "exactly one @" invariant); the plan's "NO @" was incorrect — D2's room1 template also has @.
 
 **Why this matters:** wires the Twins into a real D3 and proves no soft-locks. Order: compiler key → level files → dungeons.h → invariants → QA.
 
