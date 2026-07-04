@@ -258,10 +258,11 @@ private:
 template<typename BoltLike, typename SpellLike, typename MeterLike>
 bool resolve_damage(logic::BossState& b, const logic::Body& boss_body,
                     BoltLike& bolts, SpellLike& spells, MeterLike& magic, int magic_heal){
-    // Light always exposes/refreshes (no-op once defeated/i-framed or AlwaysVulnerable).
+    // Light/Fire/Ice (the CURRENT expose element) exposes/refreshes (no-op if defeated/i-framed or
+    // AlwaysVulnerable). cur_expose == expose_spell for a non-shift boss; shifts for a dual-spell boss.
     if(b.def->vuln == logic::VulnMode::SpellExpose &&
-       spells.consume_hit(boss_body, b.def->expose_spell)){
-        b.on_expose_hit(b.def->expose_spell);
+       spells.consume_hit(boss_body, b.cur_expose)){
+        b.on_expose_hit(b.cur_expose);
     }
     int hp_before = b.hp;
     // Wounding lands only while vulnerable (exposed, or AlwaysVulnerable). Gate here
