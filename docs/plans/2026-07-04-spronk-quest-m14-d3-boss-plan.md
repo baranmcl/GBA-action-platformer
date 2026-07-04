@@ -86,11 +86,11 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started.
+**Overall:** Phase 1 complete.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 1 — Pure-logic shifting-expose (cur_expose + BossDef fields + D3_DEF) | ⬜ Not started | — | host-tested |
+| 1 — Pure-logic shifting-expose (cur_expose + BossDef fields + D3_DEF) | ✅ Shipped | 76fc541 | host-tested; 458/458 green |
 | 2 — Coldforge 4-frame art | ⬜ Not started | — | ROM-built |
 | 3 — Integration (resolve_damage cur_expose + run_room_boss sprite/frame/block2) | ⬜ Not started | — | ROM-built |
 | 4 — D3 level restructure + invariants + QA | ⬜ Not started | — | host + emulator QA |
@@ -107,7 +107,7 @@ notes and commit messages.
 
 ## Phase 1 — Pure-logic shifting-expose (cur_expose + BossDef fields + D3_DEF)
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED — commit 76fc541 (2026-07-04)
 
 **Why this matters:** the shifting element is the whole new mechanic and it's fully host-testable. Getting `cur_expose` to initialize to `def->expose_spell` is what keeps every existing boss byte-for-byte identical.
 
@@ -122,7 +122,7 @@ notes and commit messages.
 
 Follow the Per-Task Protocol.
 
-- [ ] **Step 1: Write the failing tests** — append to `test/test_boss.cpp` (do NOT modify existing tests):
+- [x] **Step 1: Write the failing tests** — append to `test/test_boss.cpp` (do NOT modify existing tests):
 
 ```cpp
 // --- M14 D3 Coldforge Twins (SpellExpose with a SHIFTING element: cycle Fire<->Ice each wound) ---
@@ -187,9 +187,9 @@ TEST(d2_cur_expose_does_not_shift){
 }
 ```
 
-- [ ] **Step 2: Run red** — `bash tools/host_test.sh` → FAIL (`D3_DEF`/`cur_expose`/`expose_spell_alt`/`block_spell2` undefined).
+- [x] **Step 2: Run red** — `bash tools/host_test.sh` → FAIL (`D3_DEF`/`cur_expose`/`expose_spell_alt`/`block_spell2` undefined).
 
-- [ ] **Step 3: Implement in `include/logic/boss.h`.**
+- [x] **Step 3: Implement in `include/logic/boss.h`.**
 
 3a. Add two fields to the END of `struct BossDef` (after `block_spell`, line ~58), defaulted so existing inits are unchanged:
 
@@ -271,9 +271,9 @@ inline constexpr BossDef D3_DEF{
 };
 ```
 
-- [ ] **Step 4: Run green** — `bash tools/host_test.sh` → `N/N tests passed` (new D3 tests pass; ALL existing King/D1/D2 tests still pass). `python tools/check_logic_purity.py` → `logic purity OK`.
+- [x] **Step 4: Run green** — `bash tools/host_test.sh` → `N/N tests passed` (new D3 tests pass; ALL existing King/D1/D2 tests still pass). `python tools/check_logic_purity.py` → `logic purity OK`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add include/logic/boss.h test/test_boss.cpp
