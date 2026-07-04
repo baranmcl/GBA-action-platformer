@@ -461,12 +461,6 @@ static BossRoomOutcome run_room_boss(const logic::LevelData& level, logic::World
             }
         }
 
-        // ---- defense + magic economy: a data-described boss may make its bolts blockable by ONE spell
-        //      (D2 Slagshell: Fire). Each block RECHARGES magic (BLOCK_MAGIC_CHARGE per bolt) — so
-        //      blocking IS how you sustain casting (this REPLACES the magic crystal). block_spell==None
-        //      (D1) keeps bolts dodge-only (the free bolt never blocks -> no bolt-spam auto-block). A
-        //      Fire consumed blocking a bolt won't also reach the boss to expose it (one cast = one use).
-        //      Rocks are NOT blockable (dodge only).
         // ---- defense + magic economy: block the boss's bolts with block_spell (and, for a dual-element
         //      boss, block_spell2) — each block RECHARGES magic. D3: both Fire and Ice block+charge, so
         //      whichever element you're holding to cycle also refuels you. block_spell(2)==None -> skipped

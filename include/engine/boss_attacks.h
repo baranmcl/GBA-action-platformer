@@ -247,7 +247,8 @@ private:
 // driven entirely by logic::BossState. Generic over the project's spell/bolt
 // pools via templates (no game/ include). Mirrors scene_boss.cpp's
 // "damage resolution" block:
-//   * Light (def's expose spell) ALWAYS exposes (every frame) — on_expose_hit.
+//   * The CURRENT expose spell (b.cur_expose — == def->expose_spell for a fixed-element boss;
+//     shifts each wound for a dual-spell boss like the D3 Coldforge Twins) exposes — on_expose_hit.
 //   * While exposed, a bolt OR Fire/Ice wound lands; an elemental wound refills
 //     magic (heal 25). For AlwaysVulnerable bosses (no expose gate) the wound
 //     check runs unconditionally — vulnerable() short-circuits expose.

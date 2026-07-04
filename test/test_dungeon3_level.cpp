@@ -17,10 +17,6 @@ using namespace logic;
 // movement: bolt + Fire (needed to counter the ice head). Rooms 1-2 are flat-floor arenas with
 // no hidden platforms/dark veils/one-way tiles, so one static grid suffices.
 
-static const LevelData* const D3_ROOMS[] = {
-    &DUNGEON3_ROOM0_DATA, &DUNGEON3_ROOM1_DATA, &DUNGEON3_ROOM2_DATA };
-static constexpr int D3_N = 3;
-
 // Generous double-jump reach — same as D1/D2.
 static constexpr int CLIMB = 5;
 
@@ -138,18 +134,8 @@ static bool stands_at(const LevelData& L, const std::vector<uint8_t>& seen, int 
     }
     return false;
 }
-static bool reaches_forward_exit(const LevelData& L, const std::vector<uint8_t>& seen){
-    for(int i = 0; i < L.room_door_count; ++i)
-        if(stands_at(L, seen, L.room_doors[i].tx, L.room_doors[i].ty)) return true;
-    if(L.has_cage && stands_at(L, seen, L.cage_tx, L.cage_ty)) return true;
-    if(L.has_exit && stands_at(L, seen, L.exit_tx, L.exit_ty)) return true;
-    return false;
-}
-
 static int room_start_x(const LevelData& L){ return L.entrance_count? L.entrances[0].tx : L.spawn_tx; }
 static int room_start_y(const LevelData& L){ return L.entrance_count? L.entrances[0].ty : L.spawn_ty; }
-
-static int d3_tile(const LevelData& L, int x, int y){ return (int)L.tiles[y*L.w + x]; }
 
 // ===========================================================================
 // Structural invariants
