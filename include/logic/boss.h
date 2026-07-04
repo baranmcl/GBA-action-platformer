@@ -56,6 +56,10 @@ struct BossDef {
     Locomotion  locomotion = Locomotion::Stationary;   // M13: Pacing = walks the floor (run_room_boss)
     SpellId     block_spell = SpellId::None;            // M13: a player cast of this spell DESTROYS the
                                                        // boss's bolts on contact (None = dodge-only).
+    SpellId     expose_spell_alt = SpellId::None;       // M14: if set, cur_expose SHIFTS between
+                                                       // expose_spell and this on each wound (dual-spell boss).
+    SpellId     block_spell2 = SpellId::None;           // M14: a SECOND spell that also blocks+charges
+                                                       // (dual-element block; None = only block_spell blocks).
 };
 
 // --- King attack masks + phase table (reproduces the SHIPPED Nightmare King). ---
@@ -106,6 +110,28 @@ inline constexpr BossDef D2_DEF{
     /*block_spell=*/SpellId::Fire        // Fire intercepts/destroys Slagshell's red bolts (M13 QA)
 };
 
+// --- D3 Frost Hollow boss: the "Coldforge Twins" (SpellExpose with a SHIFTING element, Stationary,
+//     2 phases). A two-headed beast; the LIT head is the target. Counter the active head with the
+//     OPPOSITE spell: ice head active -> cast Fire; fire head active -> cast Ice -> expose -> wound ->
+//     the active head SWITCHES (cur_expose flips Fire<->Ice), forcing an L-cycle each wound. Both
+//     Fire AND Ice block+charge magic (block_spell/block_spell2). Starts on the ice head (cast Fire). ---
+inline constexpr uint8_t D3_ATTACKS_P1 = BOSS_ATK_AIMED;
+inline constexpr uint8_t D3_ATTACKS_P2 = BOSS_ATK_AIMED | BOSS_ATK_SPIRAL;
+inline constexpr BossPhaseDef D3_PHASES[2] = {
+    { 35, { 80, 30, 40 }, D3_ATTACKS_P1 },   // P1 70->35 : aimed frost shards
+    {  0, { 70, 30, 30 }, D3_ATTACKS_P2 },   // P2 35->0  : + the rotating spiral (icy shard-ring)
+};
+inline constexpr BossDef D3_DEF{
+    70, 10, 70, 90, VulnMode::SpellExpose, SpellId::Fire, D3_PHASES, 2,
+    /*tired_after=*/0,
+    /*intro_line=*/"One of us always burns.",
+    /*death_line=*/"Both heads... fall still...",
+    /*locomotion=*/Locomotion::Stationary,
+    /*block_spell=*/SpellId::Fire,
+    /*expose_spell_alt=*/SpellId::Ice,
+    /*block_spell2=*/SpellId::Ice
+};
+
 // Def-driven boss state. `phase` is an integer INDEX (0..phase_count-1) so the
 // phase count is variable. "Exposed" is just expose_timer>0; "Defeated" is hp<=0.
 struct BossState {
@@ -117,10 +143,13 @@ struct BossState {
     int attack_timer = 0;         // drives the per-phase attack pattern
     int hit_iframes = 0;          // >0 = just wounded: immune, not re-exposable, attacking
     int attack_cycles = 0;        // TiredWindow: completed attack cycles since the last tired window
+    SpellId cur_expose = SpellId::None;   // M14: the CURRENTLY vulnerable element (== expose_spell for a
+                                          // non-shift boss; flips on wound for a shift boss).
 
     void reset(const BossDef& d){
         def = &d; hp = d.max_hp; phase = 0; phase_start_hp = d.max_hp;
         expose_timer = 0; attack_timer = 0; hit_iframes = 0; attack_cycles = 0;
+        cur_expose = d.expose_spell;   // M14: current element starts at the def's expose spell
     }
     bool exposed() const { return expose_timer > 0; }
     bool defeated() const { return hp <= 0; }
@@ -133,12 +162,12 @@ struct BossState {
     }
 
     // Expose hit (renamed from on_light_hit). For SpellExpose only, and only when the
-    // spell matches the def's expose spell. AlwaysVulnerable -> no-op.
+    // spell matches the CURRENT expose element. AlwaysVulnerable -> no-op.
     void on_expose_hit(SpellId s){
         if(defeated() || hit_iframes > 0) return;          // can't re-expose during post-wound i-frames
         if(def->vuln != VulnMode::SpellExpose) return;     // AlwaysVulnerable: no expose mechanic
-        if(s != def->expose_spell) return;                 // wrong spell
-        expose_timer = def->expose_frames;                 // phase stays the index; "Exposed" = expose_timer>0
+        if(s != cur_expose) return;                        // M14: must match the CURRENT element
+        expose_timer = def->expose_frames;
     }
 
     void advance_phase_for_hp(){
@@ -158,6 +187,8 @@ struct BossState {
         advance_phase_for_hp();
         hit_iframes = def->hit_iframes;                  // ONE wound per expose/tired window, then recover
         if(def->vuln != VulnMode::AlwaysVulnerable) expose_timer = 0;  // a wound ends the expose/tired window
+        if(def->expose_spell_alt != SpellId::None)   // M14: shift the vulnerable element for the next opening
+            cur_expose = (cur_expose == def->expose_spell) ? def->expose_spell_alt : def->expose_spell;
     }
 
     void tick(){

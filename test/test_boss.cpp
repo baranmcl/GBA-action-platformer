@@ -340,3 +340,64 @@ TEST(bossdef_block_spell){
     CHECK((int)D1_DEF.block_spell == (int)SpellId::None);
     CHECK((int)KING_DEF.block_spell == (int)SpellId::None);
 }
+
+// --- M14 D3 Coldforge Twins (SpellExpose with a SHIFTING element: cycle Fire<->Ice each wound) ---
+TEST(bossdef_d3_coldforge_fields){
+    CHECK_EQ(D3_DEF.max_hp, 70);
+    CHECK_EQ(D3_DEF.phase_count, 2);
+    CHECK((int)D3_DEF.vuln == (int)VulnMode::SpellExpose);
+    CHECK((int)D3_DEF.expose_spell == (int)SpellId::Fire);       // starts on the ICE head -> counter is Fire
+    CHECK((int)D3_DEF.expose_spell_alt == (int)SpellId::Ice);    // shifts to Ice (fire head)
+    CHECK((int)D3_DEF.locomotion == (int)Locomotion::Stationary);
+    CHECK((int)D3_DEF.block_spell == (int)SpellId::Fire);
+    CHECK((int)D3_DEF.block_spell2 == (int)SpellId::Ice);        // both elementals block+charge
+    CHECK(D3_DEF.hit_iframes >= 60);                             // re-armor gates spam (with the forced cycle)
+    CHECK_EQ(D3_DEF.phases[0].end_hp, 35);
+    CHECK_EQ((int)D3_DEF.phases[0].attacks, (int)BOSS_ATK_AIMED);
+    CHECK_EQ((int)D3_DEF.phases[1].attacks, (int)(BOSS_ATK_AIMED | BOSS_ATK_SPIRAL));
+    CHECK(D3_DEF.phases[0].pattern.telegraph_frames >= SWITCH_BUDGET);
+    CHECK(D3_DEF.phases[1].pattern.telegraph_frames >= SWITCH_BUDGET);
+}
+// THE shift invariant: only the CURRENT element exposes; a wound flips it; you must alternate.
+TEST(d3_shift_expose_alternates){
+    BossState b; b.reset(D3_DEF);
+    CHECK((int)b.cur_expose == (int)SpellId::Fire);          // ice head active -> cast Fire
+    b.on_expose_hit(SpellId::Ice);   CHECK(!b.exposed());   // wrong element: no expose
+    b.on_expose_hit(SpellId::Fire);  CHECK(b.exposed());    // correct: exposes
+    b.on_wound(D3_DEF.wound_dmg);
+    CHECK((int)b.cur_expose == (int)SpellId::Ice);          // wound FLIPS the element
+    CHECK(!b.exposed());
+    for(int i=0;i<D3_DEF.hit_iframes;++i) b.tick();         // drain re-armor
+    b.on_expose_hit(SpellId::Fire);  CHECK(!b.exposed());   // Fire no longer exposes
+    b.on_expose_hit(SpellId::Ice);   CHECK(b.exposed());    // Ice now exposes
+    b.on_wound(D3_DEF.wound_dmg);
+    CHECK((int)b.cur_expose == (int)SpellId::Fire);         // flips back to Fire
+}
+TEST(d3_takes_seven_wounds_alternating){
+    BossState b; b.reset(D3_DEF);
+    int wounds=0;
+    while(!b.defeated() && wounds<100){
+        b.on_expose_hit(b.cur_expose);                     // cast the currently-needed element
+        b.on_wound(D3_DEF.wound_dmg);
+        for(int i=0;i<D3_DEF.hit_iframes;++i) b.tick();    // wait out re-armor
+        ++wounds;
+    }
+    CHECK(b.defeated());
+    CHECK_EQ(wounds, 7);                                    // 70/10
+}
+// REGRESSION: non-shift bosses keep a fixed element (alt==None -> cur_expose never moves).
+TEST(king_d1_d2_no_shift_fields){
+    CHECK((int)KING_DEF.expose_spell_alt == (int)SpellId::None);
+    CHECK((int)D1_DEF.expose_spell_alt   == (int)SpellId::None);
+    CHECK((int)D2_DEF.expose_spell_alt   == (int)SpellId::None);
+    CHECK((int)KING_DEF.block_spell2 == (int)SpellId::None);
+    CHECK((int)D1_DEF.block_spell2   == (int)SpellId::None);
+    CHECK((int)D2_DEF.block_spell2   == (int)SpellId::None);
+}
+TEST(d2_cur_expose_does_not_shift){
+    BossState b; b.reset(D2_DEF);
+    CHECK((int)b.cur_expose == (int)SpellId::Fire);        // == expose_spell
+    b.on_expose_hit(SpellId::Fire); CHECK(b.exposed());
+    b.on_wound(D2_DEF.wound_dmg);
+    CHECK((int)b.cur_expose == (int)SpellId::Fire);        // alt==None -> no shift
+}
