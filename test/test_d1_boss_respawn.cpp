@@ -7,6 +7,9 @@
 #include "game/levels/dungeon2_room0.h"
 #include "game/levels/dungeon2_room1.h"
 #include "game/levels/dungeon2_room2.h"
+#include "game/levels/dungeon3_room0.h"
+#include "game/levels/dungeon3_room1.h"
+#include "game/levels/dungeon3_room2.h"
 using namespace logic;
 
 // M12 QA r2 — the D1 boss arena (room 1) respawn must settle the player ON the floor, not let them
@@ -91,4 +94,13 @@ TEST(d2_all_entrances_settle_on_floor){
     check_entrance_settles(DUNGEON2_ROOM0_DATA, "d2-room0");
     check_entrance_settles(DUNGEON2_ROOM1_DATA, "d2-room1");
     check_entrance_settles(DUNGEON2_ROOM2_DATA, "d2-room2");
+}
+
+// M14 — D3 Coldforge Twins boss arena (room 1) and spronk room (room 2) respawn settle.
+// Mirrors d2_all_entrances_settle_on_floor: every D3 entrance must ground the player body
+// without embedding it in a solid tile (fall-through soft-lock protection).
+TEST(d3_all_entrances_settle_on_floor){
+    check_entrance_settles(DUNGEON3_ROOM0_DATA, "d3-room0");
+    check_entrance_settles(DUNGEON3_ROOM1_DATA, "d3-room1");
+    check_entrance_settles(DUNGEON3_ROOM2_DATA, "d3-room2");
 }
