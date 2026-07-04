@@ -91,7 +91,7 @@ notes and commit messages.
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure-logic shifting-expose (cur_expose + BossDef fields + D3_DEF) | ✅ Shipped | 76fc541 | host-tested; 458/458 green |
-| 2 — Coldforge 4-frame art | ⬜ Not started | — | ROM-built |
+| 2 — Coldforge 4-frame art | ✅ Shipped | fb39ecc | ROM-built; 458/458 green; purity OK |
 | 3 — Integration (resolve_damage cur_expose + run_room_boss sprite/frame/block2) | ⬜ Not started | — | ROM-built |
 | 4 — D3 level restructure + invariants + QA | ⬜ Not started | — | host + emulator QA |
 
@@ -286,7 +286,7 @@ git commit -m "feat(logic): shifting-expose element (BossState::cur_expose + Bos
 
 ## Phase 2 — Coldforge 4-frame art
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED — commit fb39ecc (2026-07-04)
 
 **Why this matters:** the boss must read its current element (ice/fire head) AND exposed/armored — a 4-frame sprite the Phase-3 frame logic indexes.
 
@@ -306,9 +306,9 @@ git commit -m "feat(logic): shifting-expose element (BossState::cur_expose + Bos
 
 Follow the Per-Task Protocol. (Art has no host test; verify the generator runs + the ROM builds in Phase 3.)
 
-- [ ] **Step 1: Add a `draw_coldforge_frame(im, oy, fire_active, exposed)` helper** modeled on `draw_slagshell_frame`: draw a two-headed beast body (a wide 32×32 mass with a LEFT head and a RIGHT head). Make one head LIT (bright) and the other DORMANT (dark) per `fire_active`: **fire head = red (pal 13) + gold-hot (pal 6)** (reuse Slagshell's molten palette); **ice head = the blue/cyan the ice art already uses** — inspect `make_placeholder_art.py`'s palette definition + `gen_light_proj`/`gen_magic_crystal`/`ice_proj` art for the existing blue/cyan indices and reuse them (do NOT invent a new palette entry). Add white glints (pal 15) on the lit head. When `exposed`, the LIT head cracks/brightens (its counter melted/cooled it) to clearly signal the wound window; the DORMANT head is dark/dim regardless. **Keep the two heads in the SAME positions across all four frames** (e.g. ice head always left, fire head always right) — only which head is lit/dormant + the exposed cracking changes; the player reads the element from the lit head's COLOUR, not its position. Use integer pixel ops only (`rect`, `px`) — no floats.
+- [x] **Step 1: Add a `draw_coldforge_frame(im, oy, fire_active, exposed)` helper** modeled on `draw_slagshell_frame`: draw a two-headed beast body (a wide 32×32 mass with a LEFT head and a RIGHT head). Make one head LIT (bright) and the other DORMANT (dark) per `fire_active`: **fire head = red (pal 13) + gold-hot (pal 6)** (reuse Slagshell's molten palette); **ice head = the blue/cyan the ice art already uses** — inspect `make_placeholder_art.py`'s palette definition + `gen_light_proj`/`gen_magic_crystal`/`ice_proj` art for the existing blue/cyan indices and reuse them (do NOT invent a new palette entry). Add white glints (pal 15) on the lit head. When `exposed`, the LIT head cracks/brightens (its counter melted/cooled it) to clearly signal the wound window; the DORMANT head is dark/dim regardless. **Keep the two heads in the SAME positions across all four frames** (e.g. ice head always left, fire head always right) — only which head is lit/dormant + the exposed cracking changes; the player reads the element from the lit head's COLOUR, not its position. Use integer pixel ops only (`rect`, `px`) — no floats.
 
-- [ ] **Step 2: Add `gen_coldforge`:**
+- [x] **Step 2: Add `gen_coldforge`:**
 
 ```python
 def gen_coldforge():
@@ -323,9 +323,9 @@ def gen_coldforge():
     write(im, "coldforge", {"type": "sprite", "height": 32})
 ```
 
-- [ ] **Step 3: Register + run.** Add `gen_coldforge()` in the `if __name__ == "__main__":` block after `gen_slagshell()`. Run `python tools/make_placeholder_art.py` (NOT run by the build) → confirm it writes `graphics/coldforge.json` + `graphics/coldforge.bmp` without error.
+- [x] **Step 3: Register + run.** Add `gen_coldforge()` in the `if __name__ == "__main__":` block after `gen_slagshell()`. Run `python tools/make_placeholder_art.py` (NOT run by the build) → confirm it writes `graphics/coldforge.json` + `graphics/coldforge.bmp` without error.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tools/make_placeholder_art.py graphics/coldforge.*
