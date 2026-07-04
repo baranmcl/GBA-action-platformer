@@ -86,13 +86,13 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Phase 1 complete.
+**Overall:** Phases 1-3 complete.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
 | 1 — Pure-logic shifting-expose (cur_expose + BossDef fields + D3_DEF) | ✅ Shipped | 76fc541 | host-tested; 458/458 green |
 | 2 — Coldforge 4-frame art | ✅ Shipped | fb39ecc | ROM-built; 458/458 green; purity OK |
-| 3 — Integration (resolve_damage cur_expose + run_room_boss sprite/frame/block2) | ⬜ Not started | — | ROM-built |
+| 3 — Integration (resolve_damage cur_expose + run_room_boss sprite/frame/block2) | ✅ Shipped | 9600604, d917773 | ROM-built; 458/458 green; purity OK |
 | 4 — D3 level restructure + invariants + QA | ⬜ Not started | — | host + emulator QA |
 
 ---
@@ -338,7 +338,7 @@ git commit -m "art: Coldforge Twins 4-frame boss (ice/fire head x armored/expose
 
 ## Phase 3 — Integration (resolve_damage cur_expose + run_room_boss sprite/frame/block2)
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED — commits 9600604 (Task 3.1) + d917773 (Task 3.2) (2026-07-04)
 
 **Why this matters:** wires the shift into the actual fight. ROM-built; behaviour confirmed in Phase-4 QA. Do Task 3.1 (engine) then 3.2 (scene) — they touch different files so aren't strictly order-dependent, but both are required for the shift to work end-to-end.
 
@@ -353,7 +353,7 @@ git commit -m "art: Coldforge Twins 4-frame boss (ice/fire head x armored/expose
 
 Follow the Per-Task Protocol. (Engine template — verified by the Phase-4 host tests exercising `on_expose_hit(cur_expose)` at the BossState level + the ROM build; the shift *logic* is already host-covered in Phase 1.)
 
-- [ ] **Step 1: Change the expose check** — in `resolve_damage`, replace the two `b.def->expose_spell` uses with `b.cur_expose`:
+- [x] **Step 1: Change the expose check** — in `resolve_damage`, replace the two `b.def->expose_spell` uses with `b.cur_expose`:
 
 ```cpp
     // Light/Fire/Ice (the CURRENT expose element) exposes/refreshes (no-op if defeated/i-framed or
@@ -366,9 +366,9 @@ Follow the Per-Task Protocol. (Engine template — verified by the Phase-4 host 
 
 (The wound block below it is unchanged — `bolts`/`Fire`/`Ice` wound while `vulnerable()`.)
 
-- [ ] **Step 2: Build** — `bash tools/build_rom.sh` → `ROM fixed!`. `bash tools/host_test.sh` still green (445+/N; no logic change). `python tools/check_logic_purity.py` → `logic purity OK`.
+- [x] **Step 2: Build** — `bash tools/build_rom.sh` → `ROM fixed!`. `bash tools/host_test.sh` still green (445+/N; no logic change). `python tools/check_logic_purity.py` → `logic purity OK`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add include/engine/boss_attacks.h
@@ -384,7 +384,7 @@ git commit -m "feat(engine): resolve_damage exposes on BossState::cur_expose (en
 
 Follow the Per-Task Protocol. (ROM-built; QA in Phase 4.)
 
-- [ ] **Step 1: Boss-sprite selector** — add a D3 entry to `boss_sprite_for` (anchor: the function returning `slagshell` for `&D2_DEF`):
+- [x] **Step 1: Boss-sprite selector** — add a D3 entry to `boss_sprite_for` (anchor: the function returning `slagshell` for `&D2_DEF`):
 
 ```cpp
 static const bn::sprite_item& boss_sprite_for(const logic::BossDef* def){
@@ -394,7 +394,7 @@ static const bn::sprite_item& boss_sprite_for(const logic::BossDef* def){
 }
 ```
 
-- [ ] **Step 2: Element-aware frame swap** — find the frame line (anchor: `int want_frame = b.exposed() ? 1 : 0;`) and replace it so a shift boss uses frames 2–3 when the current element is the def's alt:
+- [x] **Step 2: Element-aware frame swap** — find the frame line (anchor: `int want_frame = b.exposed() ? 1 : 0;`) and replace it so a shift boss uses frames 2–3 when the current element is the def's alt:
 
 ```cpp
         // 4-frame shift boss (D3): frames 0-1 = element A (expose_spell), 2-3 = element B
@@ -405,7 +405,7 @@ static const bn::sprite_item& boss_sprite_for(const logic::BossDef* def){
         int want_frame = elem_base + (b.exposed() ? 1 : 0);
 ```
 
-- [ ] **Step 3: Block with BOTH block spells** — find the block-defense block (anchor: `if(level.boss->block_spell != logic::SpellId::None){ ... block_with_spell ... magic.heal ... }`) and replace it with one that sums blocks from `block_spell` AND `block_spell2`:
+- [x] **Step 3: Block with BOTH block spells** — find the block-defense block (anchor: `if(level.boss->block_spell != logic::SpellId::None){ ... block_with_spell ... magic.heal ... }`) and replace it with one that sums blocks from `block_spell` AND `block_spell2`:
 
 ```cpp
         // ---- defense + magic economy: block the boss's bolts with block_spell (and, for a dual-element
@@ -421,9 +421,9 @@ static const bn::sprite_item& boss_sprite_for(const logic::BossDef* def){
         }
 ```
 
-- [ ] **Step 4: Build** — `bash tools/build_rom.sh` → `ROM fixed!` (D1/D2 unaffected: `expose_spell_alt`/`block_spell2` are `None` for them → `elem_base` 0, only `block_spell` blocks).
+- [x] **Step 4: Build** — `bash tools/build_rom.sh` → `ROM fixed!` (D1/D2 unaffected: `expose_spell_alt`/`block_spell2` are `None` for them → `elem_base` 0, only `block_spell` blocks).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/game/scene_dungeon.cpp
