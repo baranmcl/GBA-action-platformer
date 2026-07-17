@@ -3,7 +3,8 @@
 ## Build
 
 - **ROM:** `make` (requires devkitPro + Butano installed; see Butano docs for setup)
-- **Host tests:** `make -C test` (runs on any machine with g++ and Python)
+- **ROM:** `bash tools/build_rom.sh` (regenerates level headers, then builds via devkitPro).
+- **Host tests:** run `bash tools/host_test.sh` (canonical — regenerates level headers, then compiles + runs). Plain `make -C test` is fragile on this machine; see CLAUDE.md.
 
 ## Architecture: Three-Layer Rule
 

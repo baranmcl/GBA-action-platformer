@@ -40,3 +40,13 @@ endif
 # Include main makefile:
 #---------------------------------------------------------------------------------------------------------------------
 include $(LIBBUTANOABS)/butano.mak
+
+#---------------------------------------------------------------------------------------------------------------------
+# Level headers are generated from tools/levels/*.txt — `make levels` refreshes them.
+# tools/build_rom.sh runs this automatically; raw `make` does NOT.
+#---------------------------------------------------------------------------------------------------------------------
+.PHONY: levels
+levels:
+	@for f in tools/levels/*.txt; do \
+	  python tools/build_level.py $$f include/game/levels/$$(basename $${f%.txt}).h; \
+	done
