@@ -2,7 +2,8 @@
 ; is fought here on entry (JSON "boss":"d2"). No cage / no exit: scene_dungeon runs the fight
 ; on entry + opens the onward door (room-door to room 2) on victory.
 ; FLAT-FLOOR DUEL: Slagshell paces the floor. No spikes (rockfall is the hazard).
-; '$' magic crystal on the floor keeps the player from magic-soft-locking.
+; No magic crystal in this arena: magic recharges by Fire-blocking Slagshell's bolts
+; (block-to-charge), same as the shifting-element economy used in D3's arena.
 ; 'N'(id0)+'D' left = arrival/return to room 0; 'N'(id1)+'D' right = onward to room 2.
 ################################################
 #..............................................#

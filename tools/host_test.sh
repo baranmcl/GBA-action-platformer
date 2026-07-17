@@ -23,13 +23,16 @@ echo "== logic purity =="
 python tools/check_logic_purity.py
 
 echo "== level compiler unit tests =="
-( cd tools && python -m unittest test_build_level.py )
+( cd tools && python -m unittest test_build_level.py test_validate_dungeons.py )
 
 echo "== regenerate level headers (so test_*_level.cpp use fresh data) =="
 shopt -s nullglob
 for f in tools/levels/*.txt; do
     python tools/build_level.py "$f" "include/game/levels/$(basename "${f%.txt}").h"
 done
+
+echo "== whole-game dungeon validator (room graph, latch/heart registries, sprite budget, arena constraints) =="
+python tools/validate_dungeons.py
 
 echo "== compile + run host tests =="
 cd test

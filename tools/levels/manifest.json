@@ -1,0 +1,15 @@
+{
+  "dungeons": {
+    "1": ["dungeon1_room0", "dungeon1_room1", "dungeon1_room2"],
+    "2": ["dungeon2_room0", "dungeon2_room1", "dungeon2_room2"],
+    "3": ["dungeon3_room0", "dungeon3_room1", "dungeon3_room2"],
+    "4": ["dungeon4"],
+    "5": ["dungeon5"],
+    "6": ["dungeon6_room0", "dungeon6_room1", "dungeon6_room2"],
+    "7": ["dungeon7_room0", "dungeon7_room1", "dungeon7_room2"],
+    "8": ["dungeon8_room0", "dungeon8_room1", "dungeon8_room2"],
+    "9-approach": ["dungeon9_room0", "dungeon9_room1"],
+    "9-arena": ["dungeon9_arena"]
+  },
+  "standalone": ["hub"]
+}

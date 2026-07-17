@@ -22,4 +22,9 @@ for f in "$REPO"/tools/levels/*.txt; do
     "$WINPY/python" "$REPO/tools/build_level.py" "$f" "$REPO/include/game/levels/$(basename "${f%.txt}").h"
 done
 
+# Whole-game validator: catches cross-room/cross-dungeon content errors (room-graph
+# typos, latch/heart id collisions, sprite-budget overruns, arena constraint violations)
+# before they reach a ROM build.
+"$WINPY/python" "$REPO/tools/validate_dungeons.py"
+
 exec "$DKP_BASH" -lc "cd '$REPO' && export PATH=\"$WINPY:\$PATH\" && make $MAKE_ARGS"
