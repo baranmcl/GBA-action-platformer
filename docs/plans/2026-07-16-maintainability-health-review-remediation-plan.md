@@ -92,7 +92,8 @@ notes and commit messages.
 |---|---|---|---|
 | 0 — Docs & tooling quick wins | ✅ Shipped | `d6eee82..152c9ed` | 2026-07-17; 2 review-fix rounds (doc facts) |
 | 1 — Content-pipeline validation | ✅ Shipped | `c2c7eec..d6cc701` | 2026-07-17; ROM gate green; mGBA smoke pending user |
-| 2 — Shared level-test harness | 🚧 In progress | — | branch `fix/health-review-remediation` |
+| 2 — Shared level-test harness | ✅ Shipped | `4356383..7237840` | 2026-07-17; 495/495; exemptions removed, harness extended (object states, updraft/wind/grapple) |
+| 3 — Save v6 | 🚧 In progress | — | branch `fix/health-review-remediation` |
 | 2 — Shared level-test harness | ⬜ Not started | — | — |
 | 3 — Save v6 | ⬜ Not started | — | — |
 | 4 — Shared constants + player session | ⬜ Not started | — | — |
@@ -103,6 +104,8 @@ notes and commit messages.
 - **Task 1.2 Rule 6:** arena crystal requirement inverted from "≥1" to "≤1" — D1/D3 arenas are intentionally crystal-less (TiredWindow / block-to-charge designs); the original rule was written believing all arenas had crystals.
 
 ### Discoveries
+- **Task 2.6 (model-limit gaps, both documented in-code as absent assertions — NOT failures):** D4 spawn→exit full-path proof needs wind-push modeling (6-tile WindRight gust cols 19-24 rows 33-36 between staircase and updraft shaft); D5 spawn→exit needs dash-distance modeling (6-tile lava run row 22 cols 54-59 after the Dash shrine). Both rooms keep partial proofs (shrines, segments) + their historical mGBA verification. Revisit only if D4/D5 layouts change.
+- **Task 2.2 (harness model caveats, inherited from all six retired forks — preserved for migration fidelity, revisit after Phase 2):** (a) the diagonal-climb move gates on the START column's head clearance, not the landing column's — a theoretical false-"reachable" if an obstruction sits only above the landing column; (b) there is NO same-column straight-down fall move — content directly below a ledge in a 1-column-wide shaft would read unreachable; (c) `open_columns` clearing runs after object placement in build_grid — a trigger-target column sharing a column with a block/platform would un-solid both.
 - **Task 1.2:** `tools/levels/dungeon2_room1.txt`'s comment claims a '$' magic crystal is placed for anti-softlock, but none exists in the grid — the M13 fight ships on Fire-block-to-charge alone. Comment fixed to describe reality (codegen-neutral). **Open balance question for the user:** should D2's arena actually get the crystal its design comment promised? (Adding one is a one-character content edit + QA, deliberately NOT done here.)
 - **Task 1.1:** shipped content already relied on the silent gate-JSON fallback the review flagged (I3f) — `tools/levels/dungeon7_room0.txt` has a 6-tile DarkVeil 'G' column with ONE `{"type":"dark_veil"}` sidecar entry, silently reused via `j_gates[-1]`. Resolution: padded the JSON to six explicit entries (generated header byte-identical) so the strict count check stands. Any future multi-tile 'G' column needs one JSON entry per symbol.
 
@@ -377,7 +380,7 @@ Do NOT: add asserts inside per-frame loops (cost); change `find_entrance`'s '@' 
 
 # Phase 2 — Shared level-test harness
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `4356383..7237840` on 2026-07-17 (6 tasks, 3 fix rounds; suite 455→495 with ~475 net lines deleted from per-dungeon forks; D7 sound at RELIABLE=5 with zero climb_max escapes; D2/D3 puzzle exemption removed — staged proofs green on shipped data; D4/D5 partial coverage — see Discoveries for the two model-limit gaps)
 
 One gate-aware reachability harness replaces six private forks (I4, D2, I13, I29, I31). Dimension: Test Quality + Content DX. Test-only phase: zero production-code risk. Independent of Phases 0/1/3 (touches only `test/`).
 
