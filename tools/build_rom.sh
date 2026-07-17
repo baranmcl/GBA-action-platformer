@@ -10,9 +10,9 @@
 #   bash tools/build_rom.sh -j8        # pass make args
 set -euo pipefail
 
-DKP_BASH="/c/devkitPro/msys2/usr/bin/bash.exe"
-REPO="/c/Users/baranmcl/Code/GBA-action-platformer"
-WINPY="/c/Users/baranmcl/AppData/Local/Programs/Python/Python312"
+DKP_BASH="${DKP_BASH:-/c/devkitPro/msys2/usr/bin/bash.exe}"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WINPY="${WINPY:-/c/Users/baranmcl/AppData/Local/Programs/Python/Python312}"
 
 MAKE_ARGS="${*:-"-j8"}"
 
