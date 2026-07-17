@@ -93,7 +93,8 @@ notes and commit messages.
 | 0 — Docs & tooling quick wins | ✅ Shipped | `d6eee82..152c9ed` | 2026-07-17; 2 review-fix rounds (doc facts) |
 | 1 — Content-pipeline validation | ✅ Shipped | `c2c7eec..d6cc701` | 2026-07-17; ROM gate green; mGBA smoke pending user |
 | 2 — Shared level-test harness | ✅ Shipped | `4356383..7237840` | 2026-07-17; 495/495; exemptions removed, harness extended (object states, updraft/wind/grapple) |
-| 3 — Save v6 | 🚧 In progress | — | branch `fix/health-review-remediation` |
+| 3 — Save v6 | ✅ Shipped | `59b7ef8..1226bcd` | 2026-07-17; 513/513; mGBA QA pending user |
+| 4 — Shared constants + player session | 🚧 In progress | — | branch `fix/health-review-remediation` |
 | 2 — Shared level-test harness | ⬜ Not started | — | — |
 | 3 — Save v6 | ⬜ Not started | — | — |
 | 4 — Shared constants + player session | ⬜ Not started | — | — |
@@ -557,7 +558,7 @@ Do NOT: model wind push force, glide trajectories, or dash distances — conserv
 
 # Phase 3 — Save v6: dual-slot, Fletcher-16, boss-defeat + grant persistence
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `59b7ef8..1226bcd` on 2026-07-17 (4 tasks, 0 fix rounds; 513/513; ROM gates green. PENDING USER mGBA QA: power-cycle persistence, slot-A hex-corruption recovery, defeated-boss no-re-fight, 18-pip HUD bar on a 3-heart save)
 
 Implements decisions D1 + D3 and findings I14/I33/I32. Dimensions: Ops Readiness + Architecture. Schema-before-consumers: 3.1 (pure logic) → 3.2 (engine) → 3.3 (scene consumers). Independent of Phases 0/1/2. Pitfalls: IMPL-1 (all decision logic stays pure), IMPL-4 (bn::sram only), TEST-4 (corrupt/empty SRAM covered).
 
