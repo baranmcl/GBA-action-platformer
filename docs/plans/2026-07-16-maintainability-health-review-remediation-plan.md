@@ -94,7 +94,8 @@ notes and commit messages.
 | 1 — Content-pipeline validation | ✅ Shipped | `c2c7eec..d6cc701` | 2026-07-17; ROM gate green; mGBA smoke pending user |
 | 2 — Shared level-test harness | ✅ Shipped | `4356383..7237840` | 2026-07-17; 495/495; exemptions removed, harness extended (object states, updraft/wind/grapple) |
 | 3 — Save v6 | ✅ Shipped | `59b7ef8..1226bcd` | 2026-07-17; 513/513; mGBA QA pending user |
-| 4 — Shared constants + player session | 🚧 In progress | — | branch `fix/health-review-remediation` |
+| 4 — Shared constants + player session | ✅ Shipped | `100f3a2..7c28fd8` | 2026-07-17; 517/517; boss loops deliberately untouched (Phase 5) |
+| 5 — Boss-loop unification | 🚧 In progress | — | branch `fix/health-review-remediation` |
 | 2 — Shared level-test harness | ⬜ Not started | — | — |
 | 3 — Save v6 | ⬜ Not started | — | — |
 | 4 — Shared constants + player session | ⬜ Not started | — | — |
@@ -694,7 +695,7 @@ Do NOT: redesign the HUD or change HP_PER_PIP.
 
 # Phase 4 — Shared constants + player-session controller + pure damage step
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `100f3a2..7c28fd8` on 2026-07-17 (4 tasks, 0 fix rounds; 517/517; ROM gates green. Deviations: player_session.h lives in include/game/ per repo convention; main.cpp keeps explicit boot-at-full refill alongside sync_health_cap — the brief's literal substitution would have regressed it. mGBA QA pending user: hub/dungeon control feel, crystals, death reset)
 
 Extract the verbatim-duplicated scene plumbing (I7), single-source the pinned numbers (I15, I21), and move the damage/respawn frame-step into logic so the drifted tests exercise real code (I11, I12-part). Dimensions: Code Quality + Architecture + Content DX + Test Quality. MUST land before Phases 5/6 (both consume these units). Tasks 4.1/4.2 are pure-logic and parallelizable; 4.3→4.4 are sequential.
 
