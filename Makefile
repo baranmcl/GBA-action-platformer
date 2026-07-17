@@ -43,7 +43,7 @@ include $(LIBBUTANOABS)/butano.mak
 
 #---------------------------------------------------------------------------------------------------------------------
 # Level headers are generated from tools/levels/*.txt — `make levels` refreshes them.
-# tools/build_rom.sh runs this automatically; raw `make` does NOT.
+# tools/build_rom.sh performs the same regeneration itself; raw `make` does NOT.
 #---------------------------------------------------------------------------------------------------------------------
 .PHONY: levels
 levels:
