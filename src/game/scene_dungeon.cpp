@@ -65,6 +65,7 @@
 #include "logic/boss.h"          // M12: BossState (a boss room runs run_room_boss before the normal loop)
 #include "logic/collision.h"     // aabb_overlap (boss contact)
 #include "game/scene_game_over.h" // run_game_over (death -> 0 lives flow)
+#include "game/player_session.h" // play_room: PlayerSession, CrystalStation, set_clamped_cam (NOT run_room_boss — Phase 5)
 
 namespace game
 {
@@ -110,8 +111,6 @@ namespace
         bool shown = false;
         bn::vector<bn::sprite_ptr, 8> sprites;   // one per tile in the run
     };
-    // M10 Light: a respawning full-magic-refill pickup (reset each attempt — never latched).
-    struct MagicCrystalInst { int tx, ty; logic::Body body; bn::optional<bn::sprite_ptr> sprite; bool collected = false; };
     struct ShrineInst { logic::AbilityPickup pk; logic::Body body; bn::optional<bn::sprite_ptr> sprite; };
     struct HeartInst  { logic::HeartContainerSpawn hc; logic::Body body; bn::optional<bn::sprite_ptr> sprite; bool collected = false; };
     // src_tx/ty: plate or button tile to test; group: brazier group (Braziers kind)
@@ -538,14 +537,6 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     // Centre the camera on the player (cx,cy in level pixels), but CLAMP so the 240x160 view never
     // scrolls past the authored level into the blank/wrapping region of the fixed 64x32 background
     // (the BG repeats; a tall level would otherwise show its top wrapped onto the screen bottom).
-    auto set_clamped_cam = [&](int cx, int cy){
-        const int ll = -hw, lt = -hh, lr = ll + level.w * 8, lb = lt + level.h * 8;
-        const int minx = ll + 120, maxx = lr - 120, miny = lt + 80, maxy = lb - 80;
-        int camx = cx - hw, camy = cy - hh;
-        camx = (minx <= maxx) ? (camx < minx ? minx : camx > maxx ? maxx : camx) : (ll + lr) / 2;
-        camy = (miny <= maxy) ? (camy < miny ? miny : camy > maxy ? maxy : camy) : (lt + lb) / 2;
-        cam.set_position(camx, camy);
-    };
 
     logic::EntranceSpawn ent = logic::find_entrance(level, entrance_id);
     const logic::Vec2 spawn_pos { fx(ent.tx * 8), fx(ent.ty * 8) };
@@ -580,33 +571,9 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     engine::SpellPool spells(lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::Hud hud;
 
-    // Vine VFX: 4 dot sprites (bolt reused as placeholder) drawn along player->anchor line.
-    // Positioned in level-px space (same world->screen transform as other sprites).
-    // Visible only while player.grapple.active().
-    constexpr int VINE_SEGS = 4;
-    bn::vector<bn::sprite_ptr, VINE_SEGS> vine_segs;
-    for(int i = 0; i < VINE_SEGS; ++i){
-        vine_segs.push_back(bn::sprite_items::bolt.create_sprite(0, 0));
-        vine_segs.back().set_camera(cam);
-        vine_segs.back().set_visible(false);
-        vine_segs.back().set_scale(0.5);
-    }
-
-    // Spell HUD icon — screen-fixed top-RIGHT, clear of the top-left bars. Shows the SELECTED
-    // spell's art (fire/ice); swap the image only when the selection changes (set_item, no recreate).
-    bn::sprite_ptr spell_icon = bn::sprite_items::fire_proj.create_sprite(104, -68);
-    logic::SpellId last_icon = logic::SpellId::None;
-    auto refresh_spell_icon = [&]{
-        if(spell.selected != last_icon){
-            if(spell.selected == logic::SpellId::Ice)         spell_icon.set_item(bn::sprite_items::ice_proj);
-            else if(spell.selected == logic::SpellId::Fire)   spell_icon.set_item(bn::sprite_items::fire_proj);
-            else if(spell.selected == logic::SpellId::Grapple) spell_icon.set_item(bn::sprite_items::grapple_icon); // green hook icon (distinct from cyan Ice)
-            else if(spell.selected == logic::SpellId::Light)   spell_icon.set_item(bn::sprite_items::light_proj);   // white/gold Light bolt (distinct from red Fire / cyan Ice)
-            last_icon = spell.selected;
-        }
-        spell_icon.set_visible(spell.selected != logic::SpellId::None);
-    };
-    refresh_spell_icon();
+    // Player-loop unit: ability sync, input decode, spell HUD icon, vine VFX, muzzle calc.
+    game::PlayerSession session(cam, world, ps, player);
+    session.refresh_spell_icon();   // one-time: show the carried-in selection immediately
 
     // ---- pound VFX (placeholder): a brief dust/impact dot (bolt sprite reused, like the vine VFX)
     //      shown for a few frames at the impact point on each pound landing, + a tiny camera nudge. ----
@@ -772,15 +739,9 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     logic::RevealState reveal;   // room-wide Light reveal timer (a Light cast (re)starts it)
 
     // ---- magic crystals (M10 Light: full-magic-refill pickup; respawns each attempt, NOT latched) ----
-    bn::vector<MagicCrystalInst, 8> magic_crystals;
-    for(int i = 0; i < level.magic_crystal_count && i < 8; ++i){
-        const logic::MagicCrystalSpawn& mc = level.magic_crystals[i];
-        magic_crystals.push_back(MagicCrystalInst{ mc.tx, mc.ty, tile_body(mc.tx, mc.ty, 6, 8), {}, false });
-        MagicCrystalInst& ci = magic_crystals.back();
-        ci.sprite = bn::sprite_items::magic_crystal.create_sprite(0, 0);
-        ci.sprite->set_camera(cam);
-        ci.sprite->set_position(wx(mc.tx * 8 + 8), wy(mc.ty * 8 + 8));
-    }
+    game::CrystalStation crystals;
+    crystals.spawn(level, cam, lvl.map, hw, hh, game::CrystalStation::Grounding::TileCentre,
+                   /*respawn_when_depleted=*/false);   // collected stays gone until reset() (death/attempt reset only)
 
     // ---- room-doors (bg tile 5 open-door; 2-wide x 4-tall archway grounded on the floor,
     //      matching the hub's archway). Floor-scanned so a row-18-authored door reaches the
@@ -846,13 +807,11 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     // Centre camera on the player before fading in (avoids a snap on frame 0).
     int cx0 = player.body.pos.x.to_int() + player.body.half_w.to_int();
     int cy0 = player.body.pos.y.to_int() + player.body.half_h.to_int();
-    set_clamped_cam(cx0, cy0);
+    game::set_clamped_cam(cam, lvl.view.map_px_w, lvl.view.map_px_h, level.w, level.h, cx0, cy0);
     engine::set_fade(16);
     int fade_in_t = 16;
     int push_cd = 0;
     int grapple_pull_cd = 0;
-    int miss_vine_t   = 0;  // counts down from 10; >0 => miss-vine animation active
-    int miss_vine_dir = 1;  // facing direction when the miss was fired
     int lr_restart_hold = 0; // frames L+R held — anti-soft-lock manual restart (moved off START)
 
     while(true)
@@ -875,20 +834,12 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             }
         }
 
-        logic::InputFrame in = engine::read_input();
-        player.abilities.featherleap = world.has(logic::Ability::Featherleap);
-        player.abilities.glide       = world.has(logic::Ability::Glide);
-        player.abilities.dash        = world.has(logic::Ability::Dash);
-        player.abilities.grapple     = world.has(logic::Ability::Grapple);
-        player.abilities.stone       = world.has(logic::Ability::Stone);
+        session.sync_abilities();
         // Read spell intent + cycle FIRST so the selection is current for the grapple/cast branch:
-        engine::SpellIntent si = engine::read_spell_intent();
-        if(si.cycle) spell.cycle(world);
+        SessionIntent intent = session.read_intent();
         // R fires the SELECTED tool: Grapple -> pull a nearby pullable block one tile toward the
         // player (if one is in range/arc), else latch the player to an anchor; Fire/Ice -> cast.
-        bool want_grapple = si.cast && spell.selected == logic::SpellId::Grapple;
-        in.grapple_fire = false;
-        if(want_grapple){
+        if(intent.want_grapple){
             // Find a pullable block within grapple range in the facing/up arc.
             BlockInst* target = nullptr;
             int ptx = px2t(player.body.pos.x + player.body.half_w);   // player centre tile x
@@ -941,22 +892,17 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                     }
                     grapple_pull_cd = 8; // consumed by enemy pull — don't fire anchor grapple
                 } else if(!etarget){
-                    in.grapple_fire = true; // no block, no enemy -> player anchor-grapple
+                    intent.in.grapple_fire = true; // no block, no enemy -> player anchor-grapple
                 }
             }
         }
-        bool cast_spell = si.cast && (spell.selected == logic::SpellId::Fire ||
-                                      spell.selected == logic::SpellId::Ice  ||
-                                      spell.selected == logic::SpellId::Light);
         // Capture the "tried to anchor-grapple" flag BEFORE player.update consumes it.
-        bool tried_anchor = want_grapple && in.grapple_fire;
-        player.update(in, lvl.map);
+        bool tried_anchor = intent.want_grapple && intent.in.grapple_fire;
+        player.update(intent.in, lvl.map);
         avatar.sync(player);
         // Miss detection: player tried an anchor-grapple but nothing latched (no grapple point in range).
-        if(tried_anchor && !player.grapple.active()){
-            miss_vine_t   = 10;
-            miss_vine_dir = player.facing;
-        }
+        if(tried_anchor && !player.grapple.active())
+            session.note_anchor_miss(player.facing);
 
         // ---- M8 Stone pound impact resolution (on the one frame the pound lands) ----
         // Order: cracked-floor smash (may re-arm to chain through stacked floors) -> heavy switch ->
@@ -1065,11 +1011,10 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         }
 
         // Shot aim (Zelda II style, shared with the boss/hub): UP = high, DOWN = low, else medium.
-        logic::Vec2 muzzle = { player.body.pos.x + player.body.half_w,
-                               player.body.pos.y + player.body.half_h + fx(engine::read_aim_dy()) };
-        bolts.update(in.fire_pressed, muzzle, player.facing, lvl.map);
+        logic::Vec2 muzzle = session.muzzle();
+        bolts.update(intent.in.fire_pressed, muzzle, player.facing, lvl.map);
 
-        logic::SpellId fired = spells.update_and_cast(cast_spell, spell, magic, muzzle, player.facing, lvl.map);
+        logic::SpellId fired = spells.update_and_cast(intent.cast_spell, spell, magic, muzzle, player.facing, lvl.map);
 
         // ---- M10 Light reveal: a Light cast that ACTUALLY fired (re)starts the room-wide window.
         //      Detect via the returned fired-spell (NOT a magic delta — the crystal refill mutates
@@ -1166,9 +1111,9 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         if(grapple_pull_cd > 0) --grapple_pull_cd;   // ticks here; checked in the input phase above
         for(BlockInst& bi : blocks){
             // push when grounded, holding a dir, and the tile in front of the player == this block
-            if(push_cd == 0 && player.body.on_ground && (in.left || in.right)){
-                int dir = in.right ? 1 : -1;
-                int lead_px = in.right ? player.body.pos.x.to_int() + 16 : player.body.pos.x.to_int() - 1;
+            if(push_cd == 0 && player.body.on_ground && (intent.in.left || intent.in.right)){
+                int dir = intent.in.right ? 1 : -1;
+                int lead_px = intent.in.right ? player.body.pos.x.to_int() + 16 : player.body.pos.x.to_int() - 1;
                 int feet_ty = px2t(player.body.pos.y + player.body.half_h + player.body.half_h - fx(1));
                 if(px2t(fx(lead_px)) == bi.blk.tx && feet_ty == bi.blk.ty){
                     int oldx = bi.blk.tx;
@@ -1259,10 +1204,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             }
             // M10: reset magic crystals each attempt (NOT latched) so a fresh full-refill is always
             // available after a death-respawn — guarantees no magic soft-lock on the Light ascent.
-            for(MagicCrystalInst& ci : magic_crystals){
-                ci.collected = false;
-                if(ci.sprite) ci.sprite->set_visible(true);
-            }
+            crystals.reset();
         }
 
         // ---- ability shrines ----
@@ -1289,16 +1231,9 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
 
         // ---- magic crystals: collect on overlap -> full magic refill. NOT latched (resets each
         //      attempt below) so a Light beat never soft-locks on empty magic. ----
-        for(MagicCrystalInst& ci : magic_crystals){
-            if(ci.collected) continue;
-            if(logic::aabb_overlap(player.body, ci.body)){
-                magic.cur = magic.max;   // full refill — the guaranteed combat-free magic source
-                ci.collected = true;
-                if(ci.sprite) ci.sprite->set_visible(false);
-            }
-        }
+        crystals.update(player.body, magic);
 
-        refresh_spell_icon();   // reflect cycle (L) and shrine pickups in the HUD icon
+        session.refresh_spell_icon();   // reflect cycle (L) and shrine pickups in the HUD icon
 
         // ---- spronk rescue (marks the dungeon cleared; abilities now come from F pickups) ----
         if(level.has_cage){
@@ -1318,49 +1253,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             return RoomOutcome{ RoomOutcome::ExitDungeon };
         }
 
-        // ---- vine VFX: draw dot segments along player->anchor while grapple active ----
-        if(miss_vine_t > 0) --miss_vine_t;
-        if(player.grapple.active()){
-            // Latched: draw dots from player to anchor (unchanged).
-            int px_ = player.body.pos.x.to_int() + player.body.half_w.to_int();
-            int py_ = player.body.pos.y.to_int() + player.body.half_h.to_int();
-            int ax_ = player.grapple.anchor_tx * 8 + 4;
-            int ay_ = player.grapple.anchor_ty * 8 + 4;
-            for(int i = 0; i < VINE_SEGS; ++i){
-                int t = i + 1;  // t in 1..VINE_SEGS (skip the player pos itself)
-                int sx_ = px_ + (ax_ - px_) * t / (VINE_SEGS + 1);
-                int sy_ = py_ + (ay_ - py_) * t / (VINE_SEGS + 1);
-                vine_segs[i].set_position(sx_ - hw, sy_ - hh);
-                vine_segs[i].set_visible(true);
-            }
-        } else if(miss_vine_t > 0){
-            // Miss: shoot vine out and retract. Duration 10 frames; peaks at frame 5.
-            // reach in tiles: extend 0->RANGE over first half, retract RANGE->0 over second half.
-            // miss_vine_t counts down from 10 to 1; elapsed = 10 - miss_vine_t (0=just fired).
-            int elapsed = 10 - miss_vine_t;           // 0..9 as the timer runs from 10 down to 1
-            int half = 5;
-            // phase: 0..half-1 = extending, half..9 = retracting
-            int reach_tiles;
-            if(elapsed < half){
-                reach_tiles = (logic::GrappleState::RANGE * (elapsed + 1)) / half; // 0->RANGE
-            } else {
-                reach_tiles = (logic::GrappleState::RANGE * (10 - elapsed)) / half; // RANGE->0
-            }
-            if(reach_tiles < 1) reach_tiles = 1; // always at least one segment visible while active
-            int px_ = player.body.pos.x.to_int() + player.body.half_w.to_int();
-            int py_ = player.body.pos.y.to_int() + player.body.half_h.to_int();
-            int reach_px = reach_tiles * 8;
-            for(int i = 0; i < VINE_SEGS; ++i){
-                // Space VINE_SEGS dots evenly from player to reach point.
-                int t = i + 1;
-                int sx_ = px_ + (miss_vine_dir * reach_px * t) / (VINE_SEGS + 1);
-                int sy_ = py_;  // horizontal shot (stays at player centre height)
-                vine_segs[i].set_position(sx_ - hw, sy_ - hh);
-                vine_segs[i].set_visible(true);
-            }
-        } else {
-            for(int i = 0; i < VINE_SEGS; ++i) vine_segs[i].set_visible(false);
-        }
+        session.update_vine_vfx(hw, hh);
 
         // ---- pound VFX tick (placeholder): fade out the dust; apply a tiny vertical camera shake ----
         if(pound_vfx_t > 0){ if(--pound_vfx_t == 0) pound_dust.set_visible(false); }
@@ -1368,7 +1261,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         int cx = player.body.pos.x.to_int() + player.body.half_w.to_int();
         int cy = player.body.pos.y.to_int() + player.body.half_h.to_int();
         if(pound_shake_t > 0){ cy += (pound_shake_t % 2 == 0) ? 2 : -2; --pound_shake_t; }  // 2px jitter
-        set_clamped_cam(cx, cy);
+        game::set_clamped_cam(cam, lvl.view.map_px_w, lvl.view.map_px_h, level.w, level.h, cx, cy);
         if(fade_in_t > 0) engine::set_fade(--fade_in_t);
         bn::core::update();
     }
@@ -1384,8 +1277,7 @@ DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world
     ps.last_dungeon = world.current_dungeon;
     // Sync the max-HP cap to the collected heart containers (PlayerState defaults to 100/100, but a
     // continued game may have upgrades). Only raise the CAP here; the pickup itself refills to full.
-    ps.health.max = logic::max_health_for(world);
-    if(ps.health.cur > ps.health.max) ps.health.cur = ps.health.max;
+    logic::sync_health_cap(ps, world);
     ps.spell.ensure_valid(world);  // selected tool lives in PlayerState; init a default without clobbering a carried-in choice (persists across rooms, hub, hub<->dungeon)
     while(true){
         BN_ASSERT(cur_room >= 0 && cur_room < dungeon.room_count,
