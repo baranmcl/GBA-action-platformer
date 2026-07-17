@@ -142,9 +142,11 @@ def compile_level(txt_path, json_path):
                 enemies.append((x, y, patrol[0], patrol[1], p2))
                 e_idx += 1
             elif c == 'G':
-                if not j_gates:
-                    raise LevelError(f"gate 'G' at ({x},{y}) but JSON has no 'gates' entry")
-                entry = j_gates[g_idx] if g_idx < len(j_gates) else j_gates[-1]
+                if g_idx >= len(j_gates):
+                    raise LevelError(
+                        f"gate 'G' #{g_idx} at ({x},{y}) has no JSON 'gates' entry "
+                        f"({g_idx + 1} symbols so far, {len(j_gates)} entries)")
+                entry = j_gates[g_idx]
                 gtype = entry['type']
                 if gtype not in GATE_ENUM:
                     raise LevelError(f"unknown gate type '{gtype}'")
@@ -239,6 +241,13 @@ def compile_level(txt_path, json_path):
     if len(spawns) != 1:
         raise LevelError(f"need exactly one '@' spawn, found {len(spawns)}")
 
+    # JSON 'gates' entries beyond the number of 'G' symbols are orphaned (a typo, e.g. a
+    # stale entry left after removing a gate from the grid) — hard error in both directions.
+    if len(j_gates) > g_idx:
+        raise LevelError(
+            f"JSON 'gates' has {len(j_gates)} entries but only {g_idx} 'G' symbols in the level "
+            f"(orphaned entries)")
+
     brazier_groups = [(g['total'], g['target'][0], g['target'][1], g.get('latch_id', -1))
                       for g in j_brazier_groups]
 
@@ -252,7 +261,7 @@ def compile_level(txt_path, json_path):
         if tile_at(0, y) != 1 or tile_at(w - 1, y) != 1:
             raise LevelError(f"left/right border not solid at row {y}")
 
-    return {
+    level = {
         'w': w, 'h': h, 'tiles': tiles,
         'spawn': spawns[0], 'cage': cages[0] if cages else None, 'exit': exits[0] if exits else None,
         'enemies': enemies, 'gates': gates, 'doors': doors, 'pickups': pickups,
@@ -264,6 +273,59 @@ def compile_level(txt_path, json_path):
         'hidden_platforms': hidden_platforms, 'magic_crystals': magic_crystals,
         'boss': boss_symbol,
     }
+    validate_level(level)
+    return level
+
+
+def validate_level(level):
+    """Enforce the per-room caps mirroring the fixed-capacity bn::vector spawn buffers in
+    src/game/scene_dungeon.cpp. A room that exceeds one of these silently truncates on real
+    hardware (or, for the shared trigger vector, hard-crashes) — so these are build-time
+    errors, not warnings.
+    """
+    def cap(name, count, limit):
+        if count > limit:
+            raise LevelError(f"{count} {name} > cap {limit}")
+
+    cap('enemies', len(level['enemies']), 8)
+
+    cracked = [g for g in level['gates'] if g[2] == 'CrackedFloor']
+    non_cracked = [g for g in level['gates'] if g[2] != 'CrackedFloor']
+    cap('CrackedFloor gates', len(cracked), 16)
+    cap('non-CrackedFloor gates', len(non_cracked), 24)
+
+    cap('shrines', len(level['pickups']), 4)
+    cap('heart containers', len(level['heart_containers']), 4)
+    cap('blocks', len(level['blocks']), 8)
+    cap('boulders', len(level['boulders']), 8)
+
+    cap('loose platforms', len(level['loose_platforms']), 8)
+    for (tx, ty, llen) in level['loose_platforms']:
+        if llen > 8:
+            raise LevelError(f"loose platform at ({tx},{ty}) len {llen} > cap 8")
+
+    cap('hidden platforms', len(level['hidden_platforms']), 8)
+    for (tx, ty, hlen) in level['hidden_platforms']:
+        if hlen > 8:
+            raise LevelError(f"hidden platform at ({tx},{ty}) len {hlen} > cap 8")
+
+    cap('magic crystals', len(level['magic_crystals']), 8)
+    cap('room_doors', len(level['room_doors']), 8)
+    cap('braziers', len(level['braziers']), 16)
+    cap('plates', len(level['plates']), 16)
+    cap('buttons', len(level['buttons']), 16)
+
+    # plates + buttons + brazier_groups share one 16-capacity bn::vector<TriggerInst, 16>
+    # at runtime (scene_dungeon.cpp); overflowing it is a hard crash on hardware, not a
+    # silent truncation, so this combined cap is checked separately from the per-kind caps.
+    trigger_count = len(level['plates']) + len(level['buttons']) + len(level['brazier_groups'])
+    cap('triggers (plates+buttons+brazier_groups)', trigger_count, 16)
+
+    cap('width', level['w'], 64)
+    cap('height', level['h'], 128)
+    area = level['w'] * level['h']
+    if area > 8192:
+        raise LevelError(f"level {level['w']}x{level['h']}={area} tiles > 8192 (EWRAM grid cap)")
 
 
 def emit_header(level, name):

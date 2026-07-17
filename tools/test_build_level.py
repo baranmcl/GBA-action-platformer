@@ -537,6 +537,77 @@ class TestBuildLevel(unittest.TestCase):
         self.assertEqual(lvl['hidden_platforms'], [(3, 1, 2)])
         self.assertEqual(lvl['magic_crystals'], [(5, 1)])
 
+    # --- Task 1.1: per-room cap/dimension/JSON-count validation ---
+    def test_enemy_cap_exceeded_errors(self):
+        # 9 enemies > cap 8 (runtime bn::vector<EnemyInst, 8> in scene_dungeon.cpp)
+        w = 2 + 1 + 9  # borders + '@' + 9 'o's
+        txt = ('#' * w + '\n' +
+               '#@' + 'o' * 9 + '#' + '\n' +
+               '#' * w + '\n')
+        with self.assertRaises(build_level.LevelError) as cm:
+            compile_str(txt, {})
+        self.assertIn('enemies', str(cm.exception))
+
+    def test_width_cap_exceeded_errors(self):
+        # 65-wide bordered level > cap 64 (level width; EWRAM collision grid)
+        w = 65
+        interior = '.' * (w - 3)  # w minus 2 borders minus '@'
+        txt = ('#' * w + '\n' +
+               '#@' + interior + '#' + '\n' +
+               '#' * w + '\n')
+        with self.assertRaises(build_level.LevelError) as cm:
+            compile_str(txt, {})
+        self.assertIn('width', str(cm.exception))
+
+    def test_combined_trigger_cap_exceeded_errors(self):
+        # 6 plates + 6 buttons + 5 brazier_groups = 17 triggers > cap 16 (shared
+        # bn::vector<TriggerInst, 16> in scene_dungeon.cpp). brazier_groups are JSON-only
+        # (indexed by group id, not by a grid symbol), so the grid only needs the 6
+        # '=' plates + 6 '?' buttons (12 symbols) plus '@' and borders.
+        w = 2 + 1 + 6 + 6  # borders + '@' + 6 '=' + 6 '?'
+        txt = ('#' * w + '\n' +
+               '#@' + '=' * 6 + '?' * 6 + '#' + '\n' +
+               '#' * w + '\n')
+        meta = {
+            "plates": [{"target": [0, 0]} for _ in range(6)],
+            "buttons": [{"target": [0, 0]} for _ in range(6)],
+            "brazier_groups": [{"total": 1, "target": [0, 0]} for _ in range(5)],
+        }
+        with self.assertRaises(build_level.LevelError) as cm:
+            compile_str(txt, meta)
+        self.assertIn('trigger', str(cm.exception))
+
+    def test_loose_platform_len_cap_exceeded_errors(self):
+        # loose platform len 9 > cap 8
+        txt = "#######\n#@.:..#\n#######\n"
+        with self.assertRaises(build_level.LevelError) as cm:
+            compile_str(txt, {"loose_platforms": [{"len": 9}]})
+        self.assertIn('len', str(cm.exception))
+
+    def test_gate_symbol_json_undercount_errors(self):
+        # 3 'G' symbols but only 2 JSON 'gates' entries -> hard error (replaces the old
+        # silent j_gates[-1] reuse fallback at build_level.py:147)
+        txt = "########\n#@GGG..#\n########\n"
+        with self.assertRaises(build_level.LevelError):
+            compile_str(txt, {"gates": [{"type": "gap"}, {"type": "gap"}]})
+
+    def test_gate_symbol_json_overcount_errors(self):
+        # JSON 'gates' has MORE entries than 'G' symbols -> orphaned entry is a typo, hard error
+        txt = "#####\n#@G.#\n#####\n"
+        with self.assertRaises(build_level.LevelError):
+            compile_str(txt, {"gates": [{"type": "gap"}, {"type": "gap"}]})
+
+    def test_room_at_exact_caps_compiles_clean(self):
+        # Happy path: exactly at caps (8 enemies, width 64) must compile without error.
+        w = 64
+        interior_len = w - 2 - 1 - 8  # minus borders, '@', 8 'o's
+        txt = ('#' * w + '\n' +
+               '#@' + 'o' * 8 + '.' * interior_len + '#' + '\n' +
+               '#' * w + '\n')
+        lvl = compile_str(txt, {})
+        self.assertEqual(len(lvl['enemies']), 8)
+        self.assertEqual(lvl['w'], 64)
+
 
 if __name__ == '__main__':
     unittest.main()
