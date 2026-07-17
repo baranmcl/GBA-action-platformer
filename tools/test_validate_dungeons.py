@@ -236,6 +236,24 @@ class TestArenaConstraints(unittest.TestCase):
             errors, warnings = vd.validate_all(os.path.join(d, 'manifest.json'), d)
             self.assertEqual(errors, [])
 
+    def test_boss_room_floor_gap_errors(self):
+        # Boss arena floor must be solid at (w/2 - 1, h-2), (w/2, h-2), and (w/2 + 1, h-2).
+        # Replace one of the solid floor tiles with '.' to trigger the error.
+        # BOSS_ROOM_TXT has w=8, h=5, so w//2=4 and floor_y=3.
+        # Checked positions: x in {3, 4, 5} at row 3. Replace x=3 with '.'.
+        txt = (
+            "########\n"
+            "#......#\n"
+            "#..@...#\n"
+            "###.####\n"
+            "########\n"
+        )
+        with tempfile.TemporaryDirectory() as d:
+            write_room(d, 'room0', txt, {"boss": "d1"})
+            write_manifest(d, {"dungeons": {"1": ["room0"]}, "standalone": []})
+            errors, warnings = vd.validate_all(os.path.join(d, 'manifest.json'), d)
+            self.assertTrue(any('arena floor not solid' in e for e in errors), errors)
+
 
 class TestSpriteBudget(unittest.TestCase):
     def test_sprite_budget_exceeded_errors(self):
