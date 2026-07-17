@@ -176,9 +176,9 @@ TEST(d3_room0_stage2_onward_door_requires_freeze_and_both_gates){
     RSet seen_no_freeze = harness::reachable_from(L, no_freeze, L.spawn_tx, L.spawn_ty);
     CHECK(!stands_at(L, seen_no_freeze, P.onward_tx, P.onward_ty));
 
-    // (b) water frozen + Vine open but FireWall CLOSED -> still gated.
+    // (b) water frozen + Vine open + Ice-type gate open but FireWall CLOSED -> still gated.
     harness::WorldModel no_firewall{};
-    no_firewall.open_gates.insert(P.vine_idx); no_firewall.water_frozen = true; no_firewall.climb_max = true;
+    no_firewall.open_gates.insert(P.vine_idx); no_firewall.open_gates.insert(P.ice_idx); no_firewall.water_frozen = true; no_firewall.climb_max = true;
     RSet seen_no_firewall = harness::reachable_from(L, no_firewall, L.spawn_tx, L.spawn_ty);
     CHECK(!stands_at(L, seen_no_firewall, P.onward_tx, P.onward_ty));
 
