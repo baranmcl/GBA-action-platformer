@@ -20,7 +20,7 @@ the top of `tools/build_level.py`.
 4. Extend the dungeon-select table in `src/main.cpp` (the `if(n == 1) ... else if(n == 2) ...`
    chain, currently ending at `else if(n == 8) lvl = &DUNGEON8_DUNGEON;`) with your new `n`.
 5. Wire the hub door:
-   - Add the dungeon's digit glyph to `tools/levels/hub.txt` (an unused `1`-`9` symbol).
+   - Hub door: all nine `1`-`9` door glyphs in `tools/levels/hub.txt` are already allocated (D1–D8 + finale) — adding a 10th dungeon door requires the door-identity rework described in the remediation plan's Appendix A ('The 9-dungeon door-glyph ceiling', deliberately deferred). For a dungeon that REPLACES or reuses an existing slot, reuse its digit.
    - Add its gating clause to `door_enterable()` in `src/game/scene_hub.cpp` (currently a
      chain of `n == K && w.spronk_freed(K-1)` clauses — follow that pattern).
 6. Allocate registry ids (see [Global registries](#5-global-registries) below):
@@ -52,7 +52,7 @@ the top of `tools/build_level.py`.
    - Give it a `BossId`-equivalent identity — today that's just "the def's address"
      (pointer identity; see step 4). A real `BossId` enum arrives with Phase 5.
 2. Add a `"dN": 'logic::DN_DEF'` entry to the `BOSS_SYMBOL` map in `tools/build_level.py`
-   (an unknown boss name is a compile-time `LevelError`, not silently ignored).
+   (an unknown boss name is a build-time (tools/build_level.py, Python) `LevelError`, not silently ignored).
 3. Add placeholder sprite art in `tools/make_placeholder_art.py`:
    - A `draw_<boss>_frame(...)` function (model: `draw_coldforge_frame`, line ~625).
    - A `gen_<boss>()` function that composes the frames and calls `write(...)`
@@ -68,10 +68,7 @@ the top of `tools/build_level.py`.
 5. Set `"boss": "dN"` in the arena room's JSON sidecar (resolved via `BOSS_SYMBOL` above).
 6. Respect the [arena authoring constraints](#3-arena-authoring-constraints-i36) below —
    the arena room is just a normal room whose JSON has a `"boss"` key.
-7. Tests: def-invariant checks are automatic — `test/test_boss.cpp` loops every
-   registered `BossDef` and asserts structural invariants (phase HP ordering, telegraph
-   >= `SWITCH_BUDGET`, etc.). No per-boss test file is required for the def itself; still
-   write a dungeon-level test per step 1.7 above for the arena room's integration.
+7. Def-invariant tests: TODAY you must hand-write per-def structural checks in `test/test_boss.cpp` (copy the pattern of `bossdef_d3_coldforge_fields` — telegraph >= SWITCH_BUDGET per phase, end_hp descending to 0) AND add your def to `switch_budget_holds_for_all_defs`. (After the remediation plan's Phase 5 lands, one all-defs invariant loop covers every registered def automatically.) Still write a dungeon-level test per step 1.7 above for the arena room's integration.
 
 ## 3. Add an enemy type
 
