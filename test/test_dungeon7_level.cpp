@@ -75,6 +75,16 @@ static harness::WorldModel stone_cleared_wm(const LevelData& L){
 static harness::WorldModel no_pound_wm(const LevelData& L){
     harness::WorldModel wm{}; wm.boulders_broken = true; wm.loose_dropped = true; open_darkveil(L, wm); return wm;   // cracked stays SOLID
 }
+// Per-object load-state baseline: DarkVeil open (matches base_open_wm), but boulders/cracked-floors/
+// loose-platforms are ALL at their load state except the ONE object under test (Task 2.4 review fix:
+// the retired fork tested each boulder/loose-platform cleared INDIVIDUALLY against this baseline —
+// the full-kit flood in stone_cleared_wm is strictly weaker and can't catch a single-object stranding).
+static harness::WorldModel per_boulder_wm(const LevelData& L, int b){
+    harness::WorldModel wm{}; open_darkveil(L, wm); wm.broken_boulder_idx.insert(b); return wm;
+}
+static harness::WorldModel per_loose_wm(const LevelData& L, int p){
+    harness::WorldModel wm{}; open_darkveil(L, wm); wm.dropped_loose_idx.insert(p); return wm;
+}
 
 // --- Cracked-floor pound-chain scanners (D7-specific mechanic; NOT flood-fill, kept local). ---
 static bool is_cracked(const LevelData& L, int tx, int ty){
@@ -285,27 +295,26 @@ TEST(d7_manipulable_objects_cannot_strand){
     for(int r = 0; r < D7_N; ++r){
         const LevelData& L = *D7_ROOMS[r];
         int sx = harness::room_start_x(L), sy = harness::room_start_y(L);
-        // boulders: with the Stone kit the player breaks them; a forward exit stays reachable from the
-        // entrance and no boulder tile overlaps a door/cage/exit. (Per-boulder removal collapses to the
-        // full boulders-broken frontier: D7's boulders sit far from the entrance-adjacent forward door,
-        // so the stranding outcome is identical.)
-        if(L.boulder_count){
-            RSet R = harness::reachable_from(L, stone_cleared_wm(L), sx, sy);
+        // boulders: with the Stone kit the player breaks EACH boulder individually; a forward exit stays
+        // reachable from the entrance with ONLY that boulder cleared (a fresh WorldModel per iteration —
+        // every other boulder/cracked-floor/loose-platform stays at load state), and no boulder tile
+        // overlaps a door/cage/exit.
+        for(int b=0;b<L.boulder_count;++b){
+            RSet R = harness::reachable_from(L, per_boulder_wm(L, b), sx, sy);
             bool ok = reaches_forward_exit(L, R);
             CHECK(ok);
-            for(int b=0;b<L.boulder_count;++b){
-                for(int i=0;i<L.room_door_count;++i) CHECK(!(L.room_doors[i].tx==L.boulders[b].tx && L.room_doors[i].ty==L.boulders[b].ty));
-                if(L.has_cage) CHECK(!(L.cage_tx==L.boulders[b].tx && L.cage_ty==L.boulders[b].ty));
-                if(L.has_exit) CHECK(!(L.exit_tx==L.boulders[b].tx && L.exit_ty==L.boulders[b].ty));
-                std::printf("  [boulder] room %d O(%d,%d) -> forward-exit %s\n",
-                            r, L.boulders[b].tx, L.boulders[b].ty, ok?"reached":"MISSING");
-                ++covered;
-            }
+            for(int i=0;i<L.room_door_count;++i) CHECK(!(L.room_doors[i].tx==L.boulders[b].tx && L.room_doors[i].ty==L.boulders[b].ty));
+            if(L.has_cage) CHECK(!(L.cage_tx==L.boulders[b].tx && L.cage_ty==L.boulders[b].ty));
+            if(L.has_exit) CHECK(!(L.exit_tx==L.boulders[b].tx && L.exit_ty==L.boulders[b].ty));
+            std::printf("  [boulder] room %d O(%d,%d) cleared alone -> forward-exit %s\n",
+                        r, L.boulders[b].tx, L.boulders[b].ty, ok?"reached":"MISSING");
+            ++covered;
         }
-        // loose platforms: after dropping to the rest row, a forward exit stays reachable AND the rest
-        // tiles don't overlap a door/cage/exit (no sealing the goal).
+        // loose platforms: after dropping EACH platform individually to its rest row (a fresh WorldModel
+        // per iteration — every other object stays at load state), a forward exit stays reachable AND the
+        // rest tiles don't overlap a door/cage/exit (no sealing the goal).
         for(int p=0;p<L.loose_platform_count;++p){
-            RSet R = harness::reachable_from(L, stone_cleared_wm(L), sx, sy);
+            RSet R = harness::reachable_from(L, per_loose_wm(L, p), sx, sy);
             bool ok = reaches_forward_exit(L, R);
             CHECK(ok);
             const LoosePlatformSpawn& lp = L.loose_platforms[p];
@@ -316,7 +325,7 @@ TEST(d7_manipulable_objects_cannot_strand){
                 if(L.has_cage) CHECK(!(L.cage_tx==x && L.cage_ty==ty));
                 if(L.has_exit) CHECK(!(L.exit_tx==x && L.exit_ty==ty));
             }
-            std::printf("  [loose] room %d :(%d,%d,len%d) rests row %d -> forward-exit %s\n",
+            std::printf("  [loose] room %d :(%d,%d,len%d) dropped alone -> rests row %d -> forward-exit %s\n",
                         r, lp.tx, lp.ty, lp.len, ty, ok?"reached":"MISSING");
             ++covered;
         }

@@ -26,6 +26,8 @@ struct Fixture {
     std::vector<uint8_t> t;
     std::vector<GateSpawn> gates;
     std::vector<HiddenPlatformSpawn> hidden;
+    std::vector<BoulderSpawn> boulders;
+    std::vector<LoosePlatformSpawn> loose;
     int spawn_tx = 2, spawn_ty = 1;
 
     Fixture(int W, int H) : w(W), h(H), t(W*H, (uint8_t)TileKind::Empty) {
@@ -42,6 +44,8 @@ struct Fixture {
         L.spawn_tx = spawn_tx; L.spawn_ty = spawn_ty;
         if(!gates.empty()){ L.gates = gates.data(); L.gate_count = (int)gates.size(); }
         if(!hidden.empty()){ L.hidden_platforms = hidden.data(); L.hidden_platform_count = (int)hidden.size(); }
+        if(!boulders.empty()){ L.boulders = boulders.data(); L.boulder_count = (int)boulders.size(); }
+        if(!loose.empty()){ L.loose_platforms = loose.data(); L.loose_platform_count = (int)loose.size(); }
         return L;
     }
 };
@@ -212,6 +216,128 @@ TEST(harness_hidden_platform_reachable_when_revealed){
     LevelData L = f.level();
     harness::WorldModel lit{}; lit.hidden_platforms_shown = true;
     CHECK(harness::reaches(L, lit, 10, 6));         // revealed -> solid -> reliably reachable
+}
+
+// ----------------------------------------------------------------------------
+// 5b. Object-state toggles (Task 2.4 review fix): boulders_broken/broken_boulder_idx,
+//     cracked_floors_broken, and loose_dropped/dropped_loose_idx each have their own fixture-based
+//     self-test, mirroring the water_fixture/gate_fixture style above. No harness self-test existed
+//     for any of these before this fix, even though loose_dropped (2.4) and the pre-existing
+//     boulders_broken/cracked_floors_broken are load-bearing for every D7/D8/D9 no-strand invariant.
+// ----------------------------------------------------------------------------
+
+// A full-height 2-wide boulder wall at cols 9-10 (rows 1..h-3, mirroring exactly how a closed Vine/
+// DarkVeil gate fills a corridor in build_grid -- see gate_fixture above). A single floor-level boulder
+// tile is NOT enough: the harness's horizontal double-jump rule only inspects rows ABOVE the floor when
+// checking a leap's headroom, and standing on TOP of a short boulder pile is itself a valid resting
+// surface (surf() doesn't care what made the tile solid) — either lets the player bypass a short pile.
+// Filling every row in the corridor's clearance leaves no row left to stand on or climb through.
+static Fixture boulder_fixture(){
+    const int W = 20, H = 12;
+    Fixture f(W, H);
+    for(int ty = 1; ty < H-2; ++ty){
+        f.boulders.push_back(BoulderSpawn{ 9,  ty });
+        f.boulders.push_back(BoulderSpawn{ 10, ty });
+    }
+    return f;
+}
+// Boulder index layout from boulder_fixture(): pairs (9,ty),(10,ty) for ty=1..h-3, in row order — EVEN
+// indices are column 9, ODD indices are column 10.
+
+TEST(harness_boulder_intact_blocks_corridor){
+    Fixture f = boulder_fixture();
+    LevelData L = f.level();
+    harness::WorldModel wm{};                              // boulders_broken=false, idx set empty
+    CHECK(!harness::reaches(L, wm, 15, L.h-2));             // far side sealed
+}
+TEST(harness_boulder_broken_blanket_unblocks_corridor){
+    Fixture f = boulder_fixture();
+    LevelData L = f.level();
+    harness::WorldModel wm{}; wm.boulders_broken = true;
+    CHECK(harness::reaches(L, wm, 15, L.h-2));              // fully cleared -> far side reachable
+}
+TEST(harness_boulder_broken_per_index_unblocks_corridor){
+    Fixture f = boulder_fixture();
+    LevelData L = f.level();
+    harness::WorldModel wm{};
+    for(int i=0; i<(int)f.boulders.size(); ++i) wm.broken_boulder_idx.insert(i);   // every tile, by index
+    CHECK(harness::reaches(L, wm, 15, L.h-2));
+}
+TEST(harness_boulder_partial_index_clear_still_blocks){
+    Fixture f = boulder_fixture();
+    LevelData L = f.level();
+    harness::WorldModel wm{};
+    // Clear only column 9's tiles (every even index); column 10 stays a full, unbroken wall. fits()
+    // needs BOTH columns clear, so the corridor stays fully sealed even though half its tiles are gone
+    // -- this is the case the retired-fork-shaped per-object test in test_dungeon7_level.cpp guards:
+    // clearing one object must not be conflated with clearing all of them.
+    for(int i=0; i<(int)f.boulders.size(); ++i) if(i % 2 == 0) wm.broken_boulder_idx.insert(i);
+    CHECK(!harness::reaches(L, wm, 15, L.h-2));             // column 10 still solid -> still sealed
+}
+
+// A single interior floor row with a 2-wide gap; a cracked floor gate fills the gap (solid) until Stone
+// smashes it, sealing a shaft down to an otherwise fully-enclosed lower chamber.
+static constexpr int CRACKED_FLOOR_ROW = 8;
+static Fixture cracked_fixture(){
+    const int W = 20, H = 16;
+    Fixture f(W, H);
+    f.fill_row(CRACKED_FLOOR_ROW, 1, W-2, TileKind::Solid);
+    // The crack tiles are Empty in tiles[] (content symbols, not compiled-solid) -- the gate array
+    // makes them solid at runtime, mirroring the compiled dungeon format (see build_grid's comment).
+    f.set(10, CRACKED_FLOOR_ROW, TileKind::Empty);
+    f.set(11, CRACKED_FLOOR_ROW, TileKind::Empty);
+    f.gates.push_back(GateSpawn{ 10, CRACKED_FLOOR_ROW, GateType::CrackedFloor, -1 });
+    f.gates.push_back(GateSpawn{ 11, CRACKED_FLOOR_ROW, GateType::CrackedFloor, -1 });
+    return f;
+}
+
+TEST(harness_cracked_floor_intact_seals_shaft){
+    Fixture f = cracked_fixture();
+    LevelData L = f.level();
+    harness::WorldModel wm{};                               // cracked_floors_broken=false
+    CHECK(!harness::reaches(L, wm, 5, L.h-2));               // lower chamber unreachable (sealed)
+}
+TEST(harness_cracked_floor_broken_opens_shaft){
+    Fixture f = cracked_fixture();
+    LevelData L = f.level();
+    harness::WorldModel wm{}; wm.cracked_floors_broken = true;
+    CHECK(harness::reaches(L, wm, 5, L.h-2));                // fall-through -> lower chamber reachable
+}
+
+// A loose-platform run authored directly over a pit in an interior floor: intact, it fills the pit (the
+// player stands on TOP of it); dropped, the pit opens and the platform falls to rest atop the true
+// floor below (the border), bridging that lower position and opening the chamber beneath the pit.
+static Fixture loose_fixture(){
+    const int W = 20, H = 16;
+    Fixture f(W, H);
+    f.fill_row(CRACKED_FLOOR_ROW, 1, W-2, TileKind::Solid);   // reuse the same floor row as cracked_fixture
+    for(int dx=0; dx<4; ++dx) f.set(8+dx, CRACKED_FLOOR_ROW, TileKind::Empty);   // the pit (content symbol)
+    f.loose.push_back(LoosePlatformSpawn{ 8, CRACKED_FLOOR_ROW, 4 });
+    return f;
+}
+
+TEST(harness_loose_platform_intact_solid_on_top){
+    Fixture f = loose_fixture();
+    LevelData L = f.level();
+    harness::WorldModel wm{};                                // loose_dropped=false, idx set empty
+    CHECK(harness::reaches(L, wm, 9, CRACKED_FLOOR_ROW-1));  // stands on the intact platform (upper pos)
+    CHECK(!harness::reaches(L, wm, 3, L.h-2));                // pit plugged -> lower chamber sealed
+}
+TEST(harness_loose_platform_dropped_blanket_bridges_and_opens_below){
+    Fixture f = loose_fixture();
+    LevelData L = f.level();
+    harness::WorldModel wm{}; wm.loose_dropped = true;
+    CHECK(harness::reaches(L, wm, 3, L.h-2));                 // fall-through -> lower chamber reachable
+    harness::Grid g = harness::build_grid(L, wm);
+    CHECK(g.solid[(L.h-2)*L.w + 9] == 1);                     // platform rested atop the true floor
+}
+TEST(harness_loose_platform_dropped_per_index_bridges_and_opens_below){
+    Fixture f = loose_fixture();
+    LevelData L = f.level();
+    harness::WorldModel wm{}; wm.dropped_loose_idx.insert(0);
+    CHECK(harness::reaches(L, wm, 3, L.h-2));
+    harness::Grid g = harness::build_grid(L, wm);
+    CHECK(g.solid[(L.h-2)*L.w + 9] == 1);
 }
 
 // ----------------------------------------------------------------------------
