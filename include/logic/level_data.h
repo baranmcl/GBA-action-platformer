@@ -8,7 +8,7 @@ struct EntitySpawn { int tx, ty, param0, param1, param2; }; // enemy: param0/1 p
 struct GateSpawn   { int tx, ty; GateType type; int latch_id = -1; }; // latch_id -1 = not latched
 struct DoorSpawn   { int tx, ty, dungeon; };                // dungeon 1..9; 9 = finale
 struct BlockSpawn  { int tx, ty; bool pullable = false; };
-struct PlateSpawn  { int tx, ty, target_tx, target_ty; bool heavy = false; };
+struct PlateSpawn  { int tx, ty, target_tx, target_ty; bool heavy = false; int latch_id = -1; }; // latch_id -1 = not latched (heavy plates only)
 struct ButtonSpawn { int tx, ty, target_tx, target_ty; };
 struct BrazierSpawn{ int tx, ty, group; };
 struct BrazierGroupSpawn { int total, target_tx, target_ty; int latch_id = -1; }; // latch_id -1 = not latched; a group of braziers shares one target

@@ -142,7 +142,7 @@ class TestBuildLevel(unittest.TestCase):
             "brazier_groups": [{"total": 1, "target": [5, 5]}],
         })
         self.assertEqual(lvl['blocks'], [(2, 1, False)])
-        self.assertEqual(lvl['plates'], [(3, 1, 6, 1, False)])
+        self.assertEqual(lvl['plates'], [(3, 1, 6, 1, False, -1)])
         self.assertEqual(lvl['buttons'], [(4, 1, 6, 2)])
         self.assertEqual(lvl['braziers'], [(5, 1, 0)])
         self.assertEqual(lvl['brazier_groups'], [(1, 5, 5, -1)])  # latch_id defaults to -1
@@ -294,27 +294,27 @@ class TestBuildLevel(unittest.TestCase):
         # A plate entry with "heavy": true must produce a plate tuple with heavy=True (5th element)
         txt = "#######\n#@.=..#\n#######\n"
         lvl = compile_str(txt, {"plates": [{"target": [3, 4], "heavy": True}]})
-        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, True)])
+        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, True, -1)])
 
     def test_heavy_plate_flag_false_by_default(self):
         # A plate entry without "heavy" defaults to False
         txt = "#######\n#@.=..#\n#######\n"
         lvl = compile_str(txt, {"plates": [{"target": [3, 4]}]})
-        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, False)])
+        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, False, -1)])
 
     def test_heavy_plate_emit_header_true(self):
         # emit_header must include the bool in the PlateSpawn initializer
         txt = "#######\n#@.=..#\n#######\n"
         lvl = compile_str(txt, {"plates": [{"target": [3, 4], "heavy": True}]})
         hdr = build_level.emit_header(lvl, "TESTHP")
-        self.assertIn("{3,1,3,4,true}", hdr)
+        self.assertIn("{3,1,3,4,true,-1}", hdr)
 
     def test_heavy_plate_emit_header_false(self):
         # Non-heavy plate must emit false
         txt = "#######\n#@.=..#\n#######\n"
         lvl = compile_str(txt, {"plates": [{"target": [3, 4]}]})
         hdr = build_level.emit_header(lvl, "TESTHPF")
-        self.assertIn("{3,1,3,4,false}", hdr)
+        self.assertIn("{3,1,3,4,false,-1}", hdr)
 
     def test_existing_plate_test_still_green(self):
         # The existing block/plate/button/brazier test data still compiles correctly
@@ -325,8 +325,27 @@ class TestBuildLevel(unittest.TestCase):
             "braziers": [{"group": 0}],
             "brazier_groups": [{"total": 1, "target": [5, 5]}],
         })
-        # plate still at (3,1) targeting (6,1); heavy defaults False (5th field)
-        self.assertEqual(lvl['plates'], [(3, 1, 6, 1, False)])
+        # plate still at (3,1) targeting (6,1); heavy defaults False (5th field); latch_id defaults -1 (6th field)
+        self.assertEqual(lvl['plates'], [(3, 1, 6, 1, False, -1)])
+
+    # --- Task 1.3: heavy-plate latch_id persistence (I24) ---
+    def test_plate_latch_id_emits_given_value(self):
+        # A plate entry with "latch_id": 3 must produce a plate tuple carrying it (6th element)
+        # and emit_header must render the literal int, not the default.
+        txt = "#######\n#@.=..#\n#######\n"
+        lvl = compile_str(txt, {"plates": [{"target": [3, 4], "heavy": True, "latch_id": 3}]})
+        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, True, 3)])
+        hdr = build_level.emit_header(lvl, "TESTPLATCH")
+        self.assertIn("{3,1,3,4,true,3}", hdr)
+
+    def test_plate_latch_id_defaults_to_minus_one(self):
+        # A plate entry without "latch_id" defaults to -1 (not latched), both in the compiled
+        # tuple and in the emitted header literal.
+        txt = "#######\n#@.=..#\n#######\n"
+        lvl = compile_str(txt, {"plates": [{"target": [3, 4], "heavy": True}]})
+        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, True, -1)])
+        hdr = build_level.emit_header(lvl, "TESTPLNOLATCH")
+        self.assertIn("{3,1,3,4,true,-1}", hdr)
 
     # --- M8 symbols: Task 2.3 boulder 'O' + loose-platform ':' ---
     def test_boulder_symbol(self):

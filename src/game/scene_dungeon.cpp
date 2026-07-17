@@ -823,6 +823,9 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         engine::set_level_tile(lvl.view, p.tx, p.ty, 17);
         // M8: a HEAVY plate trips ONLY on a Stone pound (resolved in the just_landed() block, NOT here).
         // Skip it from the normal step/block trigger loop so it never trips on a footstep or pushed block.
+        // If a latched heavy plate's gate was already smashed on a prior visit, re-open it on room load
+        // (mirrors the gate latch restore idiom above).
+        if(p.heavy && p.latch_id >= 0 && world.latched(p.latch_id)){ open_column(lvl.view, p.target_tx, level.h); continue; }
         if(p.heavy) continue;
         logic::Trigger t = logic::Trigger::plate(); t.target_tx = p.target_tx; t.target_ty = p.target_ty;
         triggers.push_back(TriggerInst{ t, p.tx, p.ty, -1, false });
@@ -1015,8 +1018,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                 if(!p.heavy) continue;
                 if(impact_cx == p.tx && impact_fy == p.ty){
                     open_column(lvl.view, p.target_tx, level.h);
-                    // Heavy plates may carry a latch via a co-located latched gate target; persist not
-                    // wired through PlateSpawn (no latch_id field), so the open_column holds for the visit.
+                    persist_latch(world, p.latch_id);
                 }
             }
 
