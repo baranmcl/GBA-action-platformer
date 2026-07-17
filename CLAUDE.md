@@ -28,3 +28,4 @@ python tools/check_logic_purity.py
 
 - `docs/pitfalls/implementation-pitfalls.md` — common implementation traps
 - `docs/pitfalls/testing-pitfalls.md` — common testing traps
+- `docs/content-recipes.md` — checklists for adding a dungeon / boss / enemy / ability
