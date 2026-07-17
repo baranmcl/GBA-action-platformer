@@ -9,18 +9,14 @@
 #include "bn_keypad.h"
 #include "bn_vector.h"
 #include "bn_optional.h"
-#include "bn_sprite_items_spronk.h"
 #include "bn_sprite_items_enemy.h"
 #include "bn_sprite_items_fire_enemy.h"
 #include "bn_sprite_items_block.h"
-#include "bn_sprite_items_shrine.h"
 #include "bn_sprite_items_fire_proj.h"
 #include "bn_sprite_items_ice_proj.h"
 #include "bn_sprite_items_light_proj.h"
 #include "bn_sprite_items_bolt.h"
 #include "bn_sprite_items_grapple_icon.h"
-#include "bn_sprite_items_heart_container.h"
-#include "bn_sprite_items_magic_crystal.h"
 #include "bn_sprite_items_guardian.h"   // M12: per-dungeon boss sprite (D1 Whispering Woods Guardian, 2 frames)
 #include "bn_sprite_items_slagshell.h" // M13: D2 Ember Caverns boss sprite (Slagshell, 2 frames)
 #include "bn_sprite_items_coldforge.h" // M14: D3 Frost Hollow boss sprite (Coldforge Twins, 4 frames)
@@ -30,7 +26,6 @@
 #include "logic/tilemap.h"
 #include "logic/world_state.h"   // max_health_for, collect/has heart container
 #include "logic/player.h"
-#include "logic/spronk_rescue.h" // try_free_spronk
 #include "logic/enemy.h"
 #include "logic/meters.h"
 #include "logic/combat_rules.h"  // shared damage/i-frame/respawn constants + frame-step (M-remediation)
@@ -41,7 +36,7 @@
 #include "logic/gates.h"
 #include "logic/tile_ids.h"
 #include "logic/stone_impact.h" // loose_platform_in_shockwave (pound shockwave radius)
-#include "logic/room_graph.h"   // find_entrance, room_door_at
+#include "logic/room_graph.h"   // find_entrance (room_door_at now lives in game::DoorsSystem)
 #include "engine/level_loader.h"  // load_level, set_collision_tile
 #include "engine/level_view.h"    // set_level_tile
 #include "engine/avatar.h"
@@ -56,6 +51,9 @@
 #include "game/scene_game_over.h" // run_game_over (death -> 0 lives flow)
 #include "game/player_session.h" // play_room: PlayerSession, CrystalStation, set_clamped_cam
 #include "game/boss_fight.h"     // run_boss_fight (Task 5.4: room bosses share the King's fight loop)
+#include "game/room/room_ctx.h"        // Ctx: shared refs threaded into room systems (Task 6.1)
+#include "game/room/pickups_system.h"  // shrines/hearts/crystals/cage-spronk/exit (Task 6.1)
+#include "game/room/doors_system.h"    // room-door + exit archway render/Up-press (Task 6.1)
 
 namespace game
 {
@@ -101,8 +99,6 @@ namespace
         bool shown = false;
         bn::vector<bn::sprite_ptr, 8> sprites;   // one per tile in the run
     };
-    struct ShrineInst { logic::AbilityPickup pk; logic::Body body; bn::optional<bn::sprite_ptr> sprite; };
-    struct HeartInst  { logic::HeartContainerSpawn hc; logic::Body body; bn::optional<bn::sprite_ptr> sprite; bool collected = false; };
     // src_tx/ty: plate or button tile to test; group: brazier group (Braziers kind)
     struct TriggerInst { logic::Trigger trig; int src_tx, src_ty, group; bool applied = false; };
 
@@ -223,25 +219,15 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     int pound_vfx_t = 0;         // frames remaining the dust is shown
     int pound_shake_t = 0;       // frames remaining of camera nudge
 
-    // ---- cage / spronk ----
-    logic::Body cage;
-    bn::optional<bn::sprite_ptr> spronk;
-    if(level.has_cage){
-        cage = tile_body(level.cage_tx, level.cage_ty, 8, 12);
-        spronk = bn::sprite_items::spronk.create_sprite(0, 0);
-        spronk->set_camera(cam);
-        // Ground the 16x16 spronk sprite on the FIRST SOLID/one-way tile below the authored cage
-        // row, so its BOTTOM rests on the floor surface (not embedded in it).  Sprite half-height
-        // is 8 px, so centre = floor_surface - 8.  For the D1-D7 convention (cage_ty=18, floor at
-        // row 20): floor_row_below(…,18)==20 → wy(20*8 - 8) == wy(cage.pos.y.to_int()+8) — no
-        // visible regression.  For ledge cages (D8+ Room 2) the sprite now rests on the ledge
-        // instead of being embedded in it.
-        int cage_fr = floor_row_below(lvl.map, level.cage_tx, level.cage_ty);
-        spronk->set_position(wx(level.cage_tx * 8 + 8), wy(cage_fr * 8 - 8));
-        spronk->set_visible(!world.spronk_freed(d));
-    }
-    logic::Body exit;
-    if(level.has_exit) exit = tile_body(level.exit_tx, level.exit_ty, 12, 12);
+    // ---- room systems (Task 6.1): shared Ctx threaded into the pickups/doors families that
+    //      were extracted out of this function's body. spawn() below fills in for the removed
+    //      cage/spronk, exit, ability-shrine, heart-container, magic-crystal, room-door-archway,
+    //      and exit-archway inline blocks (verbatim moves — see src/game/room/*.cpp). ----
+    game::Ctx ctx{ world, player, ps, lvl, cam, hw, hh };
+    game::PickupsSystem pickups;
+    game::DoorsSystem doors;
+    pickups.spawn(level, ctx);
+    doors.spawn(level, ctx);
 
     // ---- enemies (fire_immune from param2 bit0) ----
     bn::vector<EnemyInst, 8> enemies;
@@ -287,39 +273,6 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         bool latched_open = (g.latch_id >= 0) && world.latched(g.latch_id);
         if(passable || latched_open){ gi.open = true; }              // geometry gate owned OR latch set -> open
         else { fill_column(lvl.view, g.tx, level.h, info.bg_tile); } // closed -> full-height vine/ice wall
-    }
-
-    // ---- ability shrines ----
-    bn::vector<ShrineInst, 4> shrines;
-    for(int i = 0; i < level.pickup_count && i < 4; ++i){
-        const logic::AbilityPickup& p = level.pickups[i];
-        shrines.push_back(ShrineInst{ p, tile_body(p.tx, p.ty, 6, 8), {} });
-        ShrineInst& si = shrines.back();
-        si.sprite = bn::sprite_items::shrine.create_sprite(0, 0);
-        si.sprite->set_camera(cam);
-        si.sprite->set_position(wx(p.tx * 8 + 8), wy(p.ty * 8 + 8));
-        si.sprite->set_visible(!world.has(p.ability));   // already taken on a continued game
-    }
-
-    // ---- heart containers (permanent max-HP upgrade pickup) ----
-    // Spawn only if NOT already collected (persisted in latches bits [24..31]); a collected
-    // one stays hidden forever. Body matches the tile-sized shrine pickup; sprite grounded on
-    // the content row exactly like the shrine (centre at tile-centre + 8).
-    bn::vector<HeartInst, 4> hearts;
-    for(int i = 0; i < level.heart_container_count && i < 4; ++i){
-        const logic::HeartContainerSpawn& hc = level.heart_containers[i];
-        if(world.heart_container_collected(hc.id)) continue;  // already taken -> never show it
-        hearts.push_back(HeartInst{ hc, tile_body(hc.tx, hc.ty, 6, 8), {}, false });
-        HeartInst& hi = hearts.back();
-        hi.sprite = bn::sprite_items::heart_container.create_sprite(0, 0);
-        hi.sprite->set_camera(cam);
-        // Ground the 16x16 sprite on the FIRST SOLID tile below the authored row (like the
-        // cage/exit/room-doors), so its BOTTOM rests on the floor surface. M7 hard-coded a
-        // tile-centre position assuming a row-18 floor-2-below layout; in D7's tight alcove the
-        // floor is only 1 row below, so that sank the sprite INTO the platform. Floor surface is
-        // at fr*8; sprite half-height is 8, so centre = fr*8 - 8.
-        int hc_fr = floor_row_below(lvl.map, hc.tx, hc.ty);
-        hi.sprite->set_position(wx(hc.tx * 8 + 8), wy(hc_fr * 8 - 8));
     }
 
     // ---- pushable blocks (solid collision cell + 8x8 sprite) ----
@@ -376,33 +329,6 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         }
     }
     logic::RevealState reveal;   // room-wide Light reveal timer (a Light cast (re)starts it)
-
-    // ---- magic crystals (M10 Light: full-magic-refill pickup; respawns each attempt, NOT latched) ----
-    game::CrystalStation crystals;
-    crystals.spawn(level, cam, lvl.map, hw, hh, game::CrystalStation::Grounding::TileCentre,
-                   /*respawn_when_depleted=*/false);   // collected stays gone until reset() (death/attempt reset only)
-
-    // ---- room-doors (bg tile 5 open-door; 2-wide x 4-tall archway grounded on the floor,
-    //      matching the hub's archway). Floor-scanned so a row-18-authored door reaches the
-    //      floor (row 20) instead of floating. Collision unchanged (door stays walkable). ----
-    for(int i = 0; i < level.room_door_count && i < 8; ++i){
-        const logic::RoomDoorSpawn& rd = level.room_doors[i];
-        int fr = floor_row_below(lvl.map, rd.tx, rd.ty);
-        // target_room == -1 is the exit-to-hub door: render with a DISTINCT bg tile (26, hub portal)
-        // so it reads differently from a normal room-door (tile 5) and the dungeon goal/exit (tile 6).
-        // (13 is lava, so 26 is the next free strip slot — see make_placeholder_art.py gen_tiles.)
-        int door_bg = (rd.target_room == -1) ? logic::tiles::HUB_PORTAL : logic::tiles::DOOR_OPEN;
-        for(int dy = 0; dy < 4; ++dy) for(int dx = 0; dx < 2; ++dx)
-            engine::set_level_tile(lvl.view, rd.tx + dx, fr - 1 - dy, door_bg);
-    }
-    // ---- exit marker (bg tile 6 door-locked = distinct closed door = dungeon goal;
-    //      same 2-wide x 4-tall grounded archway. room-doors use tile 5 so they're distinct.
-    //      Exit collision body untouched. ----
-    if(level.has_exit){
-        int fr = floor_row_below(lvl.map, level.exit_tx, level.exit_ty);
-        for(int dy = 0; dy < 4; ++dy) for(int dx = 0; dx < 2; ++dx)
-            engine::set_level_tile(lvl.view, level.exit_tx + dx, fr - 1 - dy, logic::tiles::DOOR_LOCKED);
-    }
 
     // ---- braziers (bg tile 14 unlit; Body for fire-hit) ----
     bn::vector<BrazierInst, 16> braziers;
@@ -463,14 +389,14 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             if(++lr_restart_hold >= 30) return RoomOutcome{ RoomOutcome::Restart };
         } else lr_restart_hold = 0;
         if(bn::keypad::up_pressed()){
-            if(const logic::RoomDoorSpawn* dr = logic::room_door_at(level, player.body)){
-                // target_room == -1 is the sentinel "exit-to-hub" door: a diegetic Up-press
-                // equivalent of SELECT=quit. Return Quit so run_dungeon returns DungeonResult::Quit
-                // (NOT Cleared) -> the hub loop resumes WITHOUT marking the dungeon cleared, and the
-                // dungeon stays re-enterable.
-                if(dr->target_room == -1) return RoomOutcome{ RoomOutcome::Quit };
-                return RoomOutcome{ RoomOutcome::GoToRoom, dr->target_room, dr->target_entrance };
-            }
+            game::DoorsSystem::UpPressResult dr = doors.on_up_pressed(level, player);
+            // target_room == -1 is the sentinel "exit-to-hub" door: a diegetic Up-press
+            // equivalent of SELECT=quit. Return Quit so run_dungeon returns DungeonResult::Quit
+            // (NOT Cleared) -> the hub loop resumes WITHOUT marking the dungeon cleared, and the
+            // dungeon stays re-enterable.
+            if(dr.kind == game::DoorsSystem::UpPressResult::ExitToHub) return RoomOutcome{ RoomOutcome::Quit };
+            if(dr.kind == game::DoorsSystem::UpPressResult::GoToRoom)
+                return RoomOutcome{ RoomOutcome::GoToRoom, dr.target_room, dr.target_entrance };
         }
 
         session.sync_abilities();
@@ -843,52 +769,21 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             }
             // M10: reset magic crystals each attempt (NOT latched) so a fresh full-refill is always
             // available after a death-respawn — guarantees no magic soft-lock on the Light ascent.
-            crystals.reset();
+            pickups.crystals.reset();
         }
 
         // ---- ability shrines ----
-        for(ShrineInst& si2 : shrines){
-            if(!world.has(si2.pk.ability) && logic::aabb_overlap(player.body, si2.body)){
-                world.grant(si2.pk.ability);
-                spell.ensure_valid(world);   // auto-select the new ability ONLY if nothing valid was selected; never clobber a cycled choice
-                engine::write_world(world);  // persist the grant NOW — quit+power-cycle must not un-earn it (I33)
-                if(si2.sprite) si2.sprite->set_visible(false);
-            }
-        }
-        // ---- heart containers: collect on overlap -> grow max HP + refill to full, persist. ----
-        for(HeartInst& hi : hearts){
-            if(hi.collected) continue;
-            if(logic::aabb_overlap(player.body, hi.body)){
-                world.collect_heart_container(hi.hc.id);
-                health.max = logic::max_health_for(world);   // grow the cap (+25 per container)
-                health.cur = health.max;                     // and refill to full — the payoff moment
-                engine::write_world(world);                  // persist immediately (same path as latches)
-                hi.collected = true;
-                if(hi.sprite) hi.sprite->set_visible(false);
-            }
-        }
-
-        // ---- magic crystals: collect on overlap -> full magic refill. NOT latched (resets each
-        //      attempt below) so a Light beat never soft-locks on empty magic. ----
-        crystals.update(player.body, magic);
+        pickups.update_shrines(ctx);
+        // ---- heart containers (collect -> grow max HP + refill) + magic crystals (collect ->
+        //      full magic refill; NOT latched, resets each attempt above) ----
+        pickups.update_hearts_and_crystals(ctx);
 
         session.refresh_spell_icon();   // reflect cycle (L) and shrine pickups in the HUD icon
 
-        // ---- spronk rescue (marks the dungeon cleared; abilities now come from F pickups) ----
-        if(level.has_cage){
-            bool was = world.spronk_freed(d);
-            logic::try_free_spronk(player.body, cage, world, d);
-            if(world.spronk_freed(d) && !was){
-                if(spronk) spronk->set_visible(false);
-                logic::refill_lives(world);   // freeing the spronk grants +1 max (via spronks_freed) AND refills NOW (on pickup, not on exit)
-                engine::write_world(world);   // persist the new max + refilled lives immediately
-            }
-        }
-
-        bool spronk_ok = !level.has_cage || world.spronk_freed(d);
-        // Must LAND on the exit (grounded), not bump it from underneath — clearing requires
-        // standing on the platform, which matters for the gated vertical climb (no head-bump cheese).
-        if(level.has_exit && spronk_ok && player.body.on_ground && logic::aabb_overlap(player.body, exit)){
+        // ---- spronk rescue (marks the dungeon cleared) + exit: must LAND on the exit (grounded),
+        //      not bump it from underneath — clearing requires standing on the platform, which
+        //      matters for the gated vertical climb (no head-bump cheese). ----
+        if(pickups.check_spronk_and_exit(ctx)){
             return RoomOutcome{ RoomOutcome::ExitDungeon };
         }
 
