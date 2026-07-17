@@ -1,6 +1,7 @@
 #include "game/scene_dungeon.h"
 
 #include "bn_core.h"
+#include "bn_assert.h"
 #include "bn_bg_palettes.h"
 #include "bn_color.h"
 #include "bn_camera_ptr.h"
@@ -1388,6 +1389,8 @@ DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world
     if(ps.health.cur > ps.health.max) ps.health.cur = ps.health.max;
     ps.spell.ensure_valid(world);  // selected tool lives in PlayerState; init a default without clobbering a carried-in choice (persists across rooms, hub, hub<->dungeon)
     while(true){
+        BN_ASSERT(cur_room >= 0 && cur_room < dungeon.room_count,
+                  "room index out of range: ", cur_room, " of ", dungeon.room_count);
         RoomOutcome out = play_room(*dungeon.rooms[cur_room], cur_entrance, world, ps);
         engine::fade_out(16);   // one fade-out per room exit; next play_room fades in
         switch(out.kind){
