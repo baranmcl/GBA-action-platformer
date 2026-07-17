@@ -49,6 +49,7 @@ struct WorldModel {
     bool water_frozen = false;           // Ice bridges cast on every water run
     bool boulders_broken = false;        // Stone pound cleared the boulders (D7 progression states)
     bool cracked_floors_broken = false;  // Stone pound smashed the cracked floors
+    bool loose_dropped = false;          // Stone pound released the loose platforms to their rest row
     bool climb_max = false;              // use CLIMB_MAX instead of CLIMB_RELIABLE (bypass checks)
     // Task 2.6 adds: bool glide, bool grapple (wind/updraft/anchor rules)
 };
@@ -135,11 +136,24 @@ inline Grid build_grid(const logic::LevelData& L, const WorldModel& wm){
             const logic::BoulderSpawn& b = L.boulders[i];
             if(b.tx>=0 && b.tx<L.w && b.ty>=0 && b.ty<L.h) g.solid[idx(b.tx,b.ty)] = 1;
         }
-    // 5. Loose platforms — solid at their spawn row (they drop on pound; we model the load state).
+    // 5. Loose platforms — solid at their authored (load-state) row, OR dropped to their rest row when a
+    //    Stone pound has released them (wm.loose_dropped): the first row whose tile directly below any
+    //    column of the run is solid (mirrors the scene / the retired D7 fork's build_grid_stone_cleared).
+    //    The scan sees the grid built so far (base tiles + gates + broken/unbroken boulders), so a run
+    //    falls through hazard tiles (spikes/lava/water) and rests on the first solid below — e.g. bridging
+    //    a spike pit on the bottom floor.
     for(int i=0; i<L.loose_platform_count; ++i){
         const logic::LoosePlatformSpawn& lp = L.loose_platforms[i];
+        int ty = lp.ty;
+        if(wm.loose_dropped){
+            while(ty+1 < L.h){
+                bool rest = false;
+                for(int dx=0; dx<lp.len; ++dx){ int x=lp.tx+dx; if(x>=0 && x<L.w && g.solid[idx(x,ty+1)]) rest = true; }
+                if(rest) break; ++ty;
+            }
+        }
         for(int dx=0; dx<lp.len; ++dx){
-            int x = lp.tx+dx; if(x>=0 && x<L.w && lp.ty>=0 && lp.ty<L.h) g.solid[idx(x,lp.ty)] = 1;
+            int x = lp.tx+dx; if(x>=0 && x<L.w && ty>=0 && ty<L.h) g.solid[idx(x,ty)] = 1;
         }
     }
     // 6. Hidden platforms — solid iff a Light reveal is active.
