@@ -553,17 +553,13 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     player.body.pos = spawn_pos;
     player.facing = ent.facing;   // face inward at the entrance
 
-    // ---- M12 boss room: a room with a non-null boss runs a self-contained fight on entry, BEFORE the
-    //      normal room loop. The fight BLOCKS until the boss is defeated (Victory) — then we fall
-    //      through to the normal loop so the player walks to the onward room-door. On Game-Over (0
-    //      lives) we return RoomOutcome::GameOver and REUSE the dungeon's existing flow (run_dungeon
-    //      handles Continue/QuitToTitle). Re-entering the room re-fights the boss (the boss is NOT
-    //      persisted; no save change). A boss room has no enemy/gate/cage/exit content during the
-    //      fight — run_room_boss owns the screen. ----
-    if(level.boss != nullptr){
+    // A defeated room boss stays defeated (persisted, save v6) — re-entering the arena
+    // while backtracking must not re-trigger a mandatory fight (D1 decision).
+    if(level.boss != nullptr && d >= 1 && d <= 8 && !world.boss_defeated(d)){
         BossRoomOutcome bo = run_room_boss(level, world, ps, lvl, cam, player, spawn_pos, ent);
         if(bo == BossRoomOutcome::GameOver) return RoomOutcome{ RoomOutcome::GameOver };
-        // Victory: fall through to the normal loop (walk to the onward door)
+        world.set_boss_defeated(d);
+        engine::write_world(world);
         engine::fade_out(16);   // clear the boss screen; the normal room loop fades back in
     }
 
@@ -1272,6 +1268,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             if(!world.has(si2.pk.ability) && logic::aabb_overlap(player.body, si2.body)){
                 world.grant(si2.pk.ability);
                 spell.ensure_valid(world);   // auto-select the new ability ONLY if nothing valid was selected; never clobber a cycled choice
+                engine::write_world(world);  // persist the grant NOW — quit+power-cycle must not un-earn it (I33)
                 if(si2.sprite) si2.sprite->set_visible(false);
             }
         }
