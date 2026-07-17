@@ -95,7 +95,8 @@ notes and commit messages.
 | 2 — Shared level-test harness | ✅ Shipped | `4356383..7237840` | 2026-07-17; 495/495; exemptions removed, harness extended (object states, updraft/wind/grapple) |
 | 3 — Save v6 | ✅ Shipped | `59b7ef8..1226bcd` | 2026-07-17; 513/513; mGBA QA pending user |
 | 4 — Shared constants + player session | ✅ Shipped | `100f3a2..7c28fd8` | 2026-07-17; 517/517; boss loops deliberately untouched (Phase 5) |
-| 5 — Boss-loop unification | 🚧 In progress | — | branch `fix/health-review-remediation` |
+| 5 — Boss-loop unification | ✅ Code-complete | `7c28fd8..973726d` | 5.5 fight-matrix mGBA QA pending user (blocks merge) |
+| 6 — play_room decomposition + minors | 🚧 In progress | — | branch `fix/health-review-remediation` |
 | 2 — Shared level-test harness | ⬜ Not started | — | — |
 | 3 — Save v6 | ⬜ Not started | — | — |
 | 4 — Shared constants + player session | ⬜ Not started | — | — |
@@ -103,6 +104,7 @@ notes and commit messages.
 | 6 — play_room decomposition + minors | ⬜ Not started | — | — |
 
 ### Deviations
+- **Task 5.5 ordering:** the plan makes 5.5 (manual fight-matrix mGBA QA) block Phase 6. Executed autonomously, the emulator gate can't run mid-session, and Phase 6 is code-independent of fight behavior (it decomposes `play_room`; it only required `run_room_boss` to be deleted, which Task 5.4 did). Decision: proceed into Phase 6; 5.5 + all accumulated mGBA QA move to the pre-merge user checklist. The gate's intent (don't build atop unverified fights) is preserved because Phase 6 builds on none of the fight code.
 - **Task 1.2 Rule 6:** arena crystal requirement inverted from "≥1" to "≤1" — D1/D3 arenas are intentionally crystal-less (TiredWindow / block-to-charge designs); the original rule was written believing all arenas had crystals.
 
 ### Discoveries
@@ -850,7 +852,7 @@ Do NOT: change input semantics, icon art choices, camera margins (120/80), or vi
 
 # Phase 5 — Boss-loop unification (D4)
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ CODE-COMPLETE at `7c28fd8..973726d` on 2026-07-17 (Tasks 5.1–5.4, 1 fix round; 520/520; ROM green; both original ~350-line loops deleted → one data-driven `run_boss_fight`; scene_boss 446→63, scene_dungeon 1313→952). **Task 5.5 (full-matrix mGBA fight QA) PENDING USER** — see the Deviation note. This gate blocks MERGE, not Phase 6 (which is code-independent of fight behavior).
 
 One data-driven fight loop replaces `run_boss` + `run_room_boss` (I2, I9, I20, I30). Dimensions: Code Quality + Architecture + Content DX. Depends on Phase 3 (boss_defeats consumer landed) and Phase 4 (PlayerSession/CrystalStation). Highest-QA phase: all four shipped fights must play identically.
 
