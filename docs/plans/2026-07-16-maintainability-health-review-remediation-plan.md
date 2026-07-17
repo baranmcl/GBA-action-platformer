@@ -96,7 +96,7 @@ notes and commit messages.
 | 3 — Save v6 | ✅ Shipped | `59b7ef8..1226bcd` | 2026-07-17; 513/513; mGBA QA pending user |
 | 4 — Shared constants + player session | ✅ Shipped | `100f3a2..7c28fd8` | 2026-07-17; 517/517; boss loops deliberately untouched (Phase 5) |
 | 5 — Boss-loop unification | ✅ Code-complete | `7c28fd8..973726d` | 5.5 fight-matrix mGBA QA pending user (blocks merge) |
-| 6 — play_room decomposition + minors | 🚧 In progress | — | branch `fix/health-review-remediation` |
+| 6 — play_room decomposition + minors | 🚧 In progress | — | branch `fix/health-review-remediation`; 6.1 `dbe3b8a`, 6.2 `5bc8179` (521/521; ROM green; mGBA smoke pending user) |
 | 2 — Shared level-test harness | ⬜ Not started | — | — |
 | 3 — Save v6 | ⬜ Not started | — | — |
 | 4 — Shared constants + player session | ⬜ Not started | — | — |
@@ -957,11 +957,11 @@ Split the 850-line room loop into room-subsystem units with an explicit update o
 **Files:** Create `src/game/room/pickups_system.{h,cpp}` (shrines, hearts, crystals→CrystalStation multi-instance, cage/spronk, exit) and `src/game/room/doors_system.{h,cpp}` (room-door render + Up-press resolution, exit archway render). Modify `scene_dungeon.cpp` accordingly.
 - [ ] Move, wire, smoke (collect a shrine + heart in D7, exit D1). Commit: `refactor(room): pickups + doors systems extracted from play_room (I1)`.
 
-### Task 6.2: Extract gates/cracked-floors/braziers/triggers; fix the two latent geometry issues
+### Task 6.2: Extract gates/cracked-floors/braziers/triggers; fix the two latent geometry issues ✅ SHIPPED `5bc8179`
 
 **Files:** Create `src/game/room/gates_system.{h,cpp}`, `src/game/room/triggers_system.{h,cpp}`. Modify `scene_dungeon.cpp`. Expose `GatesSystem::break_cracked_run_at(int impact_cx, int impact_floor) -> bool` and `TriggersSystem::trip_heavy_plate_at(int impact_cx, int impact_fy)` — Task 6.3's pound resolution calls them (see its ownership note).
-- [ ] **Brazier hitbox (I25):** replace `tile_body(b.tx, 14, 6, 24)` with rows derived from the floor scan: `tile_body(b.tx, draw_ty - 5, 6, 24)` (identical for the row-20-floor rooms: draw_ty 19 → rows 14..19; correct for ledge/nonstandard rooms). Add a harness-level regression note in the D6 brazier test.
-- [ ] **Cracked-floor span break (I27):** replace the triple-nested contiguity scan (:986-1010) with walk-left/walk-right from the impact tile:
+- [x] **Brazier hitbox (I25):** replace `tile_body(b.tx, 14, 6, 24)` with rows derived from the floor scan: `tile_body(b.tx, draw_ty - 5, 6, 24)` (identical for the row-20-floor rooms: draw_ty 19 → rows 14..19; correct for ledge/nonstandard rooms). Add a harness-level regression note in the D6 brazier test. — `test/test_dungeon6_level.cpp`'s new `d6_brazier_hitbox_tracks_floor_row` proves the identity for every shipped D6 brazier.
+- [x] **Cracked-floor span break (I27):** replace the triple-nested contiguity scan (:986-1010) with walk-left/walk-right from the impact tile:
 
 ```cpp
 auto break_tile = [&](CrackedFloorInst& q){
@@ -977,7 +977,7 @@ for(int x = impact_cx + 1; CrackedFloorInst* q = cracked_at(x); ++x) break_tile(
 // `smashed = true` + the re-arm behavior stay exactly as today.
 ```
 (C++17 for-loop condition-declarations are valid; the semantics are identical to the old maximal-contiguous-span break because a contiguous walk from the impact tile visits exactly that span.) Verify via D7 room 2's stacked-floor pound on mGBA (chain must still re-arm).
-- [ ] Commit: `refactor(room): gates + triggers systems; brazier hitbox floor-derived; cracked-run break is a 2-direction walk (I1, I25, I27)`.
+- [x] Commit: `refactor(room): gates + triggers systems; brazier hitbox floor-derived; cracked-run break is a 2-direction walk (I1, I25, I27)`. — `5bc8179`; host tests 521/521 (520 baseline + 1 new); `bash tools/build_rom.sh` → `ROM fixed!`, zero warnings; mGBA smoke (D2 brazier puzzle, D7 room2 stacked-floor re-arm, a plate/button gate) deferred to the pre-merge user checklist alongside the other Phase 5/6 QA items.
 
 ### Task 6.3: Extract enemies + blocks/boulders/platform families; wire the cross-system pound
 
