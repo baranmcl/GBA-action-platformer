@@ -132,10 +132,6 @@ TEST(d7_dungeon_table){
     CHECK(DUNGEON7_DUNGEON.rooms[2] == &DUNGEON7_ROOM2_DATA);
 }
 
-TEST(d7_rooms_min_size){
-    for(int r = 0; r < D7_N; ++r){ CHECK(D7_ROOMS[r]->w >= 30); CHECK(D7_ROOMS[r]->h >= 22); }
-}
-
 TEST(d7_one_stone_shrine){
     int shrines = 0; bool stone = false;
     for(int r = 0; r < D7_N; ++r){

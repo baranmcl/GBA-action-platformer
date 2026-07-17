@@ -341,6 +341,100 @@ TEST(harness_loose_platform_dropped_per_index_bridges_and_opens_below){
 }
 
 // ----------------------------------------------------------------------------
+// 5c. Task 2.6 — Wind tiles (WindLeft/WindRight) are passable background, exactly like before the
+//     explicit build_grid case was added: no push force is modeled (conservative; see the header
+//     comment on the WindLeft/WindRight case in build_grid). This pins that adding the explicit
+//     no-op case didn't change the model.
+// ----------------------------------------------------------------------------
+TEST(harness_wind_tiles_are_passable_non_hazard){
+    Fixture f(12, 12);
+    f.set(5, 6, TileKind::WindLeft);
+    f.set(6, 6, TileKind::WindRight);
+    LevelData L = f.level();
+    harness::Grid g = harness::build_grid(L, harness::WorldModel{});
+    for(int x : {5, 6}){
+        CHECK(g.solid[6*L.w + x] == 0);
+        CHECK(g.hazard[6*L.w + x] == 0);
+        CHECK(g.standable[6*L.w + x] == 0);
+    }
+}
+
+// ----------------------------------------------------------------------------
+// 5d. Task 2.6 — Updraft lift (glide). A contiguous vertical Updraft run at cols 9-10, rows 10-27, with
+//     a landing ledge at row 9 (feet row 8) directly above the run's top (row 10). The floor-to-ledge
+//     gain (28 -> 8 = 20 tiles) is far beyond CLIMB_MAX(7); only glide=true crosses it.
+// ----------------------------------------------------------------------------
+static Fixture updraft_fixture(){
+    const int W = 20, H = 30;
+    Fixture f(W, H);
+    // OneWay, not Solid: a Solid ledge in the SAME column as the shaft would fail fits() one row
+    // below the ledge (the straight-up climb loop walks every intermediate feet-row, including the
+    // ledge's own row, and a body can never "fit" feet-at-a-solid-tile) -- exactly like D4's real
+    // updraft shaft, whose landing platform is a OneWay tile for this reason (see dungeon4.h row 7).
+    f.fill_row(9, 8, 11, TileKind::OneWay);             // landing ledge (feet row 8)
+    for(int y = 10; y <= 27; ++y){ f.set(9, y, TileKind::Updraft); f.set(10, y, TileKind::Updraft); }
+    return f;
+}
+TEST(harness_updraft_blocks_without_glide){
+    Fixture f = updraft_fixture();
+    LevelData L = f.level();
+    harness::WorldModel wm{};                        // glide=false
+    CHECK(!harness::reaches(L, wm, 10, 8));           // floor-to-ledge gain (20) needs the lift
+}
+TEST(harness_updraft_lifts_with_glide){
+    Fixture f = updraft_fixture();
+    LevelData L = f.level();
+    harness::WorldModel wm{}; wm.glide = true;
+    CHECK(harness::reaches(L, wm, 10, 8));            // glide rides the lift to the ledge
+    // The updraft tiles themselves stay non-solid/non-hazard/non-standable background either way.
+    harness::Grid g = harness::build_grid(L, wm);
+    CHECK(g.solid[15*L.w + 9] == 0);
+    CHECK(g.hazard[15*L.w + 9] == 0);
+    CHECK(g.standable[15*L.w + 9] == 0);
+}
+
+// ----------------------------------------------------------------------------
+// 5e. Task 2.6 — Grapple anchors. An anchor's own tile is its landing cell (guaranteed solid support
+//     directly below, mirroring GrappleState::snap_to_ledge). GRAPPLE_RANGE(6) is Chebyshev from the
+//     player's BODY-CENTRE tile (logic/grapple.h); in this harness's FEET-row terms that is a 7-tile
+//     vertical allowance (see the GRAPPLE_RANGE comment in level_harness.h) -- gap=7 is the boundary.
+// ----------------------------------------------------------------------------
+static Fixture grapple_fixture(int gap){
+    const int W = 20, H = 20;
+    Fixture f(W, H);
+    int feet = H - 2;                        // 18
+    int ay = feet - gap;
+    f.set(10, ay, TileKind::GrapplePoint);
+    f.fill_row(ay+1, 10, 11, TileKind::Solid);   // every anchor has solid directly below it
+    return f;
+}
+TEST(harness_grapple_anchor_in_range_needs_grapple){
+    Fixture f = grapple_fixture(7);              // right at the feet-row boundary
+    LevelData L = f.level();
+    int ay = (L.h-2) - 7;
+    harness::WorldModel none{};                   // grapple=false
+    CHECK(!harness::reaches(L, none, 10, ay));    // 7 > CLIMB_RELIABLE(5): ordinary climb can't reach it
+    harness::WorldModel gr{}; gr.grapple = true;
+    CHECK(harness::reaches(L, gr, 10, ay));        // grapple range covers it
+}
+TEST(harness_grapple_anchor_out_of_range_stays_unreachable){
+    Fixture f = grapple_fixture(8);               // one tile beyond grapple range
+    LevelData L = f.level();
+    int ay = (L.h-2) - 8;
+    harness::WorldModel gr{}; gr.grapple = true;
+    CHECK(!harness::reaches(L, gr, 10, ay));       // out of range even with grapple
+}
+TEST(harness_grapple_anchor_within_climb_reachable_without_grapple){
+    // OR-clause: an anchor within ordinary CLIMB_RELIABLE reach needs no grapple ability at all --
+    // GrapplePoint tiles are plain passable background, so ordinary climb already applies to them.
+    Fixture f = grapple_fixture(5);
+    LevelData L = f.level();
+    int ay = (L.h-2) - 5;
+    harness::WorldModel none{};
+    CHECK(harness::reaches(L, none, 10, ay));
+}
+
+// ----------------------------------------------------------------------------
 // 6. PHYSICS CANARY — pins CLIMB_* to the REAL logic::Player double-jump.
 //    Deterministic fixed-tick schedule; integer asserts. Its FAILURE means the jump
 //    physics were retuned and the harness constants must follow.

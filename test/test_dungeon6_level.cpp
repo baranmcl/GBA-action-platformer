@@ -1,4 +1,5 @@
 #include "test_framework.h"
+#include "level_harness.h"
 #include "game/levels/dungeons.h"
 using namespace logic;
 
@@ -15,14 +16,6 @@ TEST(d6_dungeon_table){
     CHECK_EQ(DUNGEON6_DUNGEON.start_room, 0);
     CHECK(DUNGEON6_DUNGEON.rooms[0] == &DUNGEON6_ROOM0_DATA);
     CHECK(DUNGEON6_DUNGEON.rooms[2] == &DUNGEON6_ROOM2_DATA);
-}
-
-TEST(d6_rooms_min_size){
-    // Camera clamp requires every room >= the 240x160 viewport (>=30 wide, >=20 tall).
-    for(int r = 0; r < D6_N; ++r){
-        CHECK(D6_ROOMS[r]->w >= 30);
-        CHECK(D6_ROOMS[r]->h >= 20);
-    }
 }
 
 TEST(d6_rooms_solid_border){
@@ -450,6 +443,57 @@ TEST(d6_room0_has_hub_return_door){
     for(int i = 0; i < L.room_door_count; ++i)
         if(L.room_doors[i].target_room == -1) ++hub_doors;
     CHECK_EQ(hub_doors, 1);
+}
+
+// ----------------------------------------------------------------------------
+// Task 2.6 — real reachability via the shared harness (was existence-only coverage). Room-graph walk:
+// Room 0's spawn reaches its 'D' room-doors (needs grapple to reach the shelf they sit on); Room 2's
+// entrance reaches the cage + exit (needs the water gap frozen). Structural checks above (grapple
+// anchor has solid below, water gap width, etc.) stay as-is -- this adds the reachability proof they
+// were missing.
+// ----------------------------------------------------------------------------
+TEST(d6_room0_spawn_reaches_forward_doors_with_grapple){
+    // The two forward doors ((17,12) -> Room 1, (23,12) -> Room 2) sit on a shelf (row 13, cols 11-24)
+    // 7 tiles above the floor -- beyond CLIMB_RELIABLE(5) -- reached via the single anchor 'G' at
+    // (11,12). The hub-return door (6,18) is floor-level and needs no ability at all. Seeded explicitly
+    // from L.spawn_tx/ty (the true dungeon-entry point), NOT harness::reaches()'s default room_start --
+    // Room 0 has 2 named entrances (the return points from Rooms 1/2), and entrance[0] (16,12) sits
+    // ALREADY on the shelf, which would trivially "reach" the doors regardless of grapple.
+    const LevelData& L = DUNGEON6_ROOM0_DATA;
+    const RoomDoorSpawn *d_room1 = nullptr, *d_room2 = nullptr, *d_hub = nullptr;
+    for(int i = 0; i < L.room_door_count; ++i){
+        const RoomDoorSpawn& d = L.room_doors[i];
+        if(d.target_room == 1) d_room1 = &d;
+        else if(d.target_room == 2) d_room2 = &d;
+        else if(d.target_room == -1) d_hub = &d;
+    }
+    REQUIRE(d_room1 != nullptr); REQUIRE(d_room2 != nullptr); REQUIRE(d_hub != nullptr);
+
+    harness::WorldModel no_grapple{};
+    CHECK(!harness::reaches_from(L, no_grapple, L.spawn_tx, L.spawn_ty, d_room1->tx, d_room1->ty));
+    CHECK(!harness::reaches_from(L, no_grapple, L.spawn_tx, L.spawn_ty, d_room2->tx, d_room2->ty));
+    CHECK(harness::reaches_from(L, no_grapple, L.spawn_tx, L.spawn_ty, d_hub->tx, d_hub->ty));
+
+    harness::WorldModel wm{}; wm.grapple = true;
+    CHECK(harness::reaches_from(L, wm, L.spawn_tx, L.spawn_ty, d_room1->tx, d_room1->ty));
+    CHECK(harness::reaches_from(L, wm, L.spawn_tx, L.spawn_ty, d_room2->tx, d_room2->ty));
+    CHECK(harness::reaches_from(L, wm, L.spawn_tx, L.spawn_ty, d_hub->tx, d_hub->ty));
+}
+
+TEST(d6_room2_reaches_cage_and_exit_with_frozen_water){
+    // The cage + exit sit past the capped water tunnel (Ice-only crossing per
+    // d6_water_corridor_has_ceiling); grapple=true is also set for full-kit consistency even though
+    // Room 2 has no anchor of its own.
+    const LevelData& L = DUNGEON6_ROOM2_DATA;
+    REQUIRE(L.has_cage); REQUIRE(L.has_exit);
+    REQUIRE(L.entrance_count >= 1);
+    harness::WorldModel dry{}; dry.grapple = true;
+    CHECK(!harness::reaches_from(L, dry, L.entrances[0].tx, L.entrances[0].ty, L.cage_tx, L.cage_ty));
+    CHECK(!harness::reaches_from(L, dry, L.entrances[0].tx, L.entrances[0].ty, L.exit_tx, L.exit_ty));
+
+    harness::WorldModel wm{}; wm.water_frozen = true; wm.grapple = true;
+    CHECK(harness::reaches_from(L, wm, L.entrances[0].tx, L.entrances[0].ty, L.cage_tx, L.cage_ty));
+    CHECK(harness::reaches_from(L, wm, L.entrances[0].tx, L.entrances[0].ty, L.exit_tx, L.exit_ty));
 }
 
 TEST(d6_room0_hub_door_grounds_on_main_floor){

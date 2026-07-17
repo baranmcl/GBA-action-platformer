@@ -37,6 +37,15 @@ namespace harness {
 inline constexpr int CLIMB_RELIABLE = 5;
 inline constexpr int CLIMB_MAX      = 7;
 
+// Task 2.6 — Vine Grapple reach. logic::GrappleState::RANGE (include/logic/grapple.h) is 6 tiles,
+// Chebyshev distance from the player's BODY-CENTRE tile (nearest_grapple_anchor scans ptx/pty computed
+// from pos+half_extent, i.e. the centre, not the feet). This harness's flood tracks FEET positions, and
+// for the 2x4-tile body centre_row = feet_row - 1 (half_h is 2 tiles, so centre is 2 tiles below the
+// top row = feet_row-3+2). So "anchor within RANGE of the centre" becomes, in feet-row terms,
+// feet_row - anchor_ty <= RANGE + 1. Keep the raw engine constant here and apply the +1 at the call site
+// so the derivation stays visible instead of baking a mystery "7" into the flood loop.
+inline constexpr int GRAPPLE_RANGE = 6;
+
 // Player body in tiles: 2 wide x 4 tall (16x32 px). Mirrors every per-dungeon fork.
 inline constexpr int PW = 2;
 inline constexpr int PH = 4;
@@ -57,7 +66,8 @@ struct WorldModel {
     std::set<int> broken_boulder_idx;    // indices into level.boulders individually cleared
     std::set<int> dropped_loose_idx;     // indices into level.loose_platforms individually dropped
     bool climb_max = false;              // use CLIMB_MAX instead of CLIMB_RELIABLE (bypass checks)
-    // Task 2.6 adds: bool glide, bool grapple (wind/updraft/anchor rules)
+    bool glide = false;                  // Task 2.6: Featherleap/Glide held in an Updraft column -> lift
+    bool grapple = false;                // Task 2.6: Vine Grapple owned -> can latch GrapplePoint anchors
 };
 
 struct Grid {
@@ -65,6 +75,8 @@ struct Grid {
     std::vector<uint8_t> solid;     // 1 = blocked for movement
     std::vector<uint8_t> standable; // 1 = feet can rest (solid or one-way top)
     std::vector<uint8_t> hazard;    // lava/water(unfrozen)/spikes
+    std::vector<uint8_t> updraft;   // Task 2.6: 1 = Updraft tile (bg-only, non-solid lift surface)
+    std::vector<uint8_t> anchor;    // Task 2.6: 1 = GrapplePoint tile (bg-only, non-solid latch anchor)
 
     // Out-of-bounds is treated as solid/standable (a wall) and non-hazard, exactly as the
     // per-dungeon forks did with blk()/standable().
@@ -98,6 +110,8 @@ inline Grid build_grid(const logic::LevelData& L, const WorldModel& wm){
     g.solid.assign(n, 0);
     g.standable.assign(n, 0);
     g.hazard.assign(n, 0);
+    g.updraft.assign(n, 0);
+    g.anchor.assign(n, 0);
     std::vector<uint8_t> oneway(n, 0);
     auto idx = [&](int x, int y){ return y*L.w + x; };
 
@@ -112,6 +126,15 @@ inline Grid build_grid(const logic::LevelData& L, const WorldModel& wm){
             case logic::TileKind::Water:
                 if(wm.water_frozen) g.solid[idx(x,y)] = 1;   // frozen = standable IcePlatform run
                 else                g.hazard[idx(x,y)] = 1;  // damaging hazard
+                break;
+            case logic::TileKind::Updraft:     g.updraft[idx(x,y)] = 1; break;   // Task 2.6: lift surface
+            case logic::TileKind::GrapplePoint:g.anchor[idx(x,y)]  = 1; break;   // Task 2.6: latch anchor
+            case logic::TileKind::WindLeft:
+            case logic::TileKind::WindRight:
+                // Task 2.6: passable, non-standable, non-hazard -- the harness does not model the
+                // sideways gust force (conservative; see level_harness.h header comment). Explicit
+                // no-op case (rather than falling into `default`) so this is a documented decision,
+                // not an oversight.
                 break;
             default: break;
         }
@@ -187,6 +210,26 @@ inline Grid build_grid(const logic::LevelData& L, const WorldModel& wm){
 // -----------------------------------------------------------------------------
 namespace detail {
 
+// Task 2.6 — Updraft lift helper. Does the PW x PH body at (x,y) overlap any Updraft tile (mirrors
+// logic::updraft_overlap's whole-body AABB check, which is what actually gates UPDRAFT_VY in
+// src/logic/player.cpp)? If so, return the topmost row of the maximal CONTIGUOUS run of Updraft
+// tiles (scanning upward through either of the body's two columns) that includes the touched
+// row(s); -1 if the body doesn't touch any Updraft tile at (x,y). Runs are per-column-pair, not a
+// generic flood-fill blob, so two separate updraft shafts never get merged by this scan.
+inline int updraft_run_top(const Grid& g, int x, int y){
+    int top_touch = -1;
+    for(int cy = y-PH+1; cy <= y; ++cy){
+        if(cy < 0 || cy >= g.h) continue;
+        bool up_here = (x>=0 && x<g.w && g.updraft[cy*g.w+x]) || (x+1>=0 && x+1<g.w && g.updraft[cy*g.w+(x+1)]);
+        if(up_here && (top_touch < 0 || cy < top_touch)) top_touch = cy;
+    }
+    if(top_touch < 0) return -1;
+    int r = top_touch;
+    while(r-1 >= 0 && ((x>=0 && x<g.w && g.updraft[(r-1)*g.w+x]) || (x+1>=0 && x+1<g.w && g.updraft[(r-1)*g.w+(x+1)])))
+        --r;
+    return r;   // topmost row (inclusive) of the contiguous run
+}
+
 // Snap a seed down to the first standing position at/below (sx,sy) (mirrors the fork snap_start).
 inline bool snap_start(const Grid& g, int& sx, int& sy){
     for(int lx : { sx, sx-1 }){
@@ -200,10 +243,11 @@ inline bool snap_start(const Grid& g, int& sx, int& sy){
     return false;
 }
 
-// Flood standable feet-positions reachable from (sx,sy) with a given climb reach.
+// Flood standable feet-positions reachable from (sx,sy) with a given climb reach. `glide` and
+// `grapple` gate the Task 2.6 Updraft-lift and Grapple-anchor rules (see level_harness.h header).
 // Neighbour rules: walk, fall any height, climb (double-jump) up to `climb` tiles straight
 // or diagonally, and horizontal double-jump over gaps <= climb-1 tiles at the same landing row.
-inline std::vector<uint8_t> flood(const Grid& g, int sx, int sy, int climb){
+inline std::vector<uint8_t> flood(const Grid& g, int sx, int sy, int climb, bool glide, bool grapple){
     std::vector<uint8_t> seen(g.w*g.h, 0);
     if(!snap_start(g, sx, sy)) return seen;
     std::queue<std::pair<int,int>> q;
@@ -212,17 +256,52 @@ inline std::vector<uint8_t> flood(const Grid& g, int sx, int sy, int climb){
         if(!g.stand(x,y) || seen[y*g.w+x]) return;
         seen[y*g.w+x] = 1; q.push({x,y});
     };
+    // Task 2.6 — Grapple anchors: precompute anchor tile positions once (grids are tiny; a per-cell
+    // rescan would be wasteful but not incorrect). nearest_grapple_anchor (logic/grapple.h) does NOT
+    // raycast for obstruction -- it's a pure tile-range+facing search -- so the harness's rule mirrors
+    // that: no path-clearance check, only the RANGE/column test below.
+    std::vector<std::pair<int,int>> anchors;
+    if(grapple)
+        for(int y=0; y<g.h; ++y) for(int x=0; x<g.w; ++x)
+            if(g.anchor[y*g.w+x]) anchors.push_back({x,y});
     push(sx, sy);
     while(!q.empty()){
         auto pr = q.front(); q.pop();
         int x = pr.first, y = pr.second;
-        // straight-up climb
-        for(int up=1; up<=climb; ++up){
+        // straight-up climb (+ Task 2.6 Updraft lift: the first time the ascending body is found
+        // touching a contiguous Updraft run, the ordinary `climb` cap extends to that run's top plus
+        // one body-height (PH) of landing headroom -- a bounded stand-in for the residual UPDRAFT_VY
+        // momentum after the body clears the last updraft tile, NOT an unbounded escape hatch: once
+        // computed the cap stays fixed, so open air beyond the headroom still isn't free to climb.
+        // Every intermediate row must still be fits()-clear, exactly like ordinary climb: no phasing
+        // through solid, no glide TRAJECTORY modeled, straight-up only (no diagonal glide-lift).
+        int cap = climb;
+        for(int up=1; up<=cap; ++up){
             int ny = y - up;
             if(ny - PH + 1 < 0) break;
             if(!g.fits(x, ny)) break;
+            if(glide && cap == climb){
+                int rt = updraft_run_top(g, x, ny);
+                if(rt >= 0){
+                    int reach = y - (rt - PH);
+                    if(reach > cap) cap = reach;
+                }
+            }
             if(g.stand(x, ny)) push(x, ny);
         }
+        // Task 2.6 — Grapple anchors: an anchor strictly above (x,y), in the body's own column pair,
+        // within GRAPPLE_RANGE(+1 feet/centre offset -- see constant comment) unlocks its landing cell
+        // (the anchor's own tile, standing on the solid ledge every anchor is guaranteed to have
+        // directly below it). Also reachable via ordinary climb above (already handled by the loop
+        // above -- GrapplePoint tiles are non-solid, so plain climb/jump already applies to them).
+        if(grapple)
+            for(const auto& a : anchors){
+                int ax = a.first, ay = a.second;
+                if(ay >= y) continue;                              // must be above the current cell
+                if(ax != x && ax != x+PW-1) continue;               // body column overlaps the anchor
+                if((y - 1 - ay) > GRAPPLE_RANGE) continue;           // out of reach (centre-row math)
+                push(ax, ay);
+            }
         // diagonal climb + sideways-step-then-fall
         for(int dir=-1; dir<=1; dir+=2){
             int nx = x + dir;
@@ -262,13 +341,20 @@ inline std::vector<uint8_t> flood(const Grid& g, int sx, int sy, int climb){
 } // namespace detail
 
 inline int climb_of(const WorldModel& wm){ return wm.climb_max ? CLIMB_MAX : CLIMB_RELIABLE; }
+// CAUTION: prefers entrances[0] over the raw dungeon-entry spawn whenever the room has ANY named
+// entrances. For a multi-entrance room (e.g. a hub room with separate RETURN points from two child
+// rooms), entrances[0] is often one of those return points, NOT where a fresh arrival actually starts —
+// and a return point can sit somewhere only reachable WITH an ability the fresh-arrival proof is trying
+// to prove is required (Task 2.6 hit this directly: D6 Room 0's entrance[0] sits already on the grapple-
+// gated shelf). When proving "can a player arriving fresh reach X", seed explicitls from L.spawn_tx/ty
+// via reachable_from()/reaches_from(), not reachable()/reaches() (which use this function).
 inline int room_start_x(const logic::LevelData& L){ return L.entrance_count ? L.entrances[0].tx : L.spawn_tx; }
 inline int room_start_y(const logic::LevelData& L){ return L.entrance_count ? L.entrances[0].ty : L.spawn_ty; }
 
 // Flood of standable feet-positions from a given seed tile.
 inline std::set<std::pair<int,int>> reachable_from(const logic::LevelData& level, const WorldModel& wm, int tx, int ty){
     Grid g = build_grid(level, wm);
-    std::vector<uint8_t> seen = detail::flood(g, tx, ty, climb_of(wm));
+    std::vector<uint8_t> seen = detail::flood(g, tx, ty, climb_of(wm), wm.glide, wm.grapple);
     std::set<std::pair<int,int>> out;
     for(int y=0; y<g.h; ++y) for(int x=0; x<g.w; ++x) if(seen[y*g.w+x]) out.insert({x,y});
     return out;
@@ -280,14 +366,23 @@ inline std::set<std::pair<int,int>> reachable(const logic::LevelData& level, con
 
 // Does a reachable feet-position put the player AT content tile (tx,ty)? (feet at ty or ty+1,
 // within the 2-wide body's columns tx-PW+1..tx — mirrors every fork's stands_at().)
-inline bool reaches(const logic::LevelData& level, const WorldModel& wm, int tx, int ty){
-    std::set<std::pair<int,int>> R = reachable(level, wm);
+inline bool stands_at(const std::set<std::pair<int,int>>& R, int tx, int ty){
     for(int dy=0; dy<=1; ++dy){
         int fy = ty + dy;
         for(int lx=tx-PW+1; lx<=tx; ++lx)
             if(R.count({lx, fy})) return true;
     }
     return false;
+}
+inline bool reaches(const logic::LevelData& level, const WorldModel& wm, int tx, int ty){
+    return stands_at(reachable(level, wm), tx, ty);
+}
+// Same as reaches(), but flooding from an explicit seed tile rather than the room's start (entrance/
+// spawn). Useful to prove a sub-path in isolation (e.g. "given you're already at X, can you reach Y")
+// when the harness's conservative movement model can't certify the FULL path from the room's start —
+// see e.g. test_dungeon4_level.cpp's wind-gap NEEDS_CONTEXT note (Task 2.6).
+inline bool reaches_from(const logic::LevelData& level, const WorldModel& wm, int sx, int sy, int tx, int ty){
+    return stands_at(reachable_from(level, wm, sx, sy), tx, ty);
 }
 
 // Standable cell nearest-below a content tile (mirrors scene_dungeon.cpp floor_row_below:
@@ -312,6 +407,15 @@ inline void check_solid_border(const logic::LevelData& level, const char* label)
         CHECK((int)level.tiles[y*level.w + (level.w-1)] == S);  // right col
     }
     std::printf("  [border] %s: %dx%d solid border verified\n", label, level.w, level.h);
+}
+
+// Task 2.6 (registry extension carried over from Task 2.4's review): every shipped room must be at
+// least min_w x min_h tiles (the camera clamp needs room to pan). Bounds are supplied by the caller,
+// not hardcoded here, so a single call site can state (and justify) the honest bound across ALL rooms.
+inline void check_min_room_size(const logic::LevelData& level, const char* label, int min_w, int min_h){
+    CHECK(level.w >= min_w);
+    CHECK(level.h >= min_h);
+    std::printf("  [size] %s: %dx%d >= %dx%d\n", label, level.w, level.h, min_w, min_h);
 }
 
 inline void check_room_doors_resolve(const logic::DungeonData& dungeon, const char* label){

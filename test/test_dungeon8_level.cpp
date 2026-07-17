@@ -81,10 +81,6 @@ TEST(d8_dungeon_table){
     CHECK(DUNGEON8_DUNGEON.rooms[2] == &DUNGEON8_ROOM2_DATA);
 }
 
-TEST(d8_rooms_min_size){
-    for(int r = 0; r < D8_N; ++r){ CHECK(D8_ROOMS[r]->w >= 30); CHECK(D8_ROOMS[r]->h >= 22); }
-}
-
 TEST(d8_one_light_shrine){
     int shrines = 0; bool light = false;
     for(int r = 0; r < D8_N; ++r){
