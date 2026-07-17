@@ -406,6 +406,54 @@ TEST(all_boss_defs_satisfy_invariants){
 }
 
 // ---------------------------------------------------------------------------
+// Task 5.1 (review r1) — MECHANIC-contract pins for boss field selections. These are
+// behavioral contracts: Phase 5's shared fight loop selects behavior from these fields,
+// so a typo'd field means wrong mechanics with green tests. Tuning pins (hp/speeds/
+// frames) are separately checked by the all-defs loop above and are free to rebalance;
+// mechanics (what kind of fight this is) are contracts and changing one should fail.
+// ---------------------------------------------------------------------------
+TEST(bossdef_mechanic_contracts){
+    // KING_DEF: BoltAndSpellBlock teleporter with 6 perches, Light-exposed.
+    CHECK((int)KING_DEF.id == (int)BossId::King);
+    CHECK((int)KING_DEF.block_mode == (int)BlockMode::BoltAndSpellBlock);
+    CHECK((int)KING_DEF.locomotion == (int)Locomotion::Stationary);
+    CHECK_EQ(KING_DEF.teleport_on_wound, true);
+    CHECK_EQ(KING_DEF.perch_count, 6);
+    CHECK_EQ(KING_DEF.teleport_period, 200);
+    CHECK((int)KING_DEF.vuln == (int)VulnMode::SpellExpose);
+    CHECK((int)KING_DEF.expose_spell == (int)SpellId::Light);
+
+    // D1_DEF: TiredWindow guardian, dodge-only (no block), stationary, no perches.
+    CHECK((int)D1_DEF.id == (int)BossId::D1Guardian);
+    CHECK((int)D1_DEF.block_mode == (int)BlockMode::None);
+    CHECK((int)D1_DEF.locomotion == (int)Locomotion::Stationary);
+    CHECK((int)D1_DEF.vuln == (int)VulnMode::TiredWindow);
+    CHECK((int)D1_DEF.expose_spell == (int)SpellId::None);
+    CHECK(D1_DEF.perches == nullptr);
+
+    // D2_DEF: SpellBlock Fire-blocker, pacing, Fire-exposed, rockfall both phases.
+    CHECK((int)D2_DEF.id == (int)BossId::D2Slagshell);
+    CHECK((int)D2_DEF.block_mode == (int)BlockMode::SpellBlock);
+    CHECK((int)D2_DEF.locomotion == (int)Locomotion::Pacing);
+    CHECK((int)D2_DEF.block_spell == (int)SpellId::Fire);
+    CHECK((int)D2_DEF.vuln == (int)VulnMode::SpellExpose);
+    CHECK((int)D2_DEF.expose_spell == (int)SpellId::Fire);
+    CHECK((D2_DEF.phases[0].attacks & (BOSS_ATK_AIMED | BOSS_ATK_ROCKFALL)) == (BOSS_ATK_AIMED | BOSS_ATK_ROCKFALL));
+    CHECK((D2_DEF.phases[1].attacks & (BOSS_ATK_AIMED | BOSS_ATK_ROCKFALL)) == (BOSS_ATK_AIMED | BOSS_ATK_ROCKFALL));
+
+    // D3_DEF: SpellBlock dual-element (Fire+Ice), stationary, shifts spell per wound, spiral phase 2.
+    CHECK((int)D3_DEF.id == (int)BossId::D3Coldforge);
+    CHECK((int)D3_DEF.block_mode == (int)BlockMode::SpellBlock);
+    CHECK((int)D3_DEF.locomotion == (int)Locomotion::Stationary);
+    CHECK((int)D3_DEF.block_spell == (int)SpellId::Fire);
+    CHECK((int)D3_DEF.block_spell2 == (int)SpellId::Ice);
+    CHECK((int)D3_DEF.expose_spell == (int)SpellId::Fire);
+    CHECK((int)D3_DEF.expose_spell_alt == (int)SpellId::Ice);
+    CHECK_EQ(D3_DEF.phases[0].attacks, BOSS_ATK_AIMED);
+    CHECK((D3_DEF.phases[1].attacks & (BOSS_ATK_AIMED | BOSS_ATK_SPIRAL)) == (BOSS_ATK_AIMED | BOSS_ATK_SPIRAL));
+}
+
+// ---------------------------------------------------------------------------
 // Task 5.1 (I30) — wound-path behavior not previously covered: a single wound that
 // crosses MULTIPLE phase thresholds at once, and clamping/expose-end for damage
 // amounts that don't line up neatly with a boss's usual wound_dmg.
