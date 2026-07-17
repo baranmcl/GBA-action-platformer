@@ -86,17 +86,25 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** Not started.
+**Overall:** 1/7 phases shipped (Phase 0); Phase 1 in progress on branch `fix/health-review-remediation`.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
-| 0 — Docs & tooling quick wins | ⬜ Not started | — | — |
-| 1 — Content-pipeline validation | ⬜ Not started | — | — |
+| 0 — Docs & tooling quick wins | ✅ Shipped | `d6eee82..152c9ed` | 2026-07-17; 2 review-fix rounds (doc facts) |
+| 1 — Content-pipeline validation | ✅ Shipped | `c2c7eec..d6cc701` | 2026-07-17; ROM gate green; mGBA smoke pending user |
+| 2 — Shared level-test harness | 🚧 In progress | — | branch `fix/health-review-remediation` |
 | 2 — Shared level-test harness | ⬜ Not started | — | — |
 | 3 — Save v6 | ⬜ Not started | — | — |
 | 4 — Shared constants + player session | ⬜ Not started | — | — |
 | 5 — Boss-loop unification | ⬜ Not started | — | — |
 | 6 — play_room decomposition + minors | ⬜ Not started | — | — |
+
+### Deviations
+- **Task 1.2 Rule 6:** arena crystal requirement inverted from "≥1" to "≤1" — D1/D3 arenas are intentionally crystal-less (TiredWindow / block-to-charge designs); the original rule was written believing all arenas had crystals.
+
+### Discoveries
+- **Task 1.2:** `tools/levels/dungeon2_room1.txt`'s comment claims a '$' magic crystal is placed for anti-softlock, but none exists in the grid — the M13 fight ships on Fire-block-to-charge alone. Comment fixed to describe reality (codegen-neutral). **Open balance question for the user:** should D2's arena actually get the crystal its design comment promised? (Adding one is a one-character content edit + QA, deliberately NOT done here.)
+- **Task 1.1:** shipped content already relied on the silent gate-JSON fallback the review flagged (I3f) — `tools/levels/dungeon7_room0.txt` has a 6-tile DarkVeil 'G' column with ONE `{"type":"dark_veil"}` sidecar entry, silently reused via `j_gates[-1]`. Resolution: padded the JSON to six explicit entries (generated header byte-identical) so the strict count check stands. Any future multi-tile 'G' column needs one JSON entry per symbol.
 
 ## Finding → Task traceability
 
@@ -125,7 +133,7 @@ notes and commit messages.
 
 # Phase 0 — Docs & tooling quick wins
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `d6eee82..152c9ed` on 2026-07-17 (5 tasks, 7 commits incl. 2 review-fix rounds; host tests 455/455 after deleting 4 test-only-helper tests; ROM build verified post-phase)
 
 Zero-gameplay-risk fixes. Everything here is independent of every other phase and of each other. Dimensions: Ops Readiness (0.1, 0.2), Content DX (0.2–0.4), Code Quality (0.5).
 
@@ -247,7 +255,7 @@ Do NOT: rename `GateType::Water`/`TileKind::Water` or `EntitySpawn.param*` (para
 
 # Phase 1 — Content-pipeline validation
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `c2c7eec..d6cc701` on 2026-07-17 (4 tasks; ROM gate green; 1 deviation — arena crystal rule inverted; 2 discoveries — see top of plan. mGBA smoke for heavy-plate latch + D3 room walk PENDING user QA)
 
 Teach the pipeline every invariant the runtime assumes (I3, I34, I24, I36-validate). Dimensions: Ops Readiness + Architecture + Content DX + Code Quality (flagged by all four agents). Pure Python + tiny scene edits; independent of Phases 0/2/3.
 
@@ -322,7 +330,7 @@ Do NOT: add warnings-instead-of-errors, validate cross-room concerns here (Task 
 3. **Global latch registry (I3e):** collect every `latch_id` ≥ 0 from every room's gates/cracked_floors/brazier_groups; each must be in [0, 23]; duplicates allowed ONLY within the same room file (D7 uses latch 1 twice for one shortcut, same room) — cross-room duplicates are errors.
 4. **Global heart-id registry:** every heart-container id in [0, 7], globally unique.
 5. **Sprite-budget estimate (I34):** per room, `enemies + blocks + boulders + crystals + hearts + shrines + Σ loose len + Σ hidden len + 45` (HUD/player/vine/VFX reserve) must be ≤ 110; error above (Butano OAM budget is 128 — the margin is deliberate).
-6. **Arena constraints (I36):** any room whose JSON has a `"boss"` key must have: a solid tile at `(w/2, h-2)` and at `(w/2 ± 1, h-2)` (flat floor under the boss), solid columns 0 and w-1 (already border-checked), and ≥ 1 magic crystal ('$').
+6. **Arena constraints (I36):** any room whose JSON has a `"boss"` key must have: a solid tile at `(w/2, h-2)` and at `(w/2 ± 1, h-2)` (flat floor under the boss), solid columns 0 and w-1 (already border-checked), and AT MOST 1 magic crystal ('$') — the fight loop honors only `magic_crystals[0]`, so a second crystal is silently dead content. Zero crystals is LEGAL: D1 (TiredWindow — bolts are free) and D3 (dual block-to-charge) ship crystal-less by documented design. *(Deviation from the original plan text, which required ≥1 — that requirement was falsified by shipped intentional designs; see Discoveries.)*
 - [ ] **Step 1: Write failing tests** (`tools/test_validate_dungeons.py`): temp-dir fixtures with a 2-room mini-dungeon: OOB target_room; unknown target_entrance; cross-room duplicate latch_id; latch_id 24; duplicate heart id; boss room without a crystal; happy path.
 - [ ] **Step 2:** Run unittest — FAIL. **Step 3:** Implement. **Step 4:** unittest green; run `python tools/validate_dungeons.py` against the real content — must pass (if a real violation surfaces, STOP and report it; do not tune thresholds to make it pass).
 - [ ] **Step 5:** Wire into `tools/host_test.sh` (after the regen loop: `python tools/validate_dungeons.py`) and `tools/build_rom.sh` (after its regen loop). Update the unittest line in host_test.sh to also run `test_validate_dungeons.py`.
