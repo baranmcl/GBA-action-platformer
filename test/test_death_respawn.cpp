@@ -3,6 +3,7 @@
 #include "logic/meters.h"
 #include "logic/hazard.h"
 #include "logic/collision.h"
+#include "logic/combat_rules.h"
 using namespace logic;
 
 // ---- Meter edge cases that the death/respawn path relies on ----
@@ -19,8 +20,9 @@ TEST(refill_clears_empty){
 }
 
 // ---- Scene-order repro: player drains to 0 in a sub-floor water pit, then respawns ----
-// Mirrors the per-frame ORDER in scene_dungeon.cpp::play_room:
-//   player.update -> hazard damage(20)/invuln=45 -> i-frame tick -> respawn-if-empty.
+// These two scenario tests drive the SAME logic::try_hit / logic::tick_iframes / logic::respawn_vitals
+// frame-step functions that scene_dungeon.cpp::play_room calls every frame (logic/combat_rules.h),
+// so a regression in the shared step fails here too, not just in-scene.
 // The map: a sub-floor water PIT (water at the bottom rows, solid border below),
 // and a SAFE entrance ledge elsewhere. Verifies the player ends up at the entrance,
 // full HP, and does NOT immediately re-die (no death loop / stuck-in-pit).
@@ -51,9 +53,9 @@ namespace {
 // Demonstrates the DEATH-LOOP failure mode that looks like "stuck at the bottom":
 // if the respawn point is itself in/adjacent to a hazard AND the respawn grants NO
 // post-respawn i-frame, the player is damaged again the very next frames and re-dies
-// forever -> the player can never act -> "stuck". The current scene sets invuln=0 on
-// respawn (no grace), so a hazardous spawn = an unbreakable loop. The robust fix grants
-// a brief post-respawn i-frame so the player always regains control.
+// forever -> the player can never act -> "stuck". logic::respawn_vitals always grants
+// logic::RESPAWN_IFRAMES of grace (never 0), so a hazardous spawn cannot become an
+// unbreakable loop.
 TEST(respawn_grants_postrespawn_iframe_breaks_death_loop){
     // Build a map whose ONLY standable spot near spawn is a water tile (worst case:
     // an authored-unsafe entrance). Without a grace window the player loops forever.
@@ -70,25 +72,22 @@ TEST(respawn_grants_postrespawn_iframe_breaks_death_loop){
     player.body.half_w=Fixed::from_int(8); player.body.half_h=Fixed::from_int(16);
     player.body.pos=spawn_pos;
     Meter health{20,100}; int invuln=0;
-    constexpr int RESPAWN_IFRAMES=60; // the robust grace window the fix introduces
     InputFrame in{};
 
     int deaths=0;
     for(int f=0; f<300; ++f){
         player.update(in, map);
-        if(invuln==0 && hazard_overlap(player.body, map)){ health.damage(20); invuln=45; }
-        if(invuln>0) --invuln;
+        logic::try_hit(health, invuln, false, hazard_overlap(player.body, map));
+        logic::tick_iframes(invuln);
         if(health.is_empty()){
             player.body.pos=spawn_pos; player.body.vel={Fixed::from_int(0),Fixed::from_int(0)};
-            health.cur=health.max;
-            invuln=RESPAWN_IFRAMES; // robust fix: grace window, NOT 0
+            logic::respawn_vitals(health, invuln); // grants RESPAWN_IFRAMES grace, NOT 0
             ++deaths;
         }
     }
-    // With the grace window the player dies a BOUNDED number of times (each 60-frame grace
-    // lets HP-drain restart from full), never an unbreakable every-frame loop. The key
-    // invariant: the grace window must exceed the hazard re-arm (45) so each respawn yields
-    // real control frames. Assert we are not in a runaway loop.
+    // With the grace window the player dies a BOUNDED number of times (each RESPAWN_IFRAMES-frame
+    // grace lets HP-drain restart from full), never an unbreakable every-frame loop. The
+    // grace-exceeds-re-arm relationship itself is enforced by combat_rules.h's static_assert.
     CHECK(deaths <= 300/RESPAWN_IFRAMES + 1);
     CHECK(invuln > 0 || !hazard_overlap(player.body, map)); // currently protected OR safe
 }
@@ -111,17 +110,14 @@ TEST(death_in_subfloor_water_pit_respawns_safely){
     bool ever_respawned = false;
     int respawn_pos_x = -1, respawn_pos_y = -1;
 
-    // Run enough frames to drain 100 HP at 20 per 45 frames (~225 frames) plus settle time.
+    // Run enough frames to drain 100 HP at CONTACT_DAMAGE per HIT_IFRAMES (~225 frames) plus settle time.
     for(int frame=0; frame<400; ++frame){
         player.update(in, map);
-        // hazard damage (scene line ~676)
-        if(invuln==0 && hazard_overlap(player.body, map)){ health.damage(20); invuln=45; }
-        // i-frame tick (scene line ~739)
-        if(invuln>0) --invuln;
-        // respawn (scene line ~741)
+        logic::try_hit(health, invuln, false, hazard_overlap(player.body, map));
+        logic::tick_iframes(invuln);
         if(health.is_empty()){
             player.body.pos = spawn_pos; player.body.vel = {Fixed::from_int(0),Fixed::from_int(0)};
-            health.cur = health.max; invuln = 0;
+            logic::respawn_vitals(health, invuln);
             ever_respawned = true;
             respawn_pos_x = player.body.pos.x.to_int();
             respawn_pos_y = player.body.pos.y.to_int();

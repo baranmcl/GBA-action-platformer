@@ -41,6 +41,7 @@
 #include "logic/spronk_rescue.h" // try_free_spronk
 #include "logic/enemy.h"
 #include "logic/meters.h"
+#include "logic/combat_rules.h"  // shared damage/i-frame/respawn constants + frame-step (M-remediation)
 #include "logic/spell.h"
 #include "logic/hazard.h"
 #include "logic/pushable_block.h"
@@ -567,12 +568,12 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     logic::Meter& health = ps.health;   // persist across hub <-> dungeon (no reset on entry)
     logic::Meter& magic  = ps.magic;
     int invuln = 0;
-    // Post-respawn grace: i-frames granted on death so a player who died in a sub-floor
-    // hazard pit cannot be re-damaged before regaining control. MUST exceed the hazard
-    // re-arm (invuln=45 per hit) so even an authored-unsafe spawn yields real control
-    // frames instead of an unbreakable every-frame death loop (the "stuck at the bottom"
-    // report). The entrance is authored safe, but this guarantees robustness regardless.
-    constexpr int RESPAWN_IFRAMES = 60;
+    // Post-respawn grace: i-frames granted on death (logic::respawn_vitals, logic::RESPAWN_IFRAMES)
+    // so a player who died in a sub-floor hazard pit cannot be re-damaged before regaining control.
+    // The header's static_assert enforces RESPAWN_IFRAMES > HIT_IFRAMES so even an authored-unsafe
+    // spawn yields real control frames instead of an unbreakable every-frame death loop (the
+    // "stuck at the bottom" report). The entrance is authored safe, but this guarantees robustness
+    // regardless.
 
     engine::Avatar avatar(player, lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::BoltPool bolts(lvl.view.map_px_w, lvl.view.map_px_h, cam);
@@ -1121,13 +1122,13 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             if(player.stone.active() && logic::aabb_overlap(player.body, inst.e.body)){
                 // M8: a pound CRUSHES any enemy on contact (including fire_immune), refilling magic
                 // like a bolt-kill. Guarded by stone.active() (pound i-frames), parallel to dash i-frames.
-                inst.e.kill(); magic.heal(25); inst.sprite->set_visible(false);
+                inst.e.kill(); magic.heal(logic::KILL_MAGIC_REFILL); inst.sprite->set_visible(false);
             } else if(bolts.consume_hit(inst.e.body)){
-                inst.e.kill(); magic.heal(25); inst.sprite->set_visible(false);
+                inst.e.kill(); magic.heal(logic::KILL_MAGIC_REFILL); inst.sprite->set_visible(false);
             } else if(spells.consume_hit(inst.e.body, logic::SpellId::Fire)){
                 if(!inst.e.fire_immune){ inst.e.kill(); inst.sprite->set_visible(false); } // no magic refill from fire
-            } else if(invuln == 0 && !player.dash.invincible() && logic::aabb_overlap(player.body, inst.e.body)){
-                health.damage(20); invuln = 45;   // dash i-frames blink through contact
+            } else {
+                logic::try_hit(health, invuln, player.dash.invincible(), logic::aabb_overlap(player.body, inst.e.body));  // dash i-frames blink through contact
             }
         }
 
@@ -1158,7 +1159,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         spells.despawn_on_solid(lvl.map);
 
         // ---- hazards (lava, water, or spikes): same damage; dash i-frames blink through ----
-        if(invuln == 0 && !player.dash.invincible() && logic::hazard_overlap(player.body, lvl.map)){ health.damage(20); invuln = 45; }
+        logic::try_hit(health, invuln, player.dash.invincible(), logic::hazard_overlap(player.body, lvl.map));
 
         // ---- pushable blocks: push detection, gravity, sprite ----
         if(push_cd > 0) --push_cd;
@@ -1221,7 +1222,9 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         }
 
         // ---- i-frames / respawn ----
-        if(invuln > 0) { --invuln; avatar.set_visible((invuln / 4) % 2 == 0); }
+        bool was_invuln = invuln > 0;
+        logic::tick_iframes(invuln);
+        if(was_invuln) avatar.set_visible((invuln / 4) % 2 == 0);
         else avatar.set_visible(true);
         if(health.is_empty()){
             logic::lose_life(world);
@@ -1234,8 +1237,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                 return RoomOutcome{ RoomOutcome::GameOver };   // run_dungeon shows the Game Over scene
             }
             player.body.pos = spawn_pos; player.body.vel = { fx(0), fx(0) };
-            health.cur = health.max;
-            invuln = RESPAWN_IFRAMES;   // grace window (NOT 0): never re-die before regaining control
+            logic::respawn_vitals(health, invuln);   // grace window (NOT 0): never re-die before regaining control
             // Clear transient movement states so a death mid-dash / mid-pound / mid-grapple doesn't
             // carry velocity or i-frame state into the respawn (which could re-plunge into the pit).
             player.dash = logic::DashState{};
