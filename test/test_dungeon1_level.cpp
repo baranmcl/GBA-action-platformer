@@ -183,7 +183,7 @@ TEST(d1_rooms_solid_border){
 // Room 2 is the spronk chamber: has the cage + the exit. No other room has a boss.
 TEST(d1_room1_is_boss_arena){
     const LevelData& L = DUNGEON1_ROOM1_DATA;
-    CHECK(L.boss != nullptr);
+    REQUIRE(L.boss != nullptr);
     CHECK(L.boss == &D1_DEF);              // the ONE canonical boss symbol
     CHECK_EQ((int)L.boss->phase_count, 2);
     CHECK(!L.has_cage);

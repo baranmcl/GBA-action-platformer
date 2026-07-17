@@ -26,7 +26,7 @@ TEST(room_door_at_overlap){
     Body p{}; p.half_w = Fixed::from_int(8); p.half_h = Fixed::from_int(16);
     p.pos = { Fixed::from_int(12*8), Fixed::from_int(5*8) };
     const RoomDoorSpawn* d = room_door_at(ROOM, p);
-    CHECK(d != nullptr);
+    REQUIRE(d != nullptr);
     CHECK_EQ(d->target_room, 1);
 }
 TEST(room_door_at_none){

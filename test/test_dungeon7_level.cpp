@@ -828,7 +828,7 @@ TEST(d7_room0_doors_ground_on_main_floor){
 TEST(d7_room0_room1_requires_heavy_switch){
     const LevelData& L = DUNGEON7_ROOM0_DATA;
     const RoomDoorSpawn* r1 = d7_find_door(L, 1);
-    CHECK(r1 != nullptr);
+    REQUIRE(r1 != nullptr);
     // BASE KIT: static grid + cracked floors solid (build_grid already does this) + DarkVeil closed.
     Grid base = build_grid(L);
     close_dark_veil(L, base);
@@ -858,8 +858,8 @@ TEST(d7_room0_hub_exit_and_room2_always_reachable){
     const LevelData& L = DUNGEON7_ROOM0_DATA;
     const RoomDoorSpawn* q  = d7_find_door(L, -1);   // hub-exit 'Q'
     const RoomDoorSpawn* r2 = d7_find_door(L, 2);    // Room-2 door
-    CHECK(q  != nullptr);
-    CHECK(r2 != nullptr);
+    REQUIRE(q  != nullptr);
+    REQUIRE(r2 != nullptr);
 
     // Re-entry grid: cracked floors SOLID (build_grid default) + DarkVeil CLOSED. No pound, no open.
     Grid g = build_grid(L);
