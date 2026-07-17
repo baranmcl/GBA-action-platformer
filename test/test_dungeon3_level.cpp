@@ -1,10 +1,11 @@
 #include "test_framework.h"
+#include "level_harness.h"
 #include "game/levels/dungeons.h"
 #include "game/levels/dungeon3_room0.h"
 #include "game/levels/dungeon3_room1.h"
 #include "game/levels/dungeon3_room2.h"
-#include <vector>
-#include <queue>
+#include <set>
+#include <utility>
 #include <cstdio>
 using namespace logic;
 
@@ -13,129 +14,20 @@ using namespace logic;
 // on a deliberately-broken layout (verified during authoring; see the phase report). All assert
 // against the COMPILED DUNGEON3_ROOM* data.
 //
-// The flood-fill harness is the SAME 2-wide x 4-tall body model used for D1/D2, with BASE
-// movement: bolt + Fire (needed to counter the ice head). Rooms 1-2 are flat-floor arenas with
-// no hidden platforms/dark veils/one-way tiles, so one static grid suffices.
+// I4 MIGRATION: retired the private D3Grid/flood-fill fork onto test/level_harness.h (the shared
+// model). D3's kit is bolt + Fire (needed to counter the ice head) entering the room; Ice is earned
+// INSIDE room 0. Rooms 1-2 are flat-floor arenas with no gates, so a default harness::WorldModel{}
+// suffices there. Solid-border / room-door-target-resolution / entrance-settle are now covered
+// generically by test_all_dungeons.cpp.
 
-// Generous double-jump reach — same as D1/D2.
-static constexpr int CLIMB = 5;
+using RSet = std::set<std::pair<int,int>>;
 
-static constexpr int PW = 2;   // player width in tiles
-static constexpr int PH = 4;   // player height in tiles
-
-struct D3Grid {
-    int w, h;
-    std::vector<uint8_t> solid;
-    std::vector<uint8_t> hazard;
-
-    bool blk(int x, int y) const {
-        if(x < 0 || y < 0 || x >= w || y >= h) return true;
-        return solid[y*w + x] != 0;
-    }
-    bool haz(int x, int y) const {
-        if(x < 0 || y < 0 || x >= w || y >= h) return false;
-        return hazard[y*w + x] != 0;
-    }
-    bool cell_clear(int x, int y) const { return !blk(x,y) && !haz(x,y); }
-    bool fits(int x, int y) const {
-        if(x < 0 || x+PW-1 >= w || y-PH+1 < 0 || y >= h) return false;
-        for(int cx = x; cx < x+PW; ++cx)
-            for(int cy = y-PH+1; cy <= y; ++cy)
-                if(!cell_clear(cx, cy)) return false;
-        return true;
-    }
-    bool standable(int x, int y) const {
-        return fits(x, y) && (blk(x, y+1) || blk(x+PW-1, y+1));
-    }
-};
-
-static D3Grid build_grid(const LevelData& L){
-    D3Grid g; g.w = L.w; g.h = L.h;
-    g.solid.assign(L.w*L.h, 0);
-    g.hazard.assign(L.w*L.h, 0);
-    for(int y = 0; y < L.h; ++y) for(int x = 0; x < L.w; ++x){
-        TileKind k = (TileKind)L.tiles[y*L.w + x];
-        if(k == TileKind::Solid || k == TileKind::IcePlatform) g.solid[y*L.w + x] = 1;
-        if(k == TileKind::Lava || k == TileKind::Water || k == TileKind::Spikes) g.hazard[y*L.w + x] = 1;
-    }
-    return g;
-}
-
-static bool snap_start(const D3Grid& g, int& sx, int& sy){
-    for(int lx : { sx, sx-1 }){
-        int y = sy;
-        while(y < g.h){
-            if(g.standable(lx, y)){ sx = lx; sy = y; return true; }
-            if(g.fits(lx, y) && !(g.blk(lx,y+1)||g.blk(lx+PW-1,y+1))) { ++y; continue; }
-            ++y;
-        }
-    }
+static bool stands_at(const LevelData&, const RSet& R, int tx, int ty){
+    for(int dy = 0; dy <= 1; ++dy)
+        for(int lx = tx-harness::PW+1; lx <= tx; ++lx)
+            if(R.count({lx, ty+dy})) return true;
     return false;
 }
-
-static std::vector<uint8_t> reachable(const D3Grid& g, int sx, int sy, int climb){
-    std::vector<uint8_t> seen(g.w*g.h, 0);
-    if(!snap_start(g, sx, sy)) return seen;
-    std::queue<std::pair<int,int>> q;
-    auto push = [&](int x, int y){
-        if(x<0||y<0||x>=g.w||y>=g.h) return;
-        if(!g.standable(x,y) || seen[y*g.w+x]) return;
-        seen[y*g.w+x] = 1; q.push({x,y});
-    };
-    push(sx, sy);
-    while(!q.empty()){
-        auto [x,y] = q.front(); q.pop();
-        for(int up = 1; up <= climb; ++up){
-            int ny = y - up;
-            if(ny - PH + 1 < 0) break;
-            if(!g.fits(x, ny)) break;
-            if(g.standable(x, ny)) push(x, ny);
-        }
-        for(int dir = -1; dir <= 1; dir += 2){
-            int nx = x + dir;
-            for(int up = 1; up <= climb; ++up){
-                int ny = y - up;
-                if(ny - PH + 1 < 0) break;
-                if(!g.fits(x, ny)) break;
-                if(g.standable(nx, ny)) push(nx, ny);
-            }
-            if(g.fits(nx, y)){
-                int ny = y;
-                while(ny+1 < g.h && g.fits(nx, ny+1) && !(g.blk(nx,ny+1)||g.blk(nx+PW-1,ny+1))) ++ny;
-                if(g.standable(nx, ny)) push(nx, ny);
-                else if(g.standable(nx, y)) push(nx, y);
-            }
-        }
-        // Horizontal double-jump OVER a floor-level hazard/gap.
-        for(int dir = -1; dir <= 1; dir += 2){
-            for(int k = 2; k <= climb; ++k){
-                int nx = x + dir * k;
-                if(nx < 0 || nx + PW - 1 >= g.w) break;
-                if(!g.standable(nx, y)) continue;
-                int c0 = (dir < 0) ? nx : x;
-                int c1 = (dir < 0) ? x + PW - 1 : nx + PW - 1;
-                bool corridor = true;
-                for(int cx = c0; cx <= c1 && corridor; ++cx)
-                    for(int cy = y - PH + 1; cy <= y - 1; ++cy)
-                        if(g.blk(cx, cy)){ corridor = false; break; }
-                if(corridor) push(nx, y);
-            }
-        }
-    }
-    return seen;
-}
-
-static bool stands_at(const LevelData& L, const std::vector<uint8_t>& seen, int tx, int ty){
-    for(int dy = 0; dy <= 1; ++dy){
-        int fy = ty + dy;
-        if(fy < 0 || fy >= L.h) continue;
-        for(int lx = tx-PW+1; lx <= tx; ++lx)
-            if(lx >= 0 && lx < L.w && seen[fy*L.w + lx]) return true;
-    }
-    return false;
-}
-static int room_start_x(const LevelData& L){ return L.entrance_count? L.entrances[0].tx : L.spawn_tx; }
-static int room_start_y(const LevelData& L){ return L.entrance_count? L.entrances[0].ty : L.spawn_ty; }
 
 // ===========================================================================
 // Structural invariants
@@ -172,13 +64,13 @@ TEST(d3_room2_has_cage_and_exit){
 
 // 1. Room 1 (boss arena): from the room-1 entrance the arena floor is traversable and the onward
 //    door to room 2 is reachable. Break test: wall off the onward door -> RED.
-TEST(d3_room1_onward_door_reachable){   // fail-on-broken
+TEST(d3_room1_onward_door_reachable){
     const LevelData& L = DUNGEON3_ROOM1_DATA;
-    D3Grid g = build_grid(L);
-    std::vector<uint8_t> seen = reachable(g, room_start_x(L), room_start_y(L), CLIMB);
+    harness::WorldModel wm{};
+    RSet R = harness::reachable(L, wm);
     bool onward=false;
     for(int i=0;i<L.room_door_count;++i)
-        if(L.room_doors[i].target_room==2 && stands_at(L, seen, L.room_doors[i].tx, L.room_doors[i].ty)) onward=true;
+        if(L.room_doors[i].target_room==2 && stands_at(L, R, L.room_doors[i].tx, L.room_doors[i].ty)) onward=true;
     CHECK(onward);
     std::printf("  [d3-room1] onward-door(to room2)=%s\n", onward?"reach":"NO");
 }
@@ -187,25 +79,124 @@ TEST(d3_room1_onward_door_reachable){   // fail-on-broken
 //    Break test: float/wall the cage or exit -> RED.
 TEST(d3_room2_spronk_and_exit_reachable){
     const LevelData& L = DUNGEON3_ROOM2_DATA;
-    D3Grid g = build_grid(L);
-    std::vector<uint8_t> seen = reachable(g, room_start_x(L), room_start_y(L), CLIMB);
-    bool c = stands_at(L, seen, L.cage_tx, L.cage_ty);
-    bool e = stands_at(L, seen, L.exit_tx, L.exit_ty);
+    harness::WorldModel wm{};
+    RSet R = harness::reachable(L, wm);
+    bool c = stands_at(L, R, L.cage_tx, L.cage_ty);
+    bool e = stands_at(L, R, L.exit_tx, L.exit_ty);
     CHECK(c); CHECK(e);
     std::printf("  [d3-room2] cage=%s exit=%s\n", c?"reach":"NO", e?"reach":"NO");
 }
 
-// 3. Room 0 is a spell-gated puzzle (not flood-fill-traversable): assert the hub-return is reachable
-//    from spawn + the onward door exists (the accepted D2 deviation).
+// 3. Room 0's hub-return 'Q' is reachable from spawn (unlike D2's, D3's spawn/door content row sits
+//    close enough to the true floor that no ground_below snap is needed — confirmed empirically
+//    against the compiled data). The onward door to room 1 exists structurally (reachability is now
+//    PROVEN, not exempted, by the staged puzzle-solvability chain below).
 TEST(d3_room0_hub_return_reachable_and_onward_exists){
     const LevelData& L = DUNGEON3_ROOM0_DATA;
-    D3Grid g = build_grid(L);
-    std::vector<uint8_t> seen = reachable(g, L.spawn_tx, L.spawn_ty, CLIMB);
+    harness::WorldModel wm{};
+    RSet R = harness::reachable_from(L, wm, L.spawn_tx, L.spawn_ty);
     bool hub=false, onward=false;
     for(int i=0;i<L.room_door_count;++i){
-        if(L.room_doors[i].target_room==-1 && stands_at(L, seen, L.room_doors[i].tx, L.room_doors[i].ty)) hub=true;
-        if(L.room_doors[i].target_room==1) onward=true;   // structural existence
+        if(L.room_doors[i].target_room==-1 && stands_at(L, R, L.room_doors[i].tx, L.room_doors[i].ty)) hub=true;
+        if(L.room_doors[i].target_room==1) onward=true;
     }
     CHECK(hub); CHECK(onward);
     std::printf("  [d3-room0] hub-return=%s onward-exists=%s\n", hub?"reach":"NO", onward?"yes":"NO");
+}
+
+// ===========================================================================
+// ROOM 0 — STAGED PUZZLE-SOLVABILITY PROOF (I4, D2 decision). Removes the exemption this test used
+// to document (the old comment read: "Room 0 is a spell-gated puzzle (not flood-fill-traversable)
+// ... the accepted D2 deviation"). Frost Hollow room 0 has NO plates/buttons/braziers (all counts
+// are 0 in the compiled data) — its puzzle is entirely GATE-gated: Vine (Fire) -> Ice shrine -> a
+// Water hazard run + FireWall gate (both Ice) -> a second Water hazard run -> an Ice-type gate
+// (Fire, already owned) -> the onward door. Gate indices are found by TYPE in the room's COMPILED
+// gates[] array (not hardcoded indices), so a re-layout keeps this test honest. D3's kit entering the
+// room is bolt+Fire (see file header), so Vine/Ice-type gates are legitimately open()-able the whole
+// time; only Ice (earned at the shrine) is a genuine mid-room acquisition, gating the FireWall gate
+// AND both raw-tile Water hazard runs (harness::WorldModel::water_frozen).
+// ===========================================================================
+namespace {
+struct D3Puzzle {
+    const LevelData& L;
+    int vine_idx = -1, firewall_idx = -1, ice_idx = -1;
+    int onward_tx = -1, onward_ty = -1;
+    D3Puzzle() : L(DUNGEON3_ROOM0_DATA) {
+        for(int i=0;i<L.gate_count;++i){
+            if(L.gates[i].type==GateType::Vine)     vine_idx=i;
+            if(L.gates[i].type==GateType::FireWall) firewall_idx=i;
+            if(L.gates[i].type==GateType::Ice)      ice_idx=i;
+        }
+        for(int i=0;i<L.room_door_count;++i)
+            if(L.room_doors[i].target_room==1){ onward_tx=L.room_doors[i].tx; onward_ty=L.room_doors[i].ty; }
+    }
+};
+} // namespace
+
+// Stage 1: the Ice shrine (the room's first trigger/reward) sits directly behind the Vine gate.
+// Vine requires Fire, which the player already owns entering D3 (see file header) — so it is
+// legitimately open()-able at spawn. CLOSED, the shrine is unreachable even at the edge apex jump
+// (CLIMB_MAX); OPENED, it is reliably reachable.
+TEST(d3_room0_stage1_ice_shrine_gated_by_vine){
+    D3Puzzle P;
+    const LevelData& L = P.L;
+    REQUIRE(P.vine_idx >= 0);
+    REQUIRE(L.pickup_count >= 1);
+
+    harness::WorldModel closed{}; closed.climb_max = true;
+    RSet seen_closed = harness::reachable_from(L, closed, L.spawn_tx, L.spawn_ty);
+    bool reachable_closed = stands_at(L, seen_closed, L.pickups[0].tx, L.pickups[0].ty);
+    CHECK(!reachable_closed);
+
+    harness::WorldModel open{}; open.open_gates.insert(P.vine_idx);   // Fire already owned entering D3
+    RSet seen_open = harness::reachable_from(L, open, L.spawn_tx, L.spawn_ty);
+    bool reachable_open = stands_at(L, seen_open, L.pickups[0].tx, L.pickups[0].ty);
+    CHECK(reachable_open);
+    std::printf("  [d3-stage1] Ice shrine(%d,%d) via Vine gate: closed=%s open=%s\n",
+                L.pickups[0].tx, L.pickups[0].ty,
+                reachable_closed?"REACHABLE(bad)":"gated", reachable_open?"reachable":"STILL-GATED(bad)");
+}
+
+// Stage 2 (final): past the shrine sit two raw Water hazard runs (need Ice to freeze — earned at the
+// shrine) and a FireWall gate (also cleared by Ice) then an Ice-type gate (cleared by Fire, already
+// owned). Each requirement is proven independently necessary: with any ONE of {water_frozen,
+// FireWall open, Ice-type-gate open} missing, the onward door stays unreachable even at CLIMB_MAX.
+// With all satisfied, it is reliably reachable — the last link from spawn to room 1.
+TEST(d3_room0_stage2_onward_door_requires_freeze_and_both_gates){
+    D3Puzzle P;
+    const LevelData& L = P.L;
+    REQUIRE(P.firewall_idx >= 0); REQUIRE(P.ice_idx >= 0);
+    REQUIRE(P.onward_tx >= 0);
+
+    // (a) gates open (Fire-only path) but water NOT frozen -> still gated (the raw Water hazard runs
+    //     are the real Ice requirement, not just the FireWall gate).
+    harness::WorldModel no_freeze{};
+    no_freeze.open_gates.insert(P.vine_idx); no_freeze.open_gates.insert(P.firewall_idx); no_freeze.open_gates.insert(P.ice_idx);
+    no_freeze.climb_max = true;
+    RSet seen_no_freeze = harness::reachable_from(L, no_freeze, L.spawn_tx, L.spawn_ty);
+    CHECK(!stands_at(L, seen_no_freeze, P.onward_tx, P.onward_ty));
+
+    // (b) water frozen + Vine open but FireWall CLOSED -> still gated.
+    harness::WorldModel no_firewall{};
+    no_firewall.open_gates.insert(P.vine_idx); no_firewall.water_frozen = true; no_firewall.climb_max = true;
+    RSet seen_no_firewall = harness::reachable_from(L, no_firewall, L.spawn_tx, L.spawn_ty);
+    CHECK(!stands_at(L, seen_no_firewall, P.onward_tx, P.onward_ty));
+
+    // (c) water frozen + Vine + FireWall open but the Ice-type gate CLOSED -> still gated.
+    harness::WorldModel no_ice_gate{};
+    no_ice_gate.open_gates.insert(P.vine_idx); no_ice_gate.open_gates.insert(P.firewall_idx);
+    no_ice_gate.water_frozen = true; no_ice_gate.climb_max = true;
+    RSet seen_no_ice_gate = harness::reachable_from(L, no_ice_gate, L.spawn_tx, L.spawn_ty);
+    CHECK(!stands_at(L, seen_no_ice_gate, P.onward_tx, P.onward_ty));
+
+    // (d) everything satisfied -> reliably reachable.
+    harness::WorldModel open{};
+    open.open_gates.insert(P.vine_idx); open.open_gates.insert(P.firewall_idx); open.open_gates.insert(P.ice_idx);
+    open.water_frozen = true;
+    RSet seen_open = harness::reachable_from(L, open, L.spawn_tx, L.spawn_ty);
+    bool reachable_open = stands_at(L, seen_open, P.onward_tx, P.onward_ty);
+    CHECK(reachable_open);
+
+    std::printf("  [d3-stage2] onward door(%d,%d): no-freeze=gated no-firewall=gated no-ice-gate=gated all-clear=%s\n",
+                P.onward_tx, P.onward_ty, reachable_open?"reachable":"STILL-GATED(bad)");
 }
