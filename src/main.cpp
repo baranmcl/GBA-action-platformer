@@ -26,8 +26,9 @@ int main()
     // returning player may have earned heart containers (max_health_for > 100); without this they'd
     // start with a partly-empty bar (cur=100 < max=150). ps is never saved, so a fresh boot always
     // starts full — per-session damage still carries across hub<->dungeon (no free heal on hub return).
-    ps.health.max = logic::max_health_for(world);
-    ps.health.cur = ps.health.max;
+    logic::sync_health_cap(ps, world);   // grow the cap for any already-collected heart containers
+    ps.health.cur = ps.health.max;       // ...then always start a fresh boot at FULL health (unlike the
+                                         // mid-session clamp-down sync_health_cap does at the other sites)
 
     while(true)
     {
