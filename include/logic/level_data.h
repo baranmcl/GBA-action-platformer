@@ -6,7 +6,7 @@
 namespace logic {
 struct EntitySpawn { int tx, ty, param0, param1, param2; }; // enemy: param0/1 patrol l/r tile; param2 flags (bit0 = fire_immune)
 struct GateSpawn   { int tx, ty; GateType type; int latch_id = -1; }; // latch_id -1 = not latched
-struct DoorSpawn   { int tx, ty, dungeon; };                // dungeon 1..8
+struct DoorSpawn   { int tx, ty, dungeon; };                // dungeon 1..9; 9 = finale
 struct BlockSpawn  { int tx, ty; bool pullable = false; };
 struct PlateSpawn  { int tx, ty, target_tx, target_ty; bool heavy = false; };
 struct ButtonSpawn { int tx, ty, target_tx, target_ty; };
