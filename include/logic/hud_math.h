@@ -21,7 +21,7 @@ inline int bar_pixels(int cur, int max, int width){
 // the sprite count so the bar always fits the HUD's screen space (15 pips from x=-116 at
 // 8px each ends at x=-4, on-screen).
 static constexpr int HP_PER_PIP        = 10;
-static constexpr int MAX_HEALTH_PIPS   = 16;   // fits 150-HP cap (15 pips) + margin
+static constexpr int MAX_HEALTH_PIPS   = 20;   // fits the 200-HP band on screen (-116 + 20*8 = 44 < the +104 icon column)
 
 inline int clamp_pips(int n){
     if(n < 0) return 0;
