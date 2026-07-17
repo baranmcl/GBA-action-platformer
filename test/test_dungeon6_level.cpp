@@ -1,6 +1,7 @@
 #include "test_framework.h"
 #include "level_harness.h"
 #include "game/levels/dungeons.h"
+#include "game/room/room_util.h"   // floor_row_below (I25 brazier-hitbox regression, below)
 using namespace logic;
 
 // Thornwild Marsh (Dungeon 6) — the first multi-room grapple dungeon (M7).
@@ -220,7 +221,8 @@ static bool d6_solid(const LevelData& L, int tx, int ty){
 }
 
 TEST(d6_brazier_on_floor_row){
-    // Issue #1: every brazier sits where its hardcoded fire-hit zone (rows 14..19) is valid AND
+    // Issue #1: every brazier sits where its fire-hit zone (rows 14..19, see d6_brazier_hitbox_
+    // tracks_floor_row below for how those rows are now DERIVED rather than hardcoded) is valid AND
     // has a solid tile directly below it (so it grounds and lights). A brazier on a ledge (the old
     // bug) fails this. The single D6 brazier is in Room 1 on row 18, solid (row 19) directly below.
     int braziers = 0;
@@ -234,6 +236,24 @@ TEST(d6_brazier_on_floor_row){
         }
     }
     CHECK(braziers >= 1);
+}
+
+TEST(d6_brazier_hitbox_tracks_floor_row){
+    // I25 fix: the brazier hit-body is tile_body(b.tx, draw_ty - 5, 6, 24), where draw_ty is the
+    // FLOOR-SCANNED render row (game::floor_row_below), not a hardcoded row 14. For D6's standard
+    // row-20-floor rooms draw_ty == floor_row_below(...) - 1 == 19, so draw_ty - 5 == 14 -- the SAME
+    // hit rows (14..19) the pre-fix hardcoded body used. This proves that identity holds for every
+    // authored D6 brazier -- a regression if a future re-layout moves a brazier onto a non-standard
+    // floor without updating this expectation (ledge rooms would then correctly get a different row).
+    for(int r = 0; r < D6_N; ++r){
+        const LevelData& L = *D6_ROOMS[r];
+        Tilemap map{ L.w, L.h, L.tiles };
+        for(int i = 0; i < L.brazier_count; ++i){
+            int draw_ty = game::floor_row_below(map, L.braziers[i].tx, L.braziers[i].ty) - 1;
+            CHECK_EQ(draw_ty, 19);        // standard row-20 floor
+            CHECK_EQ(draw_ty - 5, 14);    // hit rows 14..19, matching the pre-fix hardcoded body
+        }
+    }
 }
 
 TEST(d6_cage_and_exit_on_floor_row){

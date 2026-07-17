@@ -32,8 +32,6 @@
 #include "logic/spell.h"
 #include "logic/hazard.h"
 #include "logic/pushable_block.h"
-#include "logic/puzzle.h"
-#include "logic/gates.h"
 #include "logic/tile_ids.h"
 #include "logic/stone_impact.h" // loose_platform_in_shockwave (pound shockwave radius)
 #include "logic/room_graph.h"   // find_entrance (room_door_at now lives in game::DoorsSystem)
@@ -51,9 +49,11 @@
 #include "game/scene_game_over.h" // run_game_over (death -> 0 lives flow)
 #include "game/player_session.h" // play_room: PlayerSession, CrystalStation, set_clamped_cam
 #include "game/boss_fight.h"     // run_boss_fight (Task 5.4: room bosses share the King's fight loop)
-#include "game/room/room_ctx.h"        // Ctx: shared refs threaded into room systems (Task 6.1)
-#include "game/room/pickups_system.h"  // shrines/hearts/crystals/cage-spronk/exit (Task 6.1)
-#include "game/room/doors_system.h"    // room-door + exit archway render/Up-press (Task 6.1)
+#include "game/room/room_ctx.h"          // Ctx: shared refs threaded into room systems (Task 6.1)
+#include "game/room/pickups_system.h"    // shrines/hearts/crystals/cage-spronk/exit (Task 6.1)
+#include "game/room/doors_system.h"      // room-door + exit archway render/Up-press (Task 6.1)
+#include "game/room/gates_system.h"      // gates + cracked floors (Task 6.2)
+#include "game/room/triggers_system.h"   // braziers + plate/button/brazier-group triggers (Task 6.2)
 
 namespace game
 {
@@ -69,20 +69,7 @@ namespace
     };
 
     struct EnemyInst { logic::Enemy e; bn::optional<bn::sprite_ptr> sprite; };
-    struct GateInst  { logic::GateSpawn spawn; logic::Body body; bool open = false; };
     struct BlockInst { logic::PushableBlock blk; bn::optional<bn::sprite_ptr> sprite; bool pullable = false; };
-    struct BrazierInst { int tx, ty, group; logic::Body body; bool lit = false; int draw_ty = 0; };
-
-    // First STANDABLE collision row at/below start_ty in this column (the floor the content rests on).
-    // Standable = solid OR one-way platform (D4's exit rests on a one-way platform, not a solid floor).
-    // Falls back to start_ty+1 if none found within the map.
-    int floor_row_below(const logic::Tilemap& map, int tx, int start_ty){
-        for(int y = start_ty + 1; y < map.h; ++y)
-            if(map.is_solid(tx, y) || map.is_oneway(tx, y)) return y;   // standable: solid or one-way platform
-        return start_ty + 1;
-    }
-    // M8 Stone: a cracked FLOOR (NOT a vertical wall gate). Solid until a pound smashes it.
-    struct CrackedFloorInst { int tx, ty, latch_id; bool broken = false; };
     // M8 Stone: a breakable solid boulder (NOT pushable). Solid tile + sprite; removed on a pound.
     struct BoulderInst { int tx, ty; bn::optional<bn::sprite_ptr> sprite; bool broken = false; };
     // M8 Stone: a horizontal run of `len` tiles, suspended, that DROPS straight down (drop-to-rest,
@@ -99,35 +86,10 @@ namespace
         bool shown = false;
         bn::vector<bn::sprite_ptr, 8> sprites;   // one per tile in the run
     };
-    // src_tx/ty: plate or button tile to test; group: brazier group (Braziers kind)
-    struct TriggerInst { logic::Trigger trig; int src_tx, src_ty, group; bool applied = false; };
-
-    // Persist a progress latch to SRAM on first trigger; no-op if already set or unlatched (-1).
-    void persist_latch(logic::World& world, int latch_id){
-        if(latch_id >= 0 && !world.latched(latch_id)){
-            world.set_latch(latch_id);
-            engine::write_world(world);
-        }
-    }
-
-    logic::Body tile_body(int tx, int ty, int hw, int hh){
-        logic::Body b{}; b.half_w = fx(hw); b.half_h = fx(hh);
-        b.pos = { fx(tx * 8), fx(ty * 8) }; return b;
-    }
-    // A gate/wall is a FULL-height 2-wide column (rows 1..floor-1) at column tx, so it
-    // can't be double-jumped over — you must clear it. Clearing opens the whole column.
-    void fill_column(engine::LevelView& view, int tx, int level_h, int bg){
-        for(int ty = 1; ty < level_h - 2; ++ty) for(int dx = 0; dx < 2; ++dx){
-            engine::set_collision_tile(tx + dx, ty, 1);
-            engine::set_level_tile(view, tx + dx, ty, bg);
-        }
-    }
-    void open_column(engine::LevelView& view, int tx, int level_h){
-        for(int ty = 1; ty < level_h - 2; ++ty) for(int dx = 0; dx < 2; ++dx){
-            engine::set_collision_tile(tx + dx, ty, 0);
-            engine::set_level_tile(view, tx + dx, ty, 0);
-        }
-    }
+    // NOTE (Task 6.2): GateInst/CrackedFloorInst/BrazierInst/TriggerInst + floor_row_below/
+    // persist_latch/tile_body/fill_column/open_column moved out with the gates/braziers/triggers
+    // families -- see game::GatesSystem (src/game/room/gates_system.cpp) and game::TriggersSystem
+    // (src/game/room/triggers_system.cpp). Nothing left in this function needs them.
 }
 
 // ---------------------------------------------------------------------------
@@ -226,6 +188,8 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     game::Ctx ctx{ world, player, ps, lvl, cam, hw, hh };
     game::PickupsSystem pickups;
     game::DoorsSystem doors;
+    game::GatesSystem gates;       // spawned below, at its original per-frame-order spot (Task 6.2)
+    game::TriggersSystem triggers; // spawned below, at its original per-frame-order spot (Task 6.2)
     pickups.spawn(level, ctx);
     doors.spawn(level, ctx);
 
@@ -244,36 +208,8 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         inst.sprite->set_camera(cam);
     }
 
-    // ---- gates (vine/ice obstacle; gap geometry) ----
-    // M8: CrackedFloor is a horizontal FLOOR, NOT a full-column vertical wall — it is SKIPPED here
-    // and collected into cracked_floors below (made solid as a single floor tile, not a column).
-    bn::vector<GateInst, 24> gates;
-    bn::vector<CrackedFloorInst, 16> cracked_floors;
-    for(int i = 0; i < level.gate_count && i < 24; ++i){
-        const logic::GateSpawn& g = level.gates[i];
-        if(g.type == logic::GateType::CrackedFloor){
-            // A cracked floor is a single SOLID floor tile the player walks on; only a pound breaks it.
-            // The compiler emits content symbols on collision tile 0, so make it solid here + render bg 11.
-            // If already latched-open (smashed on a prior visit and persisted), leave it broken/empty.
-            bool latched_open = (g.latch_id >= 0) && world.latched(g.latch_id);
-            cracked_floors.push_back(CrackedFloorInst{ g.tx, g.ty, g.latch_id, latched_open });
-            if(!latched_open){
-                engine::set_collision_tile(g.tx, g.ty, 1);
-                engine::set_level_tile(lvl.view, g.tx, g.ty, logic::gate_info(logic::GateType::CrackedFloor).bg_tile); // 11
-            }
-            continue;
-        }
-        logic::Body gb; gb.half_w = fx(8); gb.half_h = fx((level.h - 3) * 4); // full-column body
-        gb.pos = { fx(g.tx * 8), fx(8) };
-        gates.push_back(GateInst{ g, gb, false });
-        GateInst& gi = gates.back();
-        const logic::GateInfo& info = logic::gate_info(g.type);
-        bool passable = info.is_geometry && logic::can_pass(g.type, world.abilities);
-        // latched_open: a shortcut opened on a prior visit, persisted in SRAM — re-open it on room load.
-        bool latched_open = (g.latch_id >= 0) && world.latched(g.latch_id);
-        if(passable || latched_open){ gi.open = true; }              // geometry gate owned OR latch set -> open
-        else { fill_column(lvl.view, g.tx, level.h, info.bg_tile); } // closed -> full-height vine/ice wall
-    }
+    // ---- gates + cracked floors (Task 6.2: game::GatesSystem) ----
+    gates.spawn(level, ctx);
 
     // ---- pushable blocks (solid collision cell + 8x8 sprite) ----
     bn::vector<BlockInst, 8> blocks;
@@ -330,44 +266,8 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     }
     logic::RevealState reveal;   // room-wide Light reveal timer (a Light cast (re)starts it)
 
-    // ---- braziers (bg tile 14 unlit; Body for fire-hit) ----
-    bn::vector<BrazierInst, 16> braziers;
-    for(int i = 0; i < level.brazier_count && i < 16; ++i){
-        const logic::BrazierSpawn& b = level.braziers[i];
-        // Tall hit-body (rows 14..19) so a horizontal Fire shot at the player's chest height
-        // still hits a brazier sitting on the floor. Visual grounded on the floor (fr-1).
-        int draw_ty = floor_row_below(lvl.map, b.tx, b.ty) - 1;
-        braziers.push_back(BrazierInst{ b.tx, b.ty, b.group, tile_body(b.tx, 14, 6, 24), false, draw_ty });
-        engine::set_level_tile(lvl.view, b.tx, draw_ty, logic::tiles::BRAZIER_UNLIT);
-    }
-
-    // ---- plates (tile 17) / buttons (tile 18) + triggers ----
-    bn::vector<TriggerInst, 16> triggers;
-    for(int i = 0; i < level.plate_count && i < 16; ++i){
-        const logic::PlateSpawn& p = level.plates[i];
-        engine::set_level_tile(lvl.view, p.tx, p.ty, logic::tiles::PLATE);
-        // M8: a HEAVY plate trips ONLY on a Stone pound (resolved in the just_landed() block, NOT here).
-        // Skip it from the normal step/block trigger loop so it never trips on a footstep or pushed block.
-        // If a latched heavy plate's gate was already smashed on a prior visit, re-open it on room load
-        // (mirrors the gate latch restore idiom above).
-        if(p.heavy && p.latch_id >= 0 && world.latched(p.latch_id)){ open_column(lvl.view, p.target_tx, level.h); continue; }
-        if(p.heavy) continue;
-        logic::Trigger t = logic::Trigger::plate(); t.target_tx = p.target_tx; t.target_ty = p.target_ty;
-        triggers.push_back(TriggerInst{ t, p.tx, p.ty, -1, false });
-    }
-    for(int i = 0; i < level.button_count && i < 16; ++i){
-        const logic::ButtonSpawn& b = level.buttons[i];
-        engine::set_level_tile(lvl.view, b.tx, b.ty, logic::tiles::BUTTON);
-        logic::Trigger t = logic::Trigger::button(); t.target_tx = b.target_tx; t.target_ty = b.target_ty;
-        triggers.push_back(TriggerInst{ t, b.tx, b.ty, -1, false });
-    }
-    for(int g = 0; g < level.brazier_group_count && g < 16; ++g){
-        const logic::BrazierGroupSpawn& bg = level.brazier_groups[g];
-        logic::Trigger t = logic::Trigger::braziers(bg.total); t.target_tx = bg.target_tx; t.target_ty = bg.target_ty;
-        bool latched_open = (bg.latch_id >= 0) && world.latched(bg.latch_id);
-        triggers.push_back(TriggerInst{ t, 0, 0, g, latched_open });
-        if(latched_open) open_column(lvl.view, bg.target_tx, level.h);
-    }
+    // ---- braziers + plate/button/brazier-group triggers (Task 6.2: game::TriggersSystem) ----
+    triggers.spawn(level, ctx);
 
     // Centre camera on the player before fading in (avoids a snap on frame 0).
     int cx0 = player.body.pos.x.to_int() + player.body.half_w.to_int();
@@ -489,48 +389,18 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             pound_vfx_t = 8;
             pound_shake_t = 6;
             // 1. CrackedFloor smash + continue the plunge. The landed tile is solid; if it is an unbroken
-            //    cracked floor, break the WHOLE contiguous cracked-floor run at that row and RE-ARM the
-            //    pound so the next frame plunges into the area below. Re-arm ONLY on a cracked tile, so one
-            //    pound chains through STACKED cracked floors and naturally ends on the first non-cracked solid.
-            bool smashed = false;
-            for(CrackedFloorInst& cf : cracked_floors){
-                if(cf.broken || cf.tx != impact_cx || cf.ty != impact_floor) continue;
-                // Break the contiguous run of cracked-floor tiles at this row (left + right of impact).
-                for(CrackedFloorInst& run : cracked_floors){
-                    if(run.broken || run.ty != cf.ty) continue;
-                    // a tile is in the run if it connects to impact_cx via adjacent cracked tiles at this row
-                    // (simple: break any same-row cracked tile within the maximal contiguous span)
-                    bool contiguous = true;
-                    int lo = run.tx < impact_cx ? run.tx : impact_cx;
-                    int hi = run.tx < impact_cx ? impact_cx : run.tx;
-                    for(int x = lo; x <= hi && contiguous; ++x){
-                        bool found = false;
-                        for(CrackedFloorInst& q : cracked_floors)
-                            if(!q.broken && q.ty == cf.ty && q.tx == x){ found = true; break; }
-                        if(!found) contiguous = false;
-                    }
-                    if(!contiguous) continue;
-                    run.broken = true;
-                    engine::set_collision_tile(run.tx, run.ty, 0);
-                    engine::set_level_tile(lvl.view, run.tx, run.ty, 0);
-                    persist_latch(world, run.latch_id);
-                }
-                smashed = true;
-                break;
-            }
+            //    cracked floor, break the WHOLE contiguous cracked-floor run at that row (I27: a 2-direction
+            //    walk from the impact tile — game::GatesSystem::break_cracked_run_at) and RE-ARM the pound
+            //    so the next frame plunges into the area below. Re-arm ONLY on a cracked tile, so one pound
+            //    chains through STACKED cracked floors and naturally ends on the first non-cracked solid.
+            bool smashed = gates.break_cracked_run_at(impact_cx, impact_floor, ctx);
             if(smashed) player.stone.start();   // re-arm: plunge through to the next floor below
 
-            // 2. Heavy switch: a heavy plate trips ONLY on a pound. Fire its gate target (open_column)
-            //    when the player's feet/centre land on the plate tile. (Normal plates are handled in the
-            //    trigger loop below, which now SKIPS heavy plates so they never trip on a step/block.)
-            for(int i = 0; i < level.plate_count && i < 16; ++i){
-                const logic::PlateSpawn& p = level.plates[i];
-                if(!p.heavy) continue;
-                if(impact_cx == p.tx && impact_fy == p.ty){
-                    open_column(lvl.view, p.target_tx, level.h);
-                    persist_latch(world, p.latch_id);
-                }
-            }
+            // 2. Heavy switch: a heavy plate trips ONLY on a pound (game::TriggersSystem::trip_heavy_plate_at).
+            //    Fires its gate target when the player's feet/centre land on the plate tile. (Normal plates
+            //    are handled in the trigger loop below, which SKIPS heavy plates so they never trip on a
+            //    step/block.)
+            triggers.trip_heavy_plate_at(impact_cx, impact_fy, ctx);
 
             // 3. Boulder break: if a boulder is the tile directly below the player's feet (or the landed
             //    tile itself), remove it so the path clears. (Boulders rebuild on room re-entry — fine.)
@@ -600,27 +470,8 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         }
 
         // ---- spell resolution (ORDER: gates -> braziers -> enemies -> freeze/melt -> despawn-on-solid) ----
-        for(GateInst& gi : gates){
-            logic::SpellId clears = logic::gate_cleared_by(gi.spawn.type);
-            if(!gi.open && clears != logic::SpellId::None && spells.consume_hit(gi.body, clears)){
-                gi.open = true;
-                open_column(lvl.view, gi.spawn.tx, level.h);
-                persist_latch(world, gi.spawn.latch_id);
-            }
-            // M6: cracked walls aren't spell-cleared (gate_cleared_by==None); a dashing body smashes them on contact.
-            if(!gi.open && gi.spawn.type == logic::GateType::CrackedWall
-               && player.dash.active() && logic::aabb_overlap(player.body, gi.body)){
-                gi.open = true;
-                open_column(lvl.view, gi.spawn.tx, level.h);
-                persist_latch(world, gi.spawn.latch_id);
-            }
-        }
-        for(BrazierInst& bi : braziers){
-            if(!bi.lit && spells.consume_hit(bi.body, logic::SpellId::Fire)){  // only Fire lights braziers
-                bi.lit = true;
-                engine::set_level_tile(lvl.view, bi.tx, bi.draw_ty, logic::tiles::BRAZIER_LIT);
-            }
-        }
+        gates.update(ctx, spells);
+        triggers.update_braziers(ctx, spells);
 
         // ---- enemies: patrol, render, bolt-kill(+magic), fire-kill(no magic unless immune), contact ----
         for(EnemyInst& inst : enemies){
@@ -699,36 +550,14 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         }
 
         // ---- triggers: update inputs, open/close targets ----
-        for(TriggerInst& ti : triggers){
-            switch(ti.trig.kind){
-                case logic::TriggerKind::Plate: {
-                    // Pressed by the player OR a block, but only when SQUARELY on the plate —
-                    // the player's horizontal centre must be over the plate column AND the player
-                    // must be grounded on the plate's row (not merely overlapping the edge while
-                    // standing next to/above it; that loose AABB caused the gate to flicker). The
-                    // gate is held open only WHILE pressed, so the player can step on it (it opens)
-                    // but can't pass alone — only the block, left resting on it, holds it open.
-                    int pcx = px2t(player.body.pos.x + player.body.half_w);                       // centre col
-                    int pfy = px2t(player.body.pos.y + player.body.half_h + player.body.half_h - fx(1)); // feet row
-                    bool on = player.body.on_ground && pcx == ti.src_tx && pfy == ti.src_ty;
-                    for(BlockInst& bi : blocks) if(bi.blk.tx == ti.src_tx && bi.blk.ty == ti.src_ty) on = true;
-                    ti.trig.pressed = on;
-                    if(on && !ti.applied){ ti.applied = true;  open_column(lvl.view, ti.trig.target_tx, level.h); }
-                    else if(!on && ti.applied){ ti.applied = false; fill_column(lvl.view, ti.trig.target_tx, level.h, 1); }
-                    break; }
-                case logic::TriggerKind::Button: {
-                    if(logic::aabb_overlap(player.body, tile_body(ti.src_tx, ti.src_ty, 4, 4))) ti.trig.pressed = true; // latch
-                    if(!ti.applied && ti.trig.active()){ ti.applied = true; open_column(lvl.view, ti.trig.target_tx, level.h); }
-                    break; }
-                case logic::TriggerKind::Braziers: {
-                    int n = 0; for(BrazierInst& bi : braziers) if(bi.group == ti.group && bi.lit) ++n;
-                    ti.trig.lit = n;
-                    if(!ti.applied && ti.trig.active()){
-                        ti.applied = true; open_column(lvl.view, ti.trig.target_tx, level.h); // latch
-                        persist_latch(world, level.brazier_groups[ti.group].latch_id);
-                    }
-                    break; }
-            }
+        {
+            // Cross-system query (Task 6.2 extraction rule): TriggersSystem doesn't own blocks
+            // (Task 6.3's terrain_system will), so play_room hands it this frame's block tiles for
+            // the plate's "something is resting on me" check -- mirrors the original inline
+            // `for(BlockInst& bi : blocks)` scan exactly.
+            bn::vector<game::BlockTileXY, 8> block_tiles;
+            for(BlockInst& bi : blocks) block_tiles.push_back({ bi.blk.tx, bi.blk.ty });
+            triggers.update_triggers(ctx, block_tiles);
         }
 
         // ---- i-frames / respawn ----
