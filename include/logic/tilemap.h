@@ -2,6 +2,7 @@
 #include <cstdint>
 #include "logic/fixed.h"
 namespace logic {
+// TileKind::Water — the damaging hazard tile; unrelated to GateType::Water (the Ice-clearable waterfall gate).
 // Water=4 is a damaging hazard the Ice spell freezes into IcePlatform=5 (a standable, Fire-meltable
 // solid). IcePlatform counts as solid for collision but is distinct so Fire melts ONLY it, not walls.
 // Updraft/WindLeft/WindRight (6-8) are NON-solid M5 wind forces (player passes through + is pushed).

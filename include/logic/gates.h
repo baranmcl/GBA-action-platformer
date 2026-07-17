@@ -9,6 +9,7 @@ enum class GateType : uint8_t {
     Vine,         // obstacle: Fire
     Ice,          // obstacle: Fire (melts)
     Water,        // obstacle: Ice (freezes to platform)
+                  // the Ice-clearable waterfall GATE — unrelated to TileKind::Water (the damaging hazard tile)
     CrackedWall,  // obstacle: Dash
     CrackedFloor, // obstacle: Stone (ground-pound)
     DarkVeil,     // obstacle: Light

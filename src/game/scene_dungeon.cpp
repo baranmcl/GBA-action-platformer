@@ -37,13 +37,11 @@
 #include "logic/tilemap.h"
 #include "logic/world_state.h"   // max_health_for, collect/has heart container
 #include "logic/player.h"
-#include "logic/dungeon1.h"      // try_free_spronk
+#include "logic/spronk_rescue.h" // try_free_spronk
 #include "logic/enemy.h"
 #include "logic/meters.h"
 #include "logic/spell.h"
 #include "logic/hazard.h"
-#include "logic/frost.h"
-#include "logic/fire_effect.h"
 #include "logic/pushable_block.h"
 #include "logic/puzzle.h"
 #include "logic/gates.h"
@@ -558,14 +556,13 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     //      normal room loop. The fight BLOCKS until the boss is defeated (Victory) — then we fall
     //      through to the normal loop so the player walks to the onward room-door. On Game-Over (0
     //      lives) we return RoomOutcome::GameOver and REUSE the dungeon's existing flow (run_dungeon
-    //      handles Continue/QuitToTitle). boss_defeated is a per-play_room local, so re-entering the
-    //      room re-fights the boss (the boss is NOT persisted; no save change). A boss room has no
-    //      enemy/gate/cage/exit content during the fight — run_room_boss owns the screen. ----
-    bool boss_defeated = false;
-    if(level.boss != nullptr && !boss_defeated){
+    //      handles Continue/QuitToTitle). Re-entering the room re-fights the boss (the boss is NOT
+    //      persisted; no save change). A boss room has no enemy/gate/cage/exit content during the
+    //      fight — run_room_boss owns the screen. ----
+    if(level.boss != nullptr){
         BossRoomOutcome bo = run_room_boss(level, world, ps, lvl, cam, player, spawn_pos, ent);
         if(bo == BossRoomOutcome::GameOver) return RoomOutcome{ RoomOutcome::GameOver };
-        boss_defeated = true;   // Victory: fall through to the normal loop (walk to the onward door)
+        // Victory: fall through to the normal loop (walk to the onward door)
         engine::fade_out(16);   // clear the boss screen; the normal room loop fades back in
     }
 
