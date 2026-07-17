@@ -198,6 +198,28 @@ private:
 };
 
 // -----------------------------------------------------------------------------
+// rockfall_fits — compile-time cross-file invariant (I2): every ROCKFALL phase's
+// Active window (attack_active_frames) must be long enough for RockfallEmitter's
+// WARN_FRAMES telegraph to elapse and still have the rock land while the window is
+// Active (RockfallEmitter::tick is only called during AttackStep::Active — see
+// run_room_boss). Checked via static_assert for every def in the boss registry, so
+// a tuning change that breaks this is a COMPILE error, not something discovered
+// mid-playtest.
+// -----------------------------------------------------------------------------
+constexpr bool rockfall_fits(const logic::BossDef& d){
+    for(int i = 0; i < d.phase_count; ++i){
+        if((d.phases[i].attacks & logic::BOSS_ATK_ROCKFALL) != 0){
+            if(!(d.phases[i].pattern.attack_active_frames > RockfallEmitter::WARN_FRAMES)) return false;
+        }
+    }
+    return true;
+}
+static_assert(rockfall_fits(logic::KING_DEF), "rockfall must land inside the Active window (King)");
+static_assert(rockfall_fits(logic::D1_DEF),   "rockfall must land inside the Active window (D1)");
+static_assert(rockfall_fits(logic::D2_DEF),   "rockfall must land inside the Active window (D2)");
+static_assert(rockfall_fits(logic::D3_DEF),   "rockfall must land inside the Active window (D3)");
+
+// -----------------------------------------------------------------------------
 // TelegraphCue — the coloured charge orb shown AT the boss during
 // AttackStep::Telegraph so the incoming attack reads. Colour by variant:
 // aimed -> aimed_item, spiral -> spiral_item, fan -> fan_item (the King wired

@@ -27,6 +27,17 @@ enum class VulnMode : uint8_t { SpellExpose, AlwaysVulnerable, TiredWindow };
 //     walls (D2 Slagshell) — run_room_boss reads this. Movement pauses while EXPOSED (clean window). ---
 enum class Locomotion : uint8_t { Stationary, Pacing };
 
+// --- Task 5.1: BossDef becomes the WHOLE description of a boss (id + block model +
+//     perches), so the shared fight loop (Phase 5) can be 100% data-driven instead of
+//     reading scene-local constants. Pure ints/enums only — no Butano types here. ---
+enum class BossId : uint8_t { King = 0, D1Guardian, D2Slagshell, D3Coldforge };
+// Which of the boss's projectiles a player spell can destroy on contact (the block
+// defense in engine::AttackPool): None = dodge-only; SpellBlock = block_spell (and
+// block_spell2 if set) blocks; BoltAndSpellBlock = the free bolt ALSO auto-blocks
+// (the King's local block_player_shots behaviour).
+enum class BlockMode : uint8_t { None, SpellBlock, BoltAndSpellBlock };
+struct Perch { int cx, cy; };   // a teleport/patrol waypoint, in TILE coords — pure ints
+
 // --- Attack-bit scheme (SINGLE SOURCE — the engine attack library #includes this
 //     header and uses these SAME constants to interpret a phase's `attacks` mask.
 //     Logic must NOT include engine; engine may include logic.) ---
@@ -37,7 +48,11 @@ inline constexpr uint8_t BOSS_ATK_ROCKFALL = 1 << 3;  // M13: jump -> rocks fall
 
 // Per-phase data: the HP threshold ending this phase (phase i active while
 // hp > end_hp, except the last), the attack pattern, and the attack mask.
-struct BossPhaseDef { int end_hp; PhasePattern pattern; uint8_t attacks; };
+// proj_speed/rock_count are the per-phase tuning that used to live as scene-local
+// `(b.phase == 0) ? ... : ...` ternaries in run_boss/run_room_boss (Task 5.1: OUT of
+// the scene, into the def). rock_count is unused (0) for phases without ROCKFALL.
+struct BossPhaseDef { int end_hp; PhasePattern pattern; uint8_t attacks;
+                      int proj_speed = 2; int rock_count = 0; };
 
 // A boss is fully described by data. BossState points at one of these.
 struct BossDef {
@@ -60,17 +75,57 @@ struct BossDef {
                                                        // expose_spell and this on each wound (dual-spell boss).
     SpellId     block_spell2 = SpellId::None;           // M14: a SECOND spell that also blocks+charges
                                                        // (dual-element block; None = only block_spell blocks).
+    // --- Task 5.1: id + block model + perch/teleport + per-phase dialogue, so a boss
+    //     is FULLY described by its BossDef (Phase 5's shared fight loop reads only this). ---
+    BossId      id = BossId::King;
+    BlockMode   block_mode = BlockMode::None;
+    const Perch* perches = nullptr;      // teleport/patrol waypoints (tile coords); null = none
+    int         perch_count = 0;
+    int         teleport_period = 0;     // frames between teleports while not exposed (0 = never)
+    bool        teleport_on_wound = false;  // also teleport immediately after a wound lands
+    const char* phase_lines[3] = {nullptr, nullptr, nullptr};  // taunt when ENTERING phase i (index-aligned)
 };
 
 // --- King attack masks + phase table (reproduces the SHIPPED Nightmare King). ---
 inline constexpr uint8_t KING_ATTACKS = BOSS_ATK_AIMED | BOSS_ATK_SPIRAL | BOSS_ATK_FAN;
 inline constexpr BossPhaseDef KING_PHASES[3] = {
-    { 60, { 72, 30, 40 }, KING_ATTACKS },   // P1 (aerial)  — telegraph 72 >= 60
-    { 30, { 66, 30, 30 }, KING_ATTACKS },   // P2 (ground)  — telegraph 66 >= 60
-    {  0, { 60, 30, 20 }, KING_ATTACKS },   // P3 (all-in)  — telegraph 60 == SWITCH_BUDGET (tightest)
+    { 60, { 72, 30, 40 }, KING_ATTACKS, /*proj_speed=*/2 },   // P1 (aerial)  — telegraph 72 >= 60
+    { 30, { 66, 30, 30 }, KING_ATTACKS, /*proj_speed=*/3 },   // P2 (ground)  — telegraph 66 >= 60
+    {  0, { 60, 30, 20 }, KING_ATTACKS, /*proj_speed=*/3 },   // P3 (all-in)  — telegraph 60 == SWITCH_BUDGET (tightest)
+};
+// King perches (center tile coords). The King TELEPORTS between these so it isn't a sitting duck.
+// All sit at a FLOOR-HITTABLE height (row 27 — spell bolts travel HORIZONTALLY, so the King must
+// share the player's standing height to be shootable from the ground; the read that tested well).
+// X spreads across the arena so it floats "around the platforms"; the platforms are for DODGING.
+// A mix of FLOOR perches (row 27 — shoot from the ground) and PLATFORM perches (row 17 — the King
+// stands atop the central/right platforms; hit it from the OTHER platform at the same height). The
+// teleport cycles high+low so the player must reposition (climb / cross) to keep hitting it.
+// QA-tunable (positions + teleport_period, below). Task 5.1: moved from scene_boss.cpp's anonymous
+// namespace into the def (scene_boss.cpp keeps its own local copy until Task 5.3's rewrite).
+inline constexpr Perch KING_PERCHES[6] = {
+    {19, 27},   // floor centre
+    {17, 17},   // atop the central platform (climb a platform to hit)
+    {30, 27},   // floor right
+    {28, 17},   // atop the right platform
+    {9, 27},    // floor left
+    {25, 27},   // floor centre-right
 };
 inline constexpr BossDef KING_DEF{
-    90, 10, 45, 75, VulnMode::SpellExpose, SpellId::Light, KING_PHASES, 3
+    90, 10, 45, 75, VulnMode::SpellExpose, SpellId::Light, KING_PHASES, 3,
+    /*tired_after=*/0,
+    /*intro_line=*/"YOU FINALLY MADE IT",
+    /*death_line=*/"NOOOOO!",
+    /*locomotion=*/Locomotion::Stationary,
+    /*block_spell=*/SpellId::None,
+    /*expose_spell_alt=*/SpellId::None,
+    /*block_spell2=*/SpellId::None,
+    /*id=*/BossId::King,
+    /*block_mode=*/BlockMode::BoltAndSpellBlock,
+    /*perches=*/KING_PERCHES,
+    /*perch_count=*/6,
+    /*teleport_period=*/200,
+    /*teleport_on_wound=*/true,
+    /*phase_lines=*/{ nullptr, "NOW YOU'RE GETTING ME ANGRY", "I'M DONE TOYING WITH YOU" }
 };
 
 // --- D1 Whispering Woods Guardian (TiredWindow, 2 phases). Invulnerable while attacking;
@@ -78,14 +133,20 @@ inline constexpr BossDef KING_DEF{
 inline constexpr uint8_t D1_ATTACKS_P1 = BOSS_ATK_AIMED;
 inline constexpr uint8_t D1_ATTACKS_P2 = BOSS_ATK_AIMED | BOSS_ATK_FAN;
 inline constexpr BossPhaseDef D1_PHASES[2] = {
-    { 30, { 80, 30, 40 }, D1_ATTACKS_P1 },
-    {  0, { 70, 30, 30 }, D1_ATTACKS_P2 },
+    { 30, { 80, 30, 40 }, D1_ATTACKS_P1, /*proj_speed=*/2 },
+    {  0, { 70, 30, 30 }, D1_ATTACKS_P2, /*proj_speed=*/3 },
 };
 inline constexpr BossDef D1_DEF{
     60, 10, 30, 90, VulnMode::TiredWindow, SpellId::None, D1_PHASES, 2,
     /*tired_after=*/3,
     /*intro_line=*/"So, you seek the spronks?",
-    /*death_line=*/"Fool...you can't stop him"
+    /*death_line=*/"Fool...you can't stop him",
+    /*locomotion=*/Locomotion::Stationary,
+    /*block_spell=*/SpellId::None,
+    /*expose_spell_alt=*/SpellId::None,
+    /*block_spell2=*/SpellId::None,
+    /*id=*/BossId::D1Guardian,
+    /*block_mode=*/BlockMode::None
 };
 
 // --- D2 Ember Caverns boss: the Magma Golem "Slagshell" (SpellExpose+Fire, Pacing, 2 phases).
@@ -96,10 +157,11 @@ inline constexpr BossDef D1_DEF{
 inline constexpr uint8_t D2_ATTACKS_P1 = BOSS_ATK_AIMED | BOSS_ATK_ROCKFALL;
 inline constexpr uint8_t D2_ATTACKS_P2 = BOSS_ATK_AIMED | BOSS_ATK_ROCKFALL;
 inline constexpr BossPhaseDef D2_PHASES[2] = {
-    { 35, { 80, 30, 40 }, D2_ATTACKS_P1 },   // P1 70->35  (telegraph 80, active 30, recovery 40)
-    {  0, { 70, 30, 30 }, D2_ATTACKS_P2 },   // P2 35->0   (escalated rockfall)
+    { 35, { 80, 30, 40 }, D2_ATTACKS_P1, /*proj_speed=*/2, /*rock_count=*/3 },   // P1 70->35
+    {  0, { 70, 30, 30 }, D2_ATTACKS_P2, /*proj_speed=*/3, /*rock_count=*/5 },   // P2 35->0 (escalated rockfall)
     // NOTE: attack_active_frames (30) MUST exceed RockfallEmitter::WARN_FRAMES (26) so the rock drop
     // lands inside the Active window (the emitter is ticked only during AttackStep::Active). Keep >= 28.
+    // (checked at compile time in engine/boss_attacks.h's rockfall_fits static_assert.)
 };
 inline constexpr BossDef D2_DEF{
     70, 10, 90, 90, VulnMode::SpellExpose, SpellId::Fire, D2_PHASES, 2,
@@ -107,7 +169,11 @@ inline constexpr BossDef D2_DEF{
     /*intro_line=*/"You'll cook in my caverns.",
     /*death_line=*/"The embers...fade...",
     /*locomotion=*/Locomotion::Pacing,
-    /*block_spell=*/SpellId::Fire        // Fire intercepts/destroys Slagshell's red bolts (M13 QA)
+    /*block_spell=*/SpellId::Fire,       // Fire intercepts/destroys Slagshell's red bolts (M13 QA)
+    /*expose_spell_alt=*/SpellId::None,
+    /*block_spell2=*/SpellId::None,
+    /*id=*/BossId::D2Slagshell,
+    /*block_mode=*/BlockMode::SpellBlock
 };
 
 // --- D3 Frost Hollow boss: the "Coldforge Twins" (SpellExpose with a SHIFTING element, Stationary,
@@ -118,8 +184,8 @@ inline constexpr BossDef D2_DEF{
 inline constexpr uint8_t D3_ATTACKS_P1 = BOSS_ATK_AIMED;
 inline constexpr uint8_t D3_ATTACKS_P2 = BOSS_ATK_AIMED | BOSS_ATK_SPIRAL;
 inline constexpr BossPhaseDef D3_PHASES[2] = {
-    { 35, { 80, 30, 40 }, D3_ATTACKS_P1 },   // P1 70->35 : aimed frost shards
-    {  0, { 70, 30, 30 }, D3_ATTACKS_P2 },   // P2 35->0  : + the rotating spiral (icy shard-ring)
+    { 35, { 80, 30, 40 }, D3_ATTACKS_P1, /*proj_speed=*/2 },   // P1 70->35 : aimed frost shards
+    {  0, { 70, 30, 30 }, D3_ATTACKS_P2, /*proj_speed=*/3 },   // P2 35->0  : + the rotating spiral (icy shard-ring)
 };
 inline constexpr BossDef D3_DEF{
     70, 10, 70, 90, VulnMode::SpellExpose, SpellId::Fire, D3_PHASES, 2,
@@ -129,7 +195,9 @@ inline constexpr BossDef D3_DEF{
     /*locomotion=*/Locomotion::Stationary,
     /*block_spell=*/SpellId::Fire,
     /*expose_spell_alt=*/SpellId::Ice,
-    /*block_spell2=*/SpellId::Ice
+    /*block_spell2=*/SpellId::Ice,
+    /*id=*/BossId::D3Coldforge,
+    /*block_mode=*/BlockMode::SpellBlock
 };
 
 // Def-driven boss state. `phase` is an integer INDEX (0..phase_count-1) so the

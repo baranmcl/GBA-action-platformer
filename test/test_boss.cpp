@@ -278,21 +278,6 @@ static void check_budget(const BossDef& d){
 TEST(switch_budget_holds_for_all_defs){ check_budget(KING_DEF); check_budget(D1_DEF); check_budget(AV_DEF); }
 
 // --- M13 D2 Slagshell (SpellExpose+Fire, pacing, rockfall, long re-armor anti-spam) ---
-TEST(bossdef_d2_slagshell_fields){
-    CHECK_EQ(D2_DEF.max_hp, 70);
-    CHECK_EQ(D2_DEF.wound_dmg, 10);
-    CHECK_EQ(D2_DEF.phase_count, 2);
-    CHECK((int)D2_DEF.vuln == (int)VulnMode::SpellExpose);
-    CHECK((int)D2_DEF.expose_spell == (int)SpellId::Fire);     // Fire melts the crust
-    CHECK((int)D2_DEF.locomotion == (int)Locomotion::Pacing);  // the moving boss
-    CHECK(D2_DEF.hit_iframes >= 80);                           // LONG re-armor = anti-spam
-    CHECK_EQ(D2_DEF.phases[0].end_hp, 35);                     // P1 -> P2 at half HP
-    // both phases use AIMED|ROCKFALL; the phase boundary only escalates rockfall intensity
-    CHECK_EQ((int)D2_DEF.phases[0].attacks, (int)(BOSS_ATK_AIMED | BOSS_ATK_ROCKFALL));
-    CHECK_EQ((int)D2_DEF.phases[1].attacks, (int)(BOSS_ATK_AIMED | BOSS_ATK_ROCKFALL));
-    CHECK(D2_DEF.phases[0].pattern.telegraph_frames >= SWITCH_BUDGET);
-    CHECK(D2_DEF.phases[1].pattern.telegraph_frames >= SWITCH_BUDGET);
-}
 // THE anti-spam invariant: after a wound you CANNOT re-expose until hit_iframes drains, and the
 // attack pattern resumes (not frozen) during that window. This is what stops Fire->bolt mashing.
 TEST(d2_no_reexpose_during_rearm){
@@ -342,22 +327,6 @@ TEST(bossdef_block_spell){
 }
 
 // --- M14 D3 Coldforge Twins (SpellExpose with a SHIFTING element: cycle Fire<->Ice each wound) ---
-TEST(bossdef_d3_coldforge_fields){
-    CHECK_EQ(D3_DEF.max_hp, 70);
-    CHECK_EQ(D3_DEF.phase_count, 2);
-    CHECK((int)D3_DEF.vuln == (int)VulnMode::SpellExpose);
-    CHECK((int)D3_DEF.expose_spell == (int)SpellId::Fire);       // starts on the ICE head -> counter is Fire
-    CHECK((int)D3_DEF.expose_spell_alt == (int)SpellId::Ice);    // shifts to Ice (fire head)
-    CHECK((int)D3_DEF.locomotion == (int)Locomotion::Stationary);
-    CHECK((int)D3_DEF.block_spell == (int)SpellId::Fire);
-    CHECK((int)D3_DEF.block_spell2 == (int)SpellId::Ice);        // both elementals block+charge
-    CHECK(D3_DEF.hit_iframes >= 60);                             // re-armor gates spam (with the forced cycle)
-    CHECK_EQ(D3_DEF.phases[0].end_hp, 35);
-    CHECK_EQ((int)D3_DEF.phases[0].attacks, (int)BOSS_ATK_AIMED);
-    CHECK_EQ((int)D3_DEF.phases[1].attacks, (int)(BOSS_ATK_AIMED | BOSS_ATK_SPIRAL));
-    CHECK(D3_DEF.phases[0].pattern.telegraph_frames >= SWITCH_BUDGET);
-    CHECK(D3_DEF.phases[1].pattern.telegraph_frames >= SWITCH_BUDGET);
-}
 // THE shift invariant: only the CURRENT element exposes; a wound flips it; you must alternate.
 TEST(d3_shift_expose_alternates){
     BossState b; b.reset(D3_DEF);
@@ -400,4 +369,83 @@ TEST(d2_cur_expose_does_not_shift){
     b.on_expose_hit(SpellId::Fire); CHECK(b.exposed());
     b.on_wound(D2_DEF.wound_dmg);
     CHECK((int)b.cur_expose == (int)SpellId::Fire);        // alt==None -> no shift
+}
+
+// ---------------------------------------------------------------------------
+// Task 5.1 (I9, I20, I30) — BossDef becomes the WHOLE description of a boss.
+// This ALL-DEFS invariant loop replaces the deleted raw field-pin tests
+// (bossdef_d2_slagshell_fields / bossdef_d3_coldforge_fields): rather than pinning
+// exact tuning values (which breaks on every legitimate tuning pass), it checks the
+// structural invariants every boss def must satisfy, so a def can be re-tuned freely
+// as long as it stays fair/well-formed. The vuln-mode/expose-spell BEHAVIORAL checks
+// those pins also contained are already exercised by d2_only_fire_exposes,
+// d2_no_reexpose_during_rearm, d2_takes_seven_wounds, d3_shift_expose_alternates and
+// d3_takes_seven_wounds_alternating above — nothing behavioral was lost.
+// ---------------------------------------------------------------------------
+static const BossDef* ALL_BOSS_DEFS[] = { &KING_DEF, &D1_DEF, &D2_DEF, &D3_DEF };
+
+TEST(all_boss_defs_satisfy_invariants){
+    for(const BossDef* d : ALL_BOSS_DEFS){
+        CHECK(d->max_hp > 0);
+        CHECK(d->phase_count > 0);
+        int prev_end_hp = 0;
+        for(int i = 0; i < d->phase_count; ++i){
+            const BossPhaseDef& p = d->phases[i];
+            CHECK(p.pattern.telegraph_frames >= SWITCH_BUDGET);      // no window tighter than the budget
+            CHECK(p.proj_speed >= 1);                                // every phase actually moves its shots
+            if((p.attacks & BOSS_ATK_ROCKFALL) != 0) CHECK(p.rock_count >= 1);  // a rockfall phase drops rocks
+            if(i > 0) CHECK(p.end_hp < prev_end_hp);                 // end_hp strictly decreasing...
+            prev_end_hp = p.end_hp;
+        }
+        CHECK_EQ(d->phases[d->phase_count - 1].end_hp, 0);           // ...and the last band ends the fight at 0
+    }
+    // ids unique across the registry (Task 5.1's I9: a boss's identity is now data, not a scene constant).
+    for(int i = 0; i < 4; ++i)
+        for(int j = i + 1; j < 4; ++j)
+            CHECK((int)ALL_BOSS_DEFS[i]->id != (int)ALL_BOSS_DEFS[j]->id);
+}
+
+// ---------------------------------------------------------------------------
+// Task 5.1 (I30) — wound-path behavior not previously covered: a single wound that
+// crosses MULTIPLE phase thresholds at once, and clamping/expose-end for damage
+// amounts that don't line up neatly with a boss's usual wound_dmg.
+// ---------------------------------------------------------------------------
+// Synthetic 3-phase, 70-HP, AlwaysVulnerable def with thresholds close enough together
+// that a single 25-dmg wound (deliberately NOT the def's own wound_dmg) skips a whole
+// band — this is the multi-threshold-skip case advance_phase_for_hp must resolve
+// correctly (walk to the FIRST band whose end_hp the post-damage hp still satisfies,
+// not just the immediately-next one).
+static constexpr BossPhaseDef WOUND_PATH_PHASES[3] = {
+    { 60, { 60, 30, 30 }, BOSS_ATK_AIMED },
+    { 50, { 60, 30, 30 }, BOSS_ATK_AIMED },
+    {  0, { 60, 30, 30 }, BOSS_ATK_AIMED },
+};
+static constexpr BossDef WOUND_PATH_DEF{
+    70, 10, 30, 0, VulnMode::AlwaysVulnerable, SpellId::None, WOUND_PATH_PHASES, 3
+};
+TEST(on_wound_crossing_two_thresholds_lands_in_correct_band){
+    BossState b; b.reset(WOUND_PATH_DEF);
+    CHECK_EQ(b.phase, 0);                    // 70 > 60 -> band 0
+    b.on_wound(25);                          // 70 -> 45: skips band 1 (end_hp 50) entirely in one hit
+    CHECK_EQ(b.hp, 45);
+    CHECK_EQ(b.phase, 2);                    // both thresholds (60, 50) crossed -> lands in the last band
+    CHECK_EQ(b.phase_start_hp, 45);
+}
+TEST(on_wound_massive_damage_clamps_to_zero_and_defeats){
+    BossState b; b.reset(WOUND_PATH_DEF);
+    b.on_wound(1000);                        // grossly overkill
+    CHECK_EQ(b.hp, 0);                       // clamped, not negative
+    CHECK(b.defeated());
+    CHECK_EQ(b.phase, 2);                    // still resolves into the (correct) last band
+}
+TEST(on_wound_non_multiple_damage_still_ends_expose_window){
+    // A wound amount that isn't a whole multiple of the def's wound_dmg must still end
+    // the expose/tired window and grant i-frames — on_wound doesn't special-case dmg.
+    BossState b; b.reset(D2_DEF);
+    b.on_expose_hit(SpellId::Fire);
+    CHECK(b.exposed());
+    b.on_wound(7);                           // NOT a multiple of D2_DEF.wound_dmg (10)
+    CHECK_EQ(b.hp, D2_DEF.max_hp - 7);
+    CHECK(!b.exposed());                     // expose window still ends
+    CHECK_EQ(b.hit_iframes, D2_DEF.hit_iframes);
 }
