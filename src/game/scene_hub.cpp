@@ -14,6 +14,7 @@
 #include "bn_sprite_items_light_proj.h"
 
 #include "logic/tilemap.h"
+#include "logic/tile_ids.h"
 #include "logic/player.h"
 #include "logic/gates.h"
 #include "logic/spell.h"
@@ -72,7 +73,7 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
     for(int i = 0; i < HUB_DATA.door_count; ++i)
     {
         const logic::DoorSpawn& dr = HUB_DATA.doors[i];
-        int t = door_enterable(dr.dungeon, world) ? 5 : 6; // open vs locked
+        int t = door_enterable(dr.dungeon, world) ? logic::tiles::DOOR_OPEN : logic::tiles::DOOR_LOCKED;
         for(int dy = 0; dy < 4; ++dy)
             for(int dx = 0; dx < 2; ++dx)
                 engine::set_level_tile(lvl.view, dr.tx + dx, dr.ty - dy, t);

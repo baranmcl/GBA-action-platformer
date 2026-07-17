@@ -46,6 +46,7 @@
 #include "logic/pushable_block.h"
 #include "logic/puzzle.h"
 #include "logic/gates.h"
+#include "logic/tile_ids.h"
 #include "logic/stone_impact.h" // loose_platform_in_shockwave (pound shockwave radius)
 #include "logic/room_graph.h"   // find_entrance, room_door_at
 #include "engine/input.h"
@@ -789,7 +790,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         // target_room == -1 is the exit-to-hub door: render with a DISTINCT bg tile (26, hub portal)
         // so it reads differently from a normal room-door (tile 5) and the dungeon goal/exit (tile 6).
         // (13 is lava, so 26 is the next free strip slot — see make_placeholder_art.py gen_tiles.)
-        int door_bg = (rd.target_room == -1) ? 26 : 5;
+        int door_bg = (rd.target_room == -1) ? logic::tiles::HUB_PORTAL : logic::tiles::DOOR_OPEN;
         for(int dy = 0; dy < 4; ++dy) for(int dx = 0; dx < 2; ++dx)
             engine::set_level_tile(lvl.view, rd.tx + dx, fr - 1 - dy, door_bg);
     }
@@ -799,7 +800,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     if(level.has_exit){
         int fr = floor_row_below(lvl.map, level.exit_tx, level.exit_ty);
         for(int dy = 0; dy < 4; ++dy) for(int dx = 0; dx < 2; ++dx)
-            engine::set_level_tile(lvl.view, level.exit_tx + dx, fr - 1 - dy, 6);
+            engine::set_level_tile(lvl.view, level.exit_tx + dx, fr - 1 - dy, logic::tiles::DOOR_LOCKED);
     }
 
     // ---- braziers (bg tile 14 unlit; Body for fire-hit) ----
@@ -810,14 +811,14 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         // still hits a brazier sitting on the floor. Visual grounded on the floor (fr-1).
         int draw_ty = floor_row_below(lvl.map, b.tx, b.ty) - 1;
         braziers.push_back(BrazierInst{ b.tx, b.ty, b.group, tile_body(b.tx, 14, 6, 24), false, draw_ty });
-        engine::set_level_tile(lvl.view, b.tx, draw_ty, 14);
+        engine::set_level_tile(lvl.view, b.tx, draw_ty, logic::tiles::BRAZIER_UNLIT);
     }
 
     // ---- plates (tile 17) / buttons (tile 18) + triggers ----
     bn::vector<TriggerInst, 16> triggers;
     for(int i = 0; i < level.plate_count && i < 16; ++i){
         const logic::PlateSpawn& p = level.plates[i];
-        engine::set_level_tile(lvl.view, p.tx, p.ty, 17);
+        engine::set_level_tile(lvl.view, p.tx, p.ty, logic::tiles::PLATE);
         // M8: a HEAVY plate trips ONLY on a Stone pound (resolved in the just_landed() block, NOT here).
         // Skip it from the normal step/block trigger loop so it never trips on a footstep or pushed block.
         // If a latched heavy plate's gate was already smashed on a prior visit, re-open it on room load
@@ -829,7 +830,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     }
     for(int i = 0; i < level.button_count && i < 16; ++i){
         const logic::ButtonSpawn& b = level.buttons[i];
-        engine::set_level_tile(lvl.view, b.tx, b.ty, 18);
+        engine::set_level_tile(lvl.view, b.tx, b.ty, logic::tiles::BUTTON);
         logic::Trigger t = logic::Trigger::button(); t.target_tx = b.target_tx; t.target_ty = b.target_ty;
         triggers.push_back(TriggerInst{ t, b.tx, b.ty, -1, false });
     }
@@ -1106,7 +1107,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         for(BrazierInst& bi : braziers){
             if(!bi.lit && spells.consume_hit(bi.body, logic::SpellId::Fire)){  // only Fire lights braziers
                 bi.lit = true;
-                engine::set_level_tile(lvl.view, bi.tx, bi.draw_ty, 15);
+                engine::set_level_tile(lvl.view, bi.tx, bi.draw_ty, logic::tiles::BRAZIER_LIT);
             }
         }
 
@@ -1134,7 +1135,6 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         // Spells fly at chest height but water/ice sit at floor level, so consume_tile_hit scans
         // DOWN the shot's column (the M3 brazier-height lesson). MUST precede despawn_on_solid
         // because IcePlatform is solid — otherwise a melt-shot is killed before it can melt.
-        constexpr int WATER_BG = 16, ICE_PLATFORM_BG = 19;       // pinned bg indices (gates.h tile map)
         int ftx, fty;
         while(spells.consume_tile_hit(lvl.map, logic::TileKind::Water, logic::SpellId::Ice, ftx, fty)){
             // Freeze the WHOLE contiguous horizontal run of water into one ice bridge (one cast),
@@ -1143,7 +1143,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             int x1 = ftx; while(lvl.map.is_water(x1 + 1, fty)) ++x1;
             for(int x = x0; x <= x1; ++x){
                 engine::set_collision_tile(x, fty, (int)logic::TileKind::IcePlatform); // collision VALUE 5
-                engine::set_level_tile(lvl.view, x, fty, ICE_PLATFORM_BG);             // bg INDEX 19
+                engine::set_level_tile(lvl.view, x, fty, logic::tiles::ICE_PLATFORM);  // bg INDEX 19
             }
         }
         while(spells.consume_tile_hit(lvl.map, logic::TileKind::IcePlatform, logic::SpellId::Fire, ftx, fty)){
@@ -1152,7 +1152,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             int x1 = ftx; while(lvl.map.at(x1 + 1, fty) == logic::TileKind::IcePlatform) ++x1;
             for(int x = x0; x <= x1; ++x){
                 engine::set_collision_tile(x, fty, (int)logic::TileKind::Water);     // collision VALUE 4
-                engine::set_level_tile(lvl.view, x, fty, WATER_BG);                  // bg INDEX 16
+                engine::set_level_tile(lvl.view, x, fty, logic::tiles::WATER);       // bg INDEX 16
             }
         }
         spells.despawn_on_solid(lvl.map);
