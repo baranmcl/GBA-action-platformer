@@ -447,6 +447,54 @@ def gen_magic_crystal():
     px(im, 7, 11, 1); px(im, 8, 11, 1)
     write(im, "magic_crystal", {"type": "sprite"})
 
+def gen_health_pickup():
+    """Health pickup 16x16 (M14) — a full-HP restore potion/flask, DISTINCT from the red heart
+    container (which is a permanent max-HP upgrade, not this one-shot restore). Glass flask
+    silhouette (near-black outline, pal 1) filled with a bright red potion (pal 13) below a
+    narrow neck, a white cork stopper (pal 15/9), and a white glint so it reads as glassware
+    rather than a heart."""
+    im = new_img(16, 16)
+    # Neck: narrow vertical column at the top, capped by a cork stopper.
+    rect(im, 7, 1, 8, 1, 9)          # cork top (white/wand colour)
+    rect(im, 6, 2, 9, 3, 1)          # neck outline (near-black), narrow
+    rect(im, 7, 2, 8, 3, 9)          # neck glass (white-ish, "empty" glass above the liquid)
+    # Flask body outline: rounded-ish silhouette widening from the neck down to row 13.
+    body_spans = {
+        4:  [(5, 10)],
+        5:  [(4, 11)],
+        6:  [(3, 12)],
+        7:  [(3, 12)],
+        8:  [(3, 12)],
+        9:  [(3, 12)],
+        10: [(3, 12)],
+        11: [(3, 12)],
+        12: [(4, 11)],
+        13: [(5, 10)],
+    }
+    for y, segs in body_spans.items():
+        for x0, x1 in segs:
+            rect(im, x0, y, x1, y, 1)          # near-black outline silhouette
+    # Red potion liquid fill, one pixel inset from the outline (so the outline stays visible).
+    liquid_spans = {
+        5:  [(5, 10)],
+        6:  [(4, 11)],
+        7:  [(4, 11)],
+        8:  [(4, 11)],
+        9:  [(4, 11)],
+        10: [(4, 11)],
+        11: [(4, 11)],
+        12: [(5, 10)],
+    }
+    for y, segs in liquid_spans.items():
+        for x0, x1 in segs:
+            rect(im, x0, y, x1, y, 13)         # red potion (pal 13, same red as the heart —
+                                                # shared "restore" colour language — but the
+                                                # FLASK silhouette is what makes it read as a
+                                                # different pickup at a glance)
+    # White glass glint on the upper-left of the flask body.
+    px(im, 5, 6, 15); px(im, 5, 7, 15)
+    write(im, "health_pickup", {"type": "sprite"})
+
 def gen_king():
     """Nightmare King boss placeholder 32x32 (M11) — a tall, looming dark/violet figure with a
     horned crown, glowing red eyes, and a flowing shadow cloak. Built from the shared 16-colour
@@ -751,4 +799,5 @@ if __name__ == "__main__":
     gen_rock()
     gen_rock_marker()
     gen_heart_container()
+    gen_health_pickup()
     print("placeholder sprites + bg tiles + hud + ember art generated.")

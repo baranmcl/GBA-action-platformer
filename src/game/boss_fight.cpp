@@ -66,10 +66,11 @@ FightOutcome run_boss_fight(const logic::LevelData& level, const logic::BossDef&
     auto wx = [&](int px){ return px - hw; };
     auto wy = [&](int px){ return px - hh; };
 
-    // Full-HEALTH entry (common to both originals). The King's extra entry setup
-    // (ps.health.max = max_health_for, magic refill, spell.ensure_valid) is the
-    // CALLER's job (see header) — a room boss carries its magic in from the prior room.
-    health.cur = health.max;
+    // M14: the player now enters at their CARRIED-IN HP (no auto-heal on boss entry) —
+    // the top-up is the pre-boss health pickup ('+') in the approach room (PickupsSystem),
+    // which the player may skip. The King's extra entry setup (ps.health.max =
+    // max_health_for, magic refill, spell.ensure_valid) is still the CALLER's job (see
+    // header) — a room boss carries its magic in from the prior room.
 
     int invuln = 0;
     constexpr int RESPAWN_IFRAMES = 60;

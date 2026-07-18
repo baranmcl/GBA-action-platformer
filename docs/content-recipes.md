@@ -72,6 +72,11 @@ the top of `tools/build_level.py`.
 6. Respect the [arena authoring constraints](#3-arena-authoring-constraints-i36) below —
    the arena room is just a normal room whose JSON has a `"boss"` key.
 7. Def-invariant tests: TODAY you must hand-write per-def structural checks in `test/test_boss.cpp` (copy the pattern of `bossdef_d3_coldforge_fields` — telegraph >= SWITCH_BUDGET per phase, end_hp descending to 0) AND add your def to `switch_budget_holds_for_all_defs`. (After the remediation plan's Phase 5 lands, one all-defs invariant loop covers every registered def automatically.) Still write a dungeon-level test per step 1.6 above for the arena room's integration.
+8. M14: `run_boss_fight` no longer auto-heals the player on boss entry — they fight at whatever
+   HP they carried in. Author a `'+'` health-pickup symbol (one-shot full-HP restore, not
+   persisted — respawns on room re-entry like `'$'`) on the main path of the approach room,
+   before the `'D'` room-door into the arena, so the player has an optional top-up. See D1/D2/D3
+   room0 for the pattern.
 
 ## 3. Add an enemy type
 
@@ -139,3 +144,4 @@ Any room whose JSON sets `"boss"` must satisfy, or the fight is unwinnable/broke
 | boulders | 8 | | level width | ≤ 64 |
 | loose platforms | 8 (len ≤ 8) | | level height | ≤ 128 |
 | hidden platforms | 8 (len ≤ 8) | | w*h | ≤ 8192 |
+| health pickups | 4 | | | |

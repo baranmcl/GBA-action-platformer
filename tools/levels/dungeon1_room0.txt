@@ -1,6 +1,8 @@
 ; D1 Whispering Woods — Room 0 (ENTRY). M12 restructure: the old single-room D1 split into
 ; entry -> boss -> spronk. Cage REMOVED (it now lives in room 2). Featherleap 'F' shrine + the
 ; '@' spawn stay here; a room-door 'D' leads onward to room 1 (the Guardian boss arena).
+; M14: a '+' health pickup sits on the path before 'D' -- a one-shot full-HP top-up now that
+; the boss fight no longer auto-heals on entry.
 ################################################
 #..............................................#
 #..............................................#
@@ -17,6 +19,6 @@
 #..............................................#
 #..............................................#
 #..............................................#
-#..@..Q..F....o.............................DN.#
+#..@..Q..F....o..........+..................DN.#
 ################################################
 ################################################

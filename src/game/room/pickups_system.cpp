@@ -3,6 +3,7 @@
 
 #include "bn_sprite_items_shrine.h"
 #include "bn_sprite_items_heart_container.h"
+#include "bn_sprite_items_health_pickup.h"
 #include "bn_sprite_items_spronk.h"
 
 #include "logic/world_state.h"    // max_health_for, spronk_freed/free_spronk, refill_lives
@@ -73,6 +74,21 @@ void PickupsSystem::spawn(const logic::LevelData& level, Ctx& ctx)
     // ---- magic crystals (M10 Light: full-magic-refill pickup; respawns each attempt, NOT latched) ----
     crystals.spawn(level, cam, ctx.lvl.map, hw, hh, game::CrystalStation::Grounding::TileCentre,
                    /*respawn_when_depleted=*/false);   // collected stays gone until reset() (death/attempt reset only)
+
+    // ---- health pickups (M14: one-shot full-HP restore, placed in a boss's approach room; NOT
+    //      persisted -- re-appears on room re-entry, same respawn-per-visit semantics as the
+    //      magic crystal above, not the heart container's SRAM latch). ----
+    for(int i = 0; i < level.health_pickup_count && i < 4; ++i){
+        const logic::HealthPickupSpawn& hp = level.health_pickups[i];
+        _health_pickups.push_back(HealthPickupInst{ hp.tx, hp.ty, tile_body(hp.tx, hp.ty, 6, 8), {}, false });
+        HealthPickupInst& hpi = _health_pickups.back();
+        hpi.sprite = bn::sprite_items::health_pickup.create_sprite(0, 0);
+        hpi.sprite->set_camera(cam);
+        // Ground the sprite on the floor-scanned row below the authored tile (same pattern as
+        // the shrine/heart/crystal above), so it doesn't embed in a deeper floor.
+        int hp_fr = floor_row_below(ctx.lvl.map, hp.tx, hp.ty);
+        hpi.sprite->set_position(wx(hp.tx * 8 + 8), wy(hp_fr * 8 - 8));
+    }
 }
 
 void PickupsSystem::update_shrines(Ctx& ctx)
@@ -109,6 +125,21 @@ void PickupsSystem::update_hearts_and_crystals(Ctx& ctx)
     // ---- magic crystals: collect on overlap -> full magic refill. NOT latched (resets each
     //      attempt below) so a Light beat never soft-locks on empty magic. ----
     crystals.update(ctx.player.body, ctx.ps.magic);
+}
+
+void PickupsSystem::update_health_pickups(Ctx& ctx)
+{
+    // ---- health pickups: collect on overlap -> full HP restore. One-shot per room instance
+    //      (the `collected` flag is per-spawn, not world-persisted); no write_world call --
+    //      re-entering the room re-spawns it, same as a magic crystal. ----
+    for(HealthPickupInst& hpi : _health_pickups){
+        if(hpi.collected) continue;
+        if(logic::aabb_overlap(ctx.player.body, hpi.body)){
+            ctx.ps.health.cur = ctx.ps.health.max;
+            hpi.collected = true;
+            if(hpi.sprite) hpi.sprite->set_visible(false);
+        }
+    }
 }
 
 bool PickupsSystem::check_spronk_and_exit(Ctx& ctx)

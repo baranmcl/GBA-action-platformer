@@ -18,5 +18,6 @@ inline constexpr logic::BoulderSpawn* HUB_BOULDERS = nullptr;
 inline constexpr logic::LoosePlatformSpawn* HUB_LOOSE_PLATFORMS = nullptr;
 inline constexpr logic::HiddenPlatformSpawn* HUB_HIDDEN_PLATFORMS = nullptr;
 inline constexpr logic::MagicCrystalSpawn* HUB_MAGIC_CRYSTALS = nullptr;
-inline constexpr logic::LevelData HUB_DATA = { HUB_TILES, 58, 20, 8, 12, false, 0, 0, false, 0, 0, HUB_ENEMIES, 0, HUB_GATES, 0, HUB_DOORS, 9, HUB_PICKUPS, 0, HUB_BLOCKS, 0, HUB_PLATES, 0, HUB_BUTTONS, 0, HUB_BRAZIERS, 0, HUB_BRAZIER_GROUPS, 0, HUB_ENTRANCES, 0, HUB_ROOM_DOORS, 0, HUB_HEART_CONTAINERS, 0, HUB_BOULDERS, 0, HUB_LOOSE_PLATFORMS, 0, HUB_HIDDEN_PLATFORMS, 0, HUB_MAGIC_CRYSTALS, 0, nullptr };
+inline constexpr logic::HealthPickupSpawn* HUB_HEALTH_PICKUPS = nullptr;
+inline constexpr logic::LevelData HUB_DATA = { HUB_TILES, 58, 20, 8, 12, false, 0, 0, false, 0, 0, HUB_ENEMIES, 0, HUB_GATES, 0, HUB_DOORS, 9, HUB_PICKUPS, 0, HUB_BLOCKS, 0, HUB_PLATES, 0, HUB_BUTTONS, 0, HUB_BRAZIERS, 0, HUB_BRAZIER_GROUPS, 0, HUB_ENTRANCES, 0, HUB_ROOM_DOORS, 0, HUB_HEART_CONTAINERS, 0, HUB_BOULDERS, 0, HUB_LOOSE_PLATFORMS, 0, HUB_HIDDEN_PLATFORMS, 0, HUB_MAGIC_CRYSTALS, 0, HUB_HEALTH_PICKUPS, 0, nullptr };
 

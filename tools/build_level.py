@@ -14,6 +14,7 @@ Grid symbols (collision tile in parens):
   ?=hidden button  *=brazier
   N=entrance (JSON: {"id":N,"facing":±1}; id defaults to scan-order index, facing to +1)  D=room-door
   Q=exit-to-hub door (no JSON; hardcoded room-door with target_room=-1 -> returns player to the hub)
+  +=health pickup (M14: one-shot full-HP restore, not persisted; no JSON needed, like '$')
   (all content symbols except ~ set collision tile 0; positions recorded as entities)
 
 JSON sidecar (Nth metadata entry -> Nth matching symbol in row-major scan order):
@@ -62,7 +63,7 @@ BOSS_SYMBOL = {
     'd2': 'logic::D2_DEF',
     'd3': 'logic::D3_DEF',
 }
-CONTENT = set('@CEoG123456789VIWXFBPK=?*NDQHkO:h$')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door, 'Q' exit-to-hub door (target_room=-1); 'H' heart container; 'k' cracked-floor gate (M8, Stone); 'O' boulder (M8); ':' loose platform (M8); 'h' hidden platform (M10); '$' magic crystal (M10)
+CONTENT = set('@CEoG123456789VIWXFBPK=?*NDQHkO:h$+')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door, 'Q' exit-to-hub door (target_room=-1); 'H' heart container; 'k' cracked-floor gate (M8, Stone); 'O' boulder (M8); ':' loose platform (M8); 'h' hidden platform (M10); '$' magic crystal (M10); '+' health pickup (M14)
 
 
 class LevelError(Exception):
@@ -125,6 +126,7 @@ def compile_level(txt_path, json_path):
     loose_platforms = []  # (tx, ty, len)
     hidden_platforms = [] # (tx, ty, len)  M10 Light
     magic_crystals = []   # (tx, ty)       M10 Light
+    health_pickups = []   # (tx, ty)       M14: full-HP restore pickup
     e_idx = g_idx = f_idx = pl_idx = b_idx = br_idx = n_idx = rd_idx = hc_idx = lp_idx = 0
     cf_idx = 0  # scan-order index for cracked floors ('k'), maps into j_cracked_floors
     hp_idx = 0  # scan-order index for hidden platforms ('h'), maps into j_hidden_platforms
@@ -251,6 +253,9 @@ def compile_level(txt_path, json_path):
             elif c == '$':
                 # M10: a magic crystal — fully refills the magic meter on touch (respawns each attempt). No JSON needed.
                 magic_crystals.append((x, y))
+            elif c == '+':
+                # M14: a health pickup — full-HP restore on touch, one-shot per room visit (not persisted). No JSON needed.
+                health_pickups.append((x, y))
             elif c in '123456789':
                 doors.append((x, y, int(c)))
 
@@ -287,6 +292,7 @@ def compile_level(txt_path, json_path):
         'heart_containers': heart_containers,
         'boulders': boulders, 'loose_platforms': loose_platforms,
         'hidden_platforms': hidden_platforms, 'magic_crystals': magic_crystals,
+        'health_pickups': health_pickups,
         'boss': boss_symbol,
     }
     validate_level(level)
@@ -326,6 +332,7 @@ def validate_level(level):
             raise LevelError(f"hidden platform at ({tx},{ty}) len {hlen} > cap 8")
 
     cap('magic crystals', len(level['magic_crystals']), 8)
+    cap('health_pickups', len(level['health_pickups']), 4)
     cap('room_doors', len(level['room_doors']), 8)
     cap('braziers', len(level['braziers']), 16)
     cap('plates', len(level['plates']), 16)
@@ -414,6 +421,9 @@ def emit_header(level, name):
     line, mccount = emit_array('logic::MagicCrystalSpawn', 'MAGIC_CRYSTALS',
                                [f'{{{tx},{ty}}}' for (tx, ty) in level['magic_crystals']],
                                '{0,0}'); L.append(line)
+    line, hpkcount = emit_array('logic::HealthPickupSpawn', 'HEALTH_PICKUPS',
+                               [f'{{{tx},{ty}}}' for (tx, ty) in level['health_pickups']],
+                               '{0,0}'); L.append(line)
 
     sx, sy = level['spawn']
     cx, cy = level['cage'] if level['cage'] else (0, 0)
@@ -432,6 +442,7 @@ def emit_header(level, name):
         f'{name}_HEART_CONTAINERS, {hccount}, '
         f'{name}_BOULDERS, {bocount}, {name}_LOOSE_PLATFORMS, {lpcount}, '
         f'{name}_HIDDEN_PLATFORMS, {hpcount}, {name}_MAGIC_CRYSTALS, {mccount}, '
+        f'{name}_HEALTH_PICKUPS, {hpkcount}, '
         f'{boss_init} }};'
     )
     L.append('')

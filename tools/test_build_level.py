@@ -531,6 +531,45 @@ class TestBuildLevel(unittest.TestCase):
         self.assertIn("TESTNOMC_MAGIC_CRYSTALS, 0", hdr)
         self.assertEqual(lvl['magic_crystals'], [])
 
+    def test_health_pickup_symbol(self):
+        # '+' compiles to a health pickup at the right tile position (no JSON needed)
+        txt = "#######\n#@.+..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['health_pickups'], [(3, 1)])
+
+    def test_health_pickup_tile_is_empty(self):
+        # '+' is a content symbol: collision tile under it must be 0
+        txt = "#######\n#@.+..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['tiles'][lvl['w'] * 1 + 3], 0)
+
+    def test_health_pickup_emit_header(self):
+        # emit_header includes HEALTH_PICKUPS array and wires count into LevelData
+        txt = "#######\n#@.+..#\n#######\n"
+        lvl = compile_str(txt, {})
+        hdr = build_level.emit_header(lvl, "TESTHP")
+        self.assertIn("TESTHP_HEALTH_PICKUPS", hdr)
+        self.assertIn("{3,1}", hdr)  # HealthPickupSpawn {tx, ty}
+        self.assertIn("TESTHP_HEALTH_PICKUPS, 1", hdr)  # count in LevelData
+
+    def test_health_pickup_absent_still_compiles(self):
+        # Level without '+': dummy array + count 0 in LevelData
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4]}]})
+        hdr = build_level.emit_header(lvl, "TESTNOHPK")
+        self.assertIn("TESTNOHPK_HEALTH_PICKUPS", hdr)
+        self.assertIn("TESTNOHPK_HEALTH_PICKUPS, 0", hdr)
+        self.assertEqual(lvl['health_pickups'], [])
+
+    def test_health_pickup_cap_exceeded_errors(self):
+        # 5 health pickups > cap 4 (mirrors the shrine/heart_container cap style)
+        w = 2 + 1 + 5  # borders + '@' + 5 '+'
+        txt = ('#' * w + '\n' +
+               '#@' + '+' * 5 + '#' + '\n' +
+               '#' * w + '\n')
+        with self.assertRaises(build_level.LevelError) as cm:
+            compile_str(txt, {})
+        self.assertIn('health_pickups', str(cm.exception))
+
     # --- M12 boss key: optional "boss" JSON key -> LevelData.boss field ---
     def test_boss_key_d1_sets_boss_field(self):
         # A room with "boss":"d1" records the canonical D1_DEF symbol (namespace-qualified) on the level.

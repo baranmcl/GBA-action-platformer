@@ -25,9 +25,9 @@ Rules (see docs plan Task 1.2 brief for the full rationale):
   4. Global heart-container registry: every heart id must be in [0, 7] and globally
      unique (no same-room exception — a room repeating an id is still a collision).
   5. Sprite-budget estimate (I34): per room,
-     enemies + blocks + boulders + crystals + hearts + shrines + Σ loose_platform len
-     + Σ hidden_platform len + 45 (HUD/player/vine/VFX reserve) must be <= 110 (Butano's
-     OAM budget is 128; the margin is deliberate).
+     enemies + blocks + boulders + crystals + hearts + shrines + health_pickups
+     + Σ loose_platform len + Σ hidden_platform len + 45 (HUD/player/vine/VFX reserve)
+     must be <= 110 (Butano's OAM budget is 128; the margin is deliberate).
   6. Arena constraints (I36): any room whose JSON has a "boss" key must have a solid
      tile at (w/2, h-2) and (w/2 +/- 1, h-2) (flat floor under the boss). Magic
      crystals are OPTIONAL in a boss arena (D1's TiredWindow boss needs no magic;
@@ -176,6 +176,7 @@ def check_sprite_budget(room_name, lvl):
     total = (
         len(lvl['enemies']) + len(lvl['blocks']) + len(lvl['boulders'])
         + len(lvl['magic_crystals']) + len(lvl['heart_containers']) + len(lvl['pickups'])
+        + len(lvl['health_pickups'])
         + sum(p[2] for p in lvl['loose_platforms'])
         + sum(p[2] for p in lvl['hidden_platforms'])
         + SPRITE_RESERVE

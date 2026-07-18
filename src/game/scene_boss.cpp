@@ -43,10 +43,11 @@ BossResult run_boss(const logic::DungeonData& arena, logic::World& world, logic:
     player.body.pos = spawn_pos;
     player.facing = ent.facing;
 
-    // Entry vitals that are the CALLER's job (run_boss_fight only does health.cur = health.max):
-    // sync the health cap for the current world state, refill magic to full (the King fight starts
-    // fresh, unlike a room boss which carries magic in from the prior room), and make sure the
-    // selected spell is still one the player owns.
+    // Entry vitals that are the CALLER's job: sync the health cap for the current world state
+    // (M14: run_boss_fight no longer force-heals health.cur -- the King is entered at whatever
+    // HP the player carried in from the hub, same carried-in philosophy as a room boss), refill
+    // magic to full (the King fight starts fresh, unlike a room boss which carries magic in from
+    // the prior room), and make sure the selected spell is still one the player owns.
     ps.health.max = logic::max_health_for(world);
     ps.magic.cur = ps.magic.max;
     ps.spell.ensure_valid(world);

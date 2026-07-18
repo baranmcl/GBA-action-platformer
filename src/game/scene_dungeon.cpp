@@ -101,9 +101,12 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     // A defeated room boss stays defeated (persisted, save v6) — re-entering the arena
     // while backtracking must not re-trigger a mandatory fight (D1 decision).
     if(level.boss != nullptr && d >= 1 && d <= 8 && !world.boss_defeated(d)){
-        // Entry vitals: run_boss_fight refills health.cur to health.max (health.max is already
-        // current -- run_dungeon syncs the cap once before the room loop). Magic carries in from
-        // the previous room by design (room-boss semantics).
+        // Entry vitals: M14 — the player enters at their CARRIED-IN health.cur (run_boss_fight no
+        // longer force-heals); health.max is already current (run_dungeon syncs the cap once
+        // before the room loop). The pre-boss health pickup ('+') in this dungeon's approach room
+        // is the intended top-up, but it's optional -- a player who skips or is hit after it fights
+        // at whatever HP they're carrying. Magic still carries in from the previous room by design
+        // (room-boss semantics, unchanged).
         game::FightOutcome fo = run_boss_fight(level, *level.boss, boss_sprite_for(level.boss),
                                                world, ps, lvl, cam, player, spawn_pos, ent,
                                                /*inline_game_over=*/false);
@@ -399,6 +402,8 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         // ---- heart containers (collect -> grow max HP + refill) + magic crystals (collect ->
         //      full magic refill; NOT latched, resets each attempt above) ----
         pickups.update_hearts_and_crystals(ctx);
+        // ---- health pickups (M14: one-shot full-HP restore; NOT persisted, resets on room re-entry) ----
+        pickups.update_health_pickups(ctx);
 
         session.refresh_spell_icon();   // reflect cycle (L) and shrine pickups in the HUD icon
 
