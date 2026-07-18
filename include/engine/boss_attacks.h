@@ -119,6 +119,22 @@ public:
         return blocked;
     }
 
+    // Like block_with_spell but the player's FREE BOLT does the blocking. Returns the count blocked,
+    // so the scene can reward it (D3: bolt blocks recharge magic, alongside Fire/Ice).
+    template<typename BoltLike>
+    int block_with_bolt(BoltLike& bolts){
+        int blocked = 0;
+        for(AttackInst& a : _pool){
+            if(!a.active) continue;
+            if(bolts.consume_hit(a.body)){
+                a.active = false;
+                if(a.sprite) a.sprite->set_visible(false);
+                ++blocked;
+            }
+        }
+        return blocked;
+    }
+
 private:
     AttackInst _pool[CAP];
     int _half_w_px;

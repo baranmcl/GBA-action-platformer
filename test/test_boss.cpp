@@ -443,7 +443,7 @@ TEST(bossdef_mechanic_contracts){
 
     // D3_DEF: SpellBlock dual-element (Fire+Ice), stationary, shifts spell per wound, spiral phase 2.
     CHECK((int)D3_DEF.id == (int)BossId::D3Coldforge);
-    CHECK((int)D3_DEF.block_mode == (int)BlockMode::SpellBlock);
+    CHECK((int)D3_DEF.block_mode == (int)BlockMode::SpellAndBoltBlock);
     CHECK((int)D3_DEF.locomotion == (int)Locomotion::Stationary);
     CHECK((int)D3_DEF.block_spell == (int)SpellId::Fire);
     CHECK((int)D3_DEF.block_spell2 == (int)SpellId::Ice);

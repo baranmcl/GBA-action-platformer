@@ -129,6 +129,8 @@ bool PickupsSystem::check_spronk_and_exit(Ctx& ctx)
             if(_spronk) _spronk->set_visible(false);
             // Freeing the spronk grants +1 max (via spronks_freed) AND +1 current life (not a full refill).
             logic::gain_life(world);
+            ctx.ps.health.cur = ctx.ps.health.max;   // spronk rescue restores vitals (recovery deferred here from boss-defeat)
+            ctx.ps.magic.cur  = ctx.ps.magic.max;
             engine::write_world(world);   // persist the new max + granted life immediately
         }
     }

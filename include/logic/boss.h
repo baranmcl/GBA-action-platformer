@@ -34,8 +34,11 @@ enum class BossId : uint8_t { King = 0, D1Guardian, D2Slagshell, D3Coldforge };
 // Which of the boss's projectiles a player spell can destroy on contact (the block
 // defense in engine::AttackPool): None = dodge-only; SpellBlock = block_spell (and
 // block_spell2 if set) blocks; BoltAndSpellBlock = the free bolt ALSO auto-blocks
-// (the King's local block_player_shots behaviour).
-enum class BlockMode : uint8_t { None, SpellBlock, BoltAndSpellBlock };
+// (the King's local block_player_shots behaviour); SpellAndBoltBlock = block_spell
+// (and block_spell2 if set) block AND the free bolt ALSO blocks — all three charge
+// magic on a block (D3 Coldforge: the free bolt joins Fire/Ice as a magic-charging
+// blocker, unlike the King's BoltAndSpellBlock which does not reward magic).
+enum class BlockMode : uint8_t { None, SpellBlock, BoltAndSpellBlock, SpellAndBoltBlock };
 struct Perch { int cx, cy; };   // a teleport/patrol waypoint, in TILE coords — pure ints
 
 // --- Attack-bit scheme (SINGLE SOURCE — the engine attack library #includes this
@@ -197,7 +200,7 @@ inline constexpr BossDef D3_DEF{
     /*expose_spell_alt=*/SpellId::Ice,
     /*block_spell2=*/SpellId::Ice,
     /*id=*/BossId::D3Coldforge,
-    /*block_mode=*/BlockMode::SpellBlock
+    /*block_mode=*/BlockMode::SpellAndBoltBlock
 };
 
 // Def-driven boss state. `phase` is an integer INDEX (0..phase_count-1) so the

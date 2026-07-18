@@ -355,13 +355,16 @@ FightOutcome run_boss_fight(const logic::LevelData& level, const logic::BossDef&
                 // through to expose). No magic reward — the King's magic comes from wounds + crystal.
                 attacks.block_player_shots(bolts, spells);
                 break;
-            case logic::BlockMode::SpellBlock: {
+            case logic::BlockMode::SpellBlock:
+            case logic::BlockMode::SpellAndBoltBlock: {
                 // D2/D3: a cast of block_spell (and, dual-element, block_spell2) destroys a boss bolt;
                 // each block RECHARGES magic (the block IS the magic economy). Rocks are NOT blockable.
+                // SpellAndBoltBlock (D3): the free bolt ALSO blocks + charges, alongside Fire/Ice.
                 constexpr int BLOCK_MAGIC_CHARGE = 25;
                 int blocked = 0;
                 if(def.block_spell  != logic::SpellId::None) blocked += attacks.block_with_spell(spells, def.block_spell);
                 if(def.block_spell2 != logic::SpellId::None) blocked += attacks.block_with_spell(spells, def.block_spell2);
+                if(def.block_mode == logic::BlockMode::SpellAndBoltBlock) blocked += attacks.block_with_bolt(bolts);
                 if(blocked) magic.heal(BLOCK_MAGIC_CHARGE * blocked);
                 break;
             }
@@ -385,8 +388,7 @@ FightOutcome run_boss_fight(const logic::LevelData& level, const logic::BossDef&
 
         if(b.defeated()){
             boss_say(def.death_line);
-            if(!inline_game_over) health.cur = health.max;   // room boss: exit at full HEALTH (reward;
-                                                             // magic carries to the next room)
+            // Room-boss victory: vitals are NOT restored here — recovery is deferred to the spronk touch (PickupsSystem). Health stays as-is; magic carries.
             return FightOutcome::Victory;
         }
 
