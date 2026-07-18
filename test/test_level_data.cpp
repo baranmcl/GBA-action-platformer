@@ -107,3 +107,24 @@ TEST(hidden_platform_null_when_absent){
 TEST(magic_crystal_null_when_absent){
     CHECK_EQ(L.magic_crystal_count, 0);
 }
+
+// --- M14: Health Pickups ---
+static const HealthPickupSpawn HEALTH_PICKUPS[] = { {7, 13} };
+static constexpr LevelData L_HP = { TILES,3,3, 1,1, false,0,0, false,0,0,
+    ENEMIES,1, GATES,1, DOORS,1, PICKUPS,1, BLOCKS,1,
+    PLATES,1, BUTTONS,1, BRAZIERS,1, BGROUPS,1,
+    nullptr,0, nullptr,0, nullptr,0,
+    nullptr,0, nullptr,0,
+    nullptr,0, nullptr,0,
+    HEALTH_PICKUPS,1 };
+TEST(health_pickup_spawn_fields){
+    HealthPickupSpawn hp{7, 13};
+    CHECK_EQ(hp.tx, 7);
+    CHECK_EQ(hp.ty, 13);
+    CHECK_EQ(L_HP.health_pickup_count, 1);
+    CHECK_EQ(L_HP.health_pickups[0].tx, 7);
+    CHECK_EQ(L_HP.health_pickups[0].ty, 13);
+}
+TEST(health_pickup_null_when_absent){
+    CHECK_EQ(L.health_pickup_count, 0);
+}
