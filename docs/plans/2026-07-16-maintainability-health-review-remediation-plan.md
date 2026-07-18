@@ -1027,6 +1027,14 @@ Do NOT: persist debug-granted state to SRAM; add the meter outside the pause scr
 
 ---
 
+# Post-QA status (2026-07-18)
+
+User ran the full mGBA checklist below: **Save v6, boss fights, debug tooling, content/geometry, and visual items ALL PASS.** Two QA rounds of fixes landed on top of the cycle:
+- **Round 1** (`b106abd`): CPU meter now debug-session-only + no flicker; first shrine floor-grounded; hub B-wand added; spronk grab requires grounded (no from-below); spronk gives exactly +1 life.
+- **Round 2** (`2ca4956`): boss-defeat health/magic recovery deferred to the spronk touch (all dungeons); D3 Coldforge bolts now blockable with the free B-wand bolt, recharging magic (new `BlockMode::SpellAndBoltBlock`).
+
+Open: the debug-launch D8 "invisible player" softlock was **not reproducible** on re-test (deep static analysis found all D8 entrances provably clean); user is monitoring. D2 arena crystal: **user declined** (block-to-charge economy stays). Branch is merge-ready pending the user's re-QA of the two gameplay-tweak rounds.
+
 # Pre-Merge User QA Checklist (mGBA)
 
 All code is reviewed + host-tested (539/539) + ROM-building, but the following need a human at an emulator before merge (agents can build the ROM, not play it). Grouped by phase:
