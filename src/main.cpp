@@ -63,14 +63,7 @@ int main()
         }
 
         const logic::DungeonData* lvl = nullptr;
-        if(n == 1) lvl = &DUNGEON1_DUNGEON;
-        else if(n == 2) lvl = &DUNGEON2_DUNGEON;
-        else if(n == 3) lvl = &DUNGEON3_DUNGEON;
-        else if(n == 4) lvl = &DUNGEON4_DUNGEON;
-        else if(n == 5) lvl = &DUNGEON5_DUNGEON;
-        else if(n == 6) lvl = &DUNGEON6_DUNGEON;
-        else if(n == 7) lvl = &DUNGEON7_DUNGEON;
-        else if(n == 8) lvl = &DUNGEON8_DUNGEON;
+        if(n >= 1 && n <= 8) lvl = DUNGEONS_BY_ID[n - 1];
         else continue;                                // out-of-range n (no such dungeon)
 
         world.current_dungeon = n;

@@ -79,3 +79,13 @@ inline constexpr const logic::LevelData* DUNGEON9_APPROACH_ROOMS[] = { &DUNGEON9
 inline constexpr logic::DungeonData DUNGEON9_APPROACH{ DUNGEON9_APPROACH_ROOMS, 2, 0 };
 inline constexpr const logic::LevelData* DUNGEON9_ARENA_ROOMS[] = { &DUNGEON9_ARENA_DATA };
 inline constexpr logic::DungeonData DUNGEON9_ARENA{ DUNGEON9_ARENA_ROOMS, 1, 0 };
+
+// Dungeon registry (I8): index n-1 -> dungeon n's DungeonData, for n in 1..8. main.cpp's
+// dungeon-select and scene_hub's door_enterable both index off this instead of a hand-written
+// if-chain -- adding a 9th dungeon (see Appendix A's door-glyph ceiling) means adding one row
+// here plus one clause in door_enterable, not editing an if-chain in two files. Door 9 (the
+// finale) is NOT a normal dungeon and stays out of this table (see DUNGEON9_APPROACH/_ARENA
+// above and main.cpp's separate n==9 branch).
+inline constexpr const logic::DungeonData* DUNGEONS_BY_ID[8] = {
+    &DUNGEON1_DUNGEON, &DUNGEON2_DUNGEON, &DUNGEON3_DUNGEON, &DUNGEON4_DUNGEON,
+    &DUNGEON5_DUNGEON, &DUNGEON6_DUNGEON, &DUNGEON7_DUNGEON, &DUNGEON8_DUNGEON };

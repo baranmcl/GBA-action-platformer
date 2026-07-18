@@ -18,7 +18,8 @@ Grid symbols (collision tile in parens):
 
 JSON sidecar (Nth metadata entry -> Nth matching symbol in row-major scan order):
   { "tileset":"tiles",
-    "enemies":[{"patrol":[l,r], "fire_immune":false}...],   # 'o'
+    "enemies":[{"patrol":[l,r], "type":"patroller"}...],    # 'o' (type: "patroller"|"patroller_fire_immune";
+                                                              #      legacy "fire_immune":true/false also accepted)
     "gates":[{"type":"gap"}...],                            # 'G' (V/I set their type directly)
     "pickups":[{"ability":"fire"}...],                      # 'F' (default fire)
     "plates":[{"target":[tx,ty]}...],                       # '='
@@ -46,6 +47,13 @@ GATE_ENUM = {
 ABILITY_ENUM = {
     'featherleap': 'Featherleap', 'fire': 'Fire', 'ice': 'Ice', 'glide': 'Glide',
     'dash': 'Dash', 'grapple': 'Grapple', 'stone': 'Stone', 'light': 'Light',
+}
+# I10: EnemyType seam. Preferred JSON spelling for 'o' entries -> param2 bit0 (same encoding
+# the old bare "fire_immune": true/false flag used; that spelling stays accepted for back-compat
+# -- see the 'o' case in compile_level). Mirrors logic::EnemyType in include/logic/enemy.h.
+ENEMY_TYPE = {
+    'patroller': 0,
+    'patroller_fire_immune': 1,
 }
 # M12: optional room "boss" key -> the BossDef symbol (defined in logic/boss.h). EXPLICIT
 # name->symbol map; an unknown name is a compile error. D1_DEF is THE canonical symbol name.
@@ -138,7 +146,14 @@ def compile_level(txt_path, json_path):
             elif c == 'o':
                 je = j_enemies[e_idx] if e_idx < len(j_enemies) else {}
                 patrol = je.get('patrol', [x - 2, x + 2])
-                p2 = 1 if je.get('fire_immune') else 0
+                etype = je.get('type')
+                if etype is not None:
+                    if etype not in ENEMY_TYPE:
+                        raise LevelError(
+                            f"unknown enemy type '{etype}' at ({x},{y}) (known: {sorted(ENEMY_TYPE)})")
+                    p2 = ENEMY_TYPE[etype]
+                else:
+                    p2 = 1 if je.get('fire_immune') else 0  # back-compat spelling
                 enemies.append((x, y, patrol[0], patrol[1], p2))
                 e_idx += 1
             elif c == 'G':

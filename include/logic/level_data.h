@@ -4,7 +4,7 @@
 #include "logic/ability_pickup.h"   // AbilityPickup { tx, ty, ability }
 #include "logic/boss.h"             // BossDef (a boss room sets LevelData::boss = &<DEF>)
 namespace logic {
-struct EntitySpawn { int tx, ty, param0, param1, param2; }; // enemy: param0/1 patrol l/r tile; param2 flags (bit0 = fire_immune)
+struct EntitySpawn { int tx, ty, param0, param1, param2; }; // enemy: param0/1 patrol l/r tile; param2 encodes EnemyType (see logic/enemy.h's enemy_type_from_params — bit0 = fire-immune variant)
 struct GateSpawn   { int tx, ty; GateType type; int latch_id = -1; }; // latch_id -1 = not latched
 struct DoorSpawn   { int tx, ty, dungeon; };                // dungeon 1..9; 9 = finale
 struct BlockSpawn  { int tx, ty; bool pullable = false; };

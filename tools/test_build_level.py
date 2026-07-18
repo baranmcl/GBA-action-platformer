@@ -151,6 +151,21 @@ class TestBuildLevel(unittest.TestCase):
         lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4], "fire_immune": True}]})
         self.assertEqual(lvl['enemies'][0], (4, 1, 1, 4, 1))  # param2 bit0 = fire_immune
 
+    # --- I10: EnemyType "type" spelling (preferred over legacy "fire_immune") ---
+
+    def test_enemy_type_patroller(self):
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4], "type": "patroller"}]})
+        self.assertEqual(lvl['enemies'][0], (4, 1, 1, 4, 0))
+
+    def test_enemy_type_patroller_fire_immune(self):
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4], "type": "patroller_fire_immune"}]})
+        self.assertEqual(lvl['enemies'][0], (4, 1, 1, 4, 1))  # same param2 bit0 as fire_immune:true
+
+    def test_enemy_unknown_type_errors(self):
+        with self.assertRaises(build_level.LevelError) as cm:
+            compile_str(VALID, {"enemies": [{"patrol": [1, 4], "type": "flyer"}]})
+        self.assertIn('flyer', str(cm.exception))
+
     def test_plate_requires_json_target(self):
         txt = "#####\n#@=.#\n#####\n"
         with self.assertRaises(build_level.LevelError):

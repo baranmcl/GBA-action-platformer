@@ -147,3 +147,40 @@ TEST(spronk_count_three){
     w.free_spronk(2); w.free_spronk(5); w.free_spronk(8);
     CHECK_EQ(spronk_count(w), 3);
 }
+
+// --- door_enterable (I8) ---
+
+TEST(door_enterable_door1_always_open_fresh_start){
+    World w;
+    CHECK(door_enterable(1, w));
+}
+
+TEST(door_enterable_door2_locked_until_spronk1_freed){
+    World w;
+    CHECK(!door_enterable(2, w));
+    w.free_spronk(1);
+    CHECK(door_enterable(2, w));
+}
+
+TEST(door_enterable_door8_needs_spronk7_not_spronk1){
+    World w;
+    w.free_spronk(1);
+    CHECK(!door_enterable(8, w)); // only spronk 1 freed, not spronk 7
+    w.free_spronk(7);
+    CHECK(door_enterable(8, w));
+}
+
+TEST(door_enterable_door9_finale_needs_all_eight_spronks){
+    World w;
+    for(int d = 1; d <= 7; ++d) w.free_spronk(d);
+    CHECK(!door_enterable(9, w)); // only 7 of 8 freed
+    w.free_spronk(8);
+    CHECK(door_enterable(9, w));
+}
+
+TEST(door_enterable_out_of_range_n_is_false){
+    World w;
+    for(int d = 1; d <= 8; ++d) w.free_spronk(d); // even fully-unlocked state
+    CHECK(!door_enterable(0, w));
+    CHECK(!door_enterable(10, w));
+}

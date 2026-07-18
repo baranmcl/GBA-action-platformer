@@ -16,14 +16,17 @@ the top of `tools/build_level.py`.
    remediation plan; until then there is no manifest step).
 3. Hand-add the generated includes + a `DUNGEONN_ROOMS[]` array + a
    `DUNGEONN_DUNGEON` `logic::DungeonData` to `include/game/levels/dungeons.h`
-   (follow the `DUNGEON3_ROOMS` / `DUNGEON3_DUNGEON` pattern already there).
-4. Extend the dungeon-select table in `src/main.cpp` (the `if(n == 1) ... else if(n == 2) ...`
-   chain, currently ending at `else if(n == 8) lvl = &DUNGEON8_DUNGEON;`) with your new `n`.
-5. Wire the hub door:
+   (follow the `DUNGEON3_ROOMS` / `DUNGEON3_DUNGEON` pattern already there), then add one row
+   to `DUNGEONS_BY_ID[8]` (also in `dungeons.h`, right after the dungeon defs). Routing
+   (`src/main.cpp`'s `DUNGEONS_BY_ID[n-1]` lookup) and hub door-gating
+   (`logic::door_enterable` in `include/logic/world_state.h`) are both driven off `n` by a
+   formula, not a per-dungeon clause — for `n` in `1..8` they're automatic once the row
+   exists (I8). This is capped at 8 dungeon slots (see the door-glyph ceiling note below); a
+   9th dungeon needs the Appendix A rework, not just a table row.
+4. Wire the hub door:
    - Hub door: all nine `1`-`9` door glyphs in `tools/levels/hub.txt` are already allocated (D1–D8 + finale) — adding a 10th dungeon door requires the door-identity rework described in the remediation plan's Appendix A ('The 9-dungeon door-glyph ceiling', deliberately deferred). For a dungeon that REPLACES or reuses an existing slot, reuse its digit.
-   - Add its gating clause to `door_enterable()` in `src/game/scene_hub.cpp` (currently a
-     chain of `n == K && w.spronk_freed(K-1)` clauses — follow that pattern).
-6. Allocate registry ids (see [Global registries](#5-global-registries) below):
+   - Gating is automatic (see step 3) — no `door_enterable` edit needed for `n` in `1..8`.
+5. Allocate registry ids (see [Global registries](#5-global-registries) below):
    - A latch id in `[0..23]`, globally unique across all dungeons' JSON (only if the
      dungeon uses a latch — braziers/cracked-floor shortcuts).
    - A heart-container id in `[0..7]`, globally unique (only if the dungeon has a heart
@@ -31,12 +34,12 @@ the top of `tools/build_level.py`.
    - After Task 1.2 lands, `tools/validate_dungeons.py` enforces both uniqueness rules;
      today there is no automated check — grep `tools/levels/*.json` for `latch_id`/
      `heart_containers` before picking a number.
-7. Write dungeon-specific tests:
+6. Write dungeon-specific tests:
    - **Today:** copy an existing `test/test_dungeonN_level.cpp` (e.g.
      `test_dungeon8_level.cpp`) and adapt it to the new rooms/geometry.
    - **After Phase 2** of the remediation plan: build on the shared harness,
      `test/level_harness.h`, instead of copy-adapting.
-8. Build + verify:
+7. Build + verify:
    - `bash tools/host_test.sh` — must end `N/N tests passed, 0 checks failed`.
    - `bash tools/build_rom.sh` then run the ROM in mGBA — walk the new dungeon
      end-to-end (spawn -> content -> spronk/exit or boss victory -> hub return).
@@ -68,20 +71,24 @@ the top of `tools/build_level.py`.
 5. Set `"boss": "dN"` in the arena room's JSON sidecar (resolved via `BOSS_SYMBOL` above).
 6. Respect the [arena authoring constraints](#3-arena-authoring-constraints-i36) below —
    the arena room is just a normal room whose JSON has a `"boss"` key.
-7. Def-invariant tests: TODAY you must hand-write per-def structural checks in `test/test_boss.cpp` (copy the pattern of `bossdef_d3_coldforge_fields` — telegraph >= SWITCH_BUDGET per phase, end_hp descending to 0) AND add your def to `switch_budget_holds_for_all_defs`. (After the remediation plan's Phase 5 lands, one all-defs invariant loop covers every registered def automatically.) Still write a dungeon-level test per step 1.7 above for the arena room's integration.
+7. Def-invariant tests: TODAY you must hand-write per-def structural checks in `test/test_boss.cpp` (copy the pattern of `bossdef_d3_coldforge_fields` — telegraph >= SWITCH_BUDGET per phase, end_hp descending to 0) AND add your def to `switch_budget_holds_for_all_defs`. (After the remediation plan's Phase 5 lands, one all-defs invariant loop covers every registered def automatically.) Still write a dungeon-level test per step 1.6 above for the arena room's integration.
 
 ## 3. Add an enemy type
 
-*(This recipe applies after Task 6.6 of the remediation plan lands an `EnemyType` enum;
-today there is only one enemy type ('o'/`EntitySpawn`, patrol + fire-immune flag) and no
-per-type table.)*
+Since Task 6.6 of the remediation plan, enemy type is a seam: `enum class EnemyType` in
+`include/logic/enemy.h`, decoded from `EntitySpawn.param2` by `enemy_type_from_params`, and
+dispatched in `src/game/room/enemies_system.cpp`'s `spawn()` via a single `switch(type)` —
+that switch is the one place a new type's sprite/behavior gets wired in.
 
-1. Add the new value to the `EnemyType` enum and its row in the per-type behavior table.
+1. Add the new value to `EnemyType` (`include/logic/enemy.h`) and a row in
+   `enemies_system.cpp`'s `switch(logic::enemy_type_from_params(s.param2))` (sprite pick +
+   any behavior flags, following the `PatrollerFireImmune` case).
 2. Add its sprite assets (placeholder art via `tools/make_placeholder_art.py`, same
    draw/gen/register pattern as bosses above).
-3. Add a `"type"` key to the room JSON's `enemies[]` entries to select it (defaulting to
-   the existing patrol-walker type for omitted keys, to avoid a breaking change to
-   existing rooms).
+3. Add the new spelling to `ENEMY_TYPE` in `tools/build_level.py` (maps a `"type"` JSON
+   string to the same `param2` encoding as the enum) so room JSON's `enemies[]` entries can
+   select it via `{"type": "your_new_type"}`; an unknown `"type"` value is a `LevelError`.
+   Entries with no `"type"`/`"fire_immune"` key keep defaulting to the plain patrol walker.
 
 ## 4. Arena authoring constraints (I36)
 

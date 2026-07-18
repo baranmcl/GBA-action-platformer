@@ -29,18 +29,6 @@ namespace game
 {
 namespace {
     logic::Fixed fx(int v){ return logic::Fixed::from_int(v); }
-    // Door N enterable: D1 always; each next door opens once the prior dungeon's spronk is freed.
-    bool door_enterable(int n, const logic::World& w){
-        return n == 1
-            || (n == 2 && w.spronk_freed(1))
-            || (n == 3 && w.spronk_freed(2))
-            || (n == 4 && w.spronk_freed(3))
-            || (n == 5 && w.spronk_freed(4))
-            || (n == 6 && w.spronk_freed(5))
-            || (n == 7 && w.spronk_freed(6))
-            || (n == 8 && w.spronk_freed(7))
-            || (n == 9 && logic::spronk_count(w) == 8); // Door 9 (finale) opens only when ALL 8 spronks are freed
-    }
 }
 
 HubResult run_hub(logic::World& world, logic::PlayerState& ps)
@@ -65,7 +53,7 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
     for(int i = 0; i < HUB_DATA.door_count; ++i)
     {
         const logic::DoorSpawn& dr = HUB_DATA.doors[i];
-        int t = door_enterable(dr.dungeon, world) ? logic::tiles::DOOR_OPEN : logic::tiles::DOOR_LOCKED;
+        int t = logic::door_enterable(dr.dungeon, world) ? logic::tiles::DOOR_OPEN : logic::tiles::DOOR_LOCKED;
         for(int dy = 0; dy < 4; ++dy)
             for(int dx = 0; dx < 2; ++dx)
                 engine::set_level_tile(lvl.view, dr.tx + dx, dr.ty - dy, t);
@@ -155,7 +143,7 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
             for(int i = 0; i < HUB_DATA.door_count; ++i)
             {
                 const logic::DoorSpawn& dr = HUB_DATA.doors[i];
-                if(!door_enterable(dr.dungeon, world)) continue;
+                if(!logic::door_enterable(dr.dungeon, world)) continue;
                 logic::Body door; // matches the 2x4 archway region
                 door.half_w = fx(8); door.half_h = fx(16);
                 door.pos = { fx(dr.tx * 8), fx((dr.ty - 3) * 8) };

@@ -52,6 +52,17 @@ inline int max_health_for(const World& w){
 // Lives helpers — mirror max_health_for pattern.
 // max_lives: 3 base + 1 per freed spronk (each rescued spronk grants +1 permanent max).
 inline int spronk_count(const World& w){ return __builtin_popcount((unsigned)w.spronks_freed); }
+
+// Door-gating rule (I8): door 1 (n==1) is always enterable; doors 2..8 each need the PRIOR
+// dungeon's spronk freed (door n needs spronk n-1); door 9 (the finale) needs all 8 spronks
+// freed. Single source of truth for scene_hub's door render + door-entry check, replacing a
+// hand-scattered 9-disjunct if-chain duplicated in two call sites.
+inline bool door_enterable(int n, const World& w){
+    return n == 1
+        || (n >= 2 && n <= 8 && w.spronk_freed(n - 1))
+        || (n == 9 && spronk_count(w) == 8);
+}
+
 inline int max_lives(const World& w){ return World::STARTING_LIVES + spronk_count(w); }
 inline void refill_lives(World& w){ w.lives = (uint8_t)max_lives(w); }
 inline void lose_life(World& w){ if(w.lives > 0) --w.lives; }

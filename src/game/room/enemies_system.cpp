@@ -13,7 +13,7 @@ namespace {
 
 void EnemiesSystem::spawn(const logic::LevelData& level, Ctx& ctx)
 {
-    // ---- enemies (fire_immune from param2 bit0) ----
+    // ---- enemies: type decoded from param2 (I10 seam) ----
     for(int i = 0; i < level.enemy_count && i < 8; ++i){
         const logic::EntitySpawn& s = level.enemies[i];
         _enemies.push_back(EnemyInst{});
@@ -21,9 +21,21 @@ void EnemiesSystem::spawn(const logic::LevelData& level, Ctx& ctx)
         inst.e.body.half_w = fx(8); inst.e.body.half_h = fx(8);
         inst.e.body.pos = { fx(s.tx * 8), fx(s.ty * 8) };
         inst.e.left_bound = fx(s.param0 * 8); inst.e.right_bound = fx(s.param1 * 8);
-        inst.e.fire_immune = (s.param2 & 1) != 0;
-        inst.sprite = (inst.e.fire_immune ? bn::sprite_items::fire_enemy.create_sprite(0, 0)
-                                          : bn::sprite_items::enemy.create_sprite(0, 0));
+
+        // The ONE place a future enemy type (flyer, shooter, ...) adds a row: set
+        // fire_immune + pick the sprite per type. Behavior for the two existing
+        // types is unchanged from the old `(s.param2 & 1)` ternary.
+        switch(logic::enemy_type_from_params(s.param2)){
+            case logic::EnemyType::PatrollerFireImmune:
+                inst.e.fire_immune = true;
+                inst.sprite = bn::sprite_items::fire_enemy.create_sprite(0, 0);
+                break;
+            case logic::EnemyType::Patroller:
+            default:
+                inst.e.fire_immune = false;
+                inst.sprite = bn::sprite_items::enemy.create_sprite(0, 0);
+                break;
+        }
         inst.sprite->set_camera(ctx.cam);
     }
 }
