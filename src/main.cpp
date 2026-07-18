@@ -3,6 +3,7 @@
 #include "logic/world_state.h"
 #include "logic/player_state.h"
 #include "engine/save.h"
+#include "engine/pause.h"
 #include "game/scene_title.h"
 #include "game/scene_hub.h"
 #include "game/scene_dungeon.h"
@@ -35,6 +36,7 @@ int main()
         if(dl.dungeon != 0)
         {
             engine::set_save_enabled(false); // linchpin: nothing below can reach SRAM until re-enabled
+            engine::set_cpu_meter_enabled(true); // debug session: show the pause-screen CPU meter
             logic::World dbg_world = dl.world;
             dbg_world.current_dungeon = dl.dungeon;
             logic::PlayerState dbg_ps;
@@ -53,6 +55,7 @@ int main()
                 game::run_dungeon(*lvl, dbg_world, dbg_ps);
             }
 
+            engine::set_cpu_meter_enabled(false); // debug session over: hide the CPU meter again
             engine::set_save_enabled(true); // restore normal saving for the rest of the session
         }
         // Loop back to the title; dl.dungeon == 0 (cancelled) also lands here.

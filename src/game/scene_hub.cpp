@@ -15,6 +15,7 @@
 #include "logic/collision.h"   // aabb_overlap
 #include "logic/world_state.h" // World
 #include "logic/player_state.h" // sync_health_cap (heart-container max-HP sync)
+#include "engine/bolts.h"
 #include "engine/spell_pool.h"
 #include "engine/level_loader.h"
 #include "engine/level_view.h"  // set_level_tile
@@ -94,6 +95,7 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
     logic::Meter& magic = ps.magic;   // earned-magic pool (banked across hub <-> dungeon)
 
     engine::Avatar avatar(player, lvl.view.map_px_w, lvl.view.map_px_h, cam);
+    engine::BoltPool bolts(lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::SpellPool spells(lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::Hud hud; // shows the persistent health/magic in the hub too
 
@@ -132,6 +134,9 @@ HubResult run_hub(logic::World& world, logic::PlayerState& ps)
             session.note_anchor_miss(player.facing);
 
         // Shot aim (Zelda II style, shared with the boss/dungeon): UP = high, DOWN = low, else medium.
+        // Always-available wand (basic B attack), mirrored from play_room -- the hub had a
+        // SpellPool but no BoltPool, so B did nothing here.
+        bolts.update(intent.in.fire_pressed, session.muzzle(), player.facing, lvl.map);
         spells.update_and_cast(intent.cast_spell, ps.spell, magic, session.muzzle(), player.facing, lvl.map);
         spells.despawn_on_solid(lvl.map);
 

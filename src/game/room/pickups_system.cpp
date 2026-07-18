@@ -44,7 +44,10 @@ void PickupsSystem::spawn(const logic::LevelData& level, Ctx& ctx)
         ShrineInst& si = _shrines.back();
         si.sprite = bn::sprite_items::shrine.create_sprite(0, 0);
         si.sprite->set_camera(cam);
-        si.sprite->set_position(wx(p.tx * 8 + 8), wy(p.ty * 8 + 8));
+        // Ground the shrine on the floor-scanned row below the authored tile (same pattern as the
+        // cage/heart above), so a shrine authored above a deeper floor doesn't embed in it.
+        int shrine_fr = floor_row_below(ctx.lvl.map, p.tx, p.ty);
+        si.sprite->set_position(wx(p.tx * 8 + 8), wy(shrine_fr * 8 - 8));
         si.sprite->set_visible(!world.has(p.ability));   // already taken on a continued game
     }
 
@@ -116,11 +119,17 @@ bool PickupsSystem::check_spronk_and_exit(Ctx& ctx)
     // ---- spronk rescue (marks the dungeon cleared; abilities now come from F pickups) ----
     if(_has_cage){
         bool was = world.spronk_freed(d);
-        logic::try_free_spronk(ctx.player.body, _cage, world, d);
+        // Grounded-only, mirroring the exit's on_ground gate (no head-bump cheese): a tall cage on
+        // a ledge can otherwise be overlapped by jumping up underneath the platform. Normal grabs
+        // are grounded anyway (you walk/stand onto the cage), so this only blocks the mid-air
+        // from-below grab.
+        if(ctx.player.body.on_ground)
+            logic::try_free_spronk(ctx.player.body, _cage, world, d);
         if(world.spronk_freed(d) && !was){
             if(_spronk) _spronk->set_visible(false);
-            logic::refill_lives(world);   // freeing the spronk grants +1 max (via spronks_freed) AND refills NOW (on pickup, not on exit)
-            engine::write_world(world);   // persist the new max + refilled lives immediately
+            // Freeing the spronk grants +1 max (via spronks_freed) AND +1 current life (not a full refill).
+            logic::gain_life(world);
+            engine::write_world(world);   // persist the new max + granted life immediately
         }
     }
 

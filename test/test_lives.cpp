@@ -102,6 +102,33 @@ TEST(refill_lives_already_at_max_unchanged){
     CHECK_EQ((int)w.lives, 3);
 }
 
+// --- gain_life ---
+
+TEST(gain_life_grants_exactly_one_after_spronk_freed){
+    World w;
+    w.lives = 2; // starting max 3, lost a life
+    w.free_spronk(1); // freeing a spronk grows max to 4
+    gain_life(w);
+    CHECK_EQ((int)w.lives, 3); // +1, NOT a full refill to 4
+}
+
+TEST(gain_life_at_old_max_grants_one_more_via_new_cap){
+    World w;
+    // lives == 3, the max at 0 spronks (full)
+    CHECK_EQ((int)w.lives, 3);
+    w.free_spronk(1); // freeing a spronk grows max to 4
+    gain_life(w);
+    CHECK_EQ((int)w.lives, 4); // +1 up to the new max
+}
+
+TEST(gain_life_at_max_is_noop){
+    World w;
+    w.free_spronk(1); // max = 4
+    w.lives = 4;       // already at max
+    gain_life(w);
+    CHECK_EQ((int)w.lives, 4); // cannot exceed max
+}
+
 // --- clamp_lives_on_load ---
 
 TEST(clamp_lives_on_load_zero_becomes_max){
