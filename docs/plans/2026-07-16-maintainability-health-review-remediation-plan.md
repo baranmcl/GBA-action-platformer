@@ -86,7 +86,7 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** 7/7 phases code-complete on branch `fix/health-review-remediation` (34 tasks). Host tests 455→539. Pending before merge: user mGBA QA (see the pre-merge checklist appended below) + final whole-branch review. Phase 5's Task 5.5 (fight-matrix QA) and all per-task emulator smokes are user-blocked and consolidated into that checklist.
+**Overall:** 7/7 phases code-complete on branch `fix/health-review-remediation` (34 tasks + tidy-up `e6a41b8`; ~50 commits over `40bf96c..HEAD`). Host tests 455→539; scene_dungeon.cpp 1420→469, scene_boss.cpp 446→63. Final whole-branch review (2026-07-17, opus): **MERGE-READY** — cross-phase coherence confirmed, no Critical/Important, all accumulated Minors triaged (one fixed in the tidy-up, rest deferred). **The only remaining gate is user mGBA QA** (pre-merge checklist below) — agents build the ROM but can't play it. Every per-task review passed spec+quality; the plan is a complete durable record of the cycle.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
