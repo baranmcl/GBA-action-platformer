@@ -627,6 +627,24 @@ class TestBuildLevel(unittest.TestCase):
         self.assertEqual(len(lvl['enemies']), 8)
         self.assertEqual(lvl['w'], 64)
 
+    # --- I23: empty entity lists emit a null pointer, not a dummy one-element array ---
+    def test_empty_gates_emit_nullptr(self):
+        # No 'G'/'V'/'I'/'W' symbols -> GATES must be a null pointer, not `{ {`.
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4]}]})
+        hdr = build_level.emit_header(lvl, "TESTNULLGATES")
+        self.assertIn("TESTNULLGATES_GATES = nullptr;", hdr)
+        self.assertNotIn("TESTNULLGATES_GATES[] = { {", hdr)
+        self.assertIn("TESTNULLGATES_GATES, 0", hdr)
+
+    def test_nonempty_gates_still_emit_array(self):
+        # A level with real gates must still emit a real array (not nullptr).
+        txt = "######\n#@VI.#\n######\n"
+        lvl = compile_str(txt, {})
+        hdr = build_level.emit_header(lvl, "TESTREALGATES")
+        self.assertIn("TESTREALGATES_GATES[] = {", hdr)
+        self.assertNotIn("TESTREALGATES_GATES = nullptr;", hdr)
+        self.assertIn("TESTREALGATES_GATES, 2", hdr)
+
 
 if __name__ == '__main__':
     unittest.main()

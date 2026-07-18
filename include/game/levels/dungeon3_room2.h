@@ -2,21 +2,21 @@
 #include "logic/level_data.h"
 
 inline constexpr unsigned char DUNGEON3_ROOM2_TILES[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
-inline constexpr logic::EntitySpawn DUNGEON3_ROOM2_ENEMIES[] = { {0,0,0,0,0} };
-inline constexpr logic::GateSpawn DUNGEON3_ROOM2_GATES[] = { {0,0,logic::GateType::Gap,-1} };
-inline constexpr logic::DoorSpawn DUNGEON3_ROOM2_DOORS[] = { {0,0,0} };
-inline constexpr logic::AbilityPickup DUNGEON3_ROOM2_PICKUPS[] = { {0,0,logic::Ability::Fire} };
-inline constexpr logic::BlockSpawn DUNGEON3_ROOM2_BLOCKS[] = { {0,0,false} };
-inline constexpr logic::PlateSpawn DUNGEON3_ROOM2_PLATES[] = { {0,0,0,0,false,-1} };
-inline constexpr logic::ButtonSpawn DUNGEON3_ROOM2_BUTTONS[] = { {0,0,0,0} };
-inline constexpr logic::BrazierSpawn DUNGEON3_ROOM2_BRAZIERS[] = { {0,0,0} };
-inline constexpr logic::BrazierGroupSpawn DUNGEON3_ROOM2_BRAZIER_GROUPS[] = { {0,0,0,-1} };
+inline constexpr logic::EntitySpawn* DUNGEON3_ROOM2_ENEMIES = nullptr;
+inline constexpr logic::GateSpawn* DUNGEON3_ROOM2_GATES = nullptr;
+inline constexpr logic::DoorSpawn* DUNGEON3_ROOM2_DOORS = nullptr;
+inline constexpr logic::AbilityPickup* DUNGEON3_ROOM2_PICKUPS = nullptr;
+inline constexpr logic::BlockSpawn* DUNGEON3_ROOM2_BLOCKS = nullptr;
+inline constexpr logic::PlateSpawn* DUNGEON3_ROOM2_PLATES = nullptr;
+inline constexpr logic::ButtonSpawn* DUNGEON3_ROOM2_BUTTONS = nullptr;
+inline constexpr logic::BrazierSpawn* DUNGEON3_ROOM2_BRAZIERS = nullptr;
+inline constexpr logic::BrazierGroupSpawn* DUNGEON3_ROOM2_BRAZIER_GROUPS = nullptr;
 inline constexpr logic::EntranceSpawn DUNGEON3_ROOM2_ENTRANCES[] = { {0,5,16,1} };
 inline constexpr logic::RoomDoorSpawn DUNGEON3_ROOM2_ROOM_DOORS[] = { {6,16,1,1} };
-inline constexpr logic::HeartContainerSpawn DUNGEON3_ROOM2_HEART_CONTAINERS[] = { {0,0,0} };
-inline constexpr logic::BoulderSpawn DUNGEON3_ROOM2_BOULDERS[] = { {0,0} };
-inline constexpr logic::LoosePlatformSpawn DUNGEON3_ROOM2_LOOSE_PLATFORMS[] = { {0,0,1} };
-inline constexpr logic::HiddenPlatformSpawn DUNGEON3_ROOM2_HIDDEN_PLATFORMS[] = { {0,0,1} };
-inline constexpr logic::MagicCrystalSpawn DUNGEON3_ROOM2_MAGIC_CRYSTALS[] = { {0,0} };
+inline constexpr logic::HeartContainerSpawn* DUNGEON3_ROOM2_HEART_CONTAINERS = nullptr;
+inline constexpr logic::BoulderSpawn* DUNGEON3_ROOM2_BOULDERS = nullptr;
+inline constexpr logic::LoosePlatformSpawn* DUNGEON3_ROOM2_LOOSE_PLATFORMS = nullptr;
+inline constexpr logic::HiddenPlatformSpawn* DUNGEON3_ROOM2_HIDDEN_PLATFORMS = nullptr;
+inline constexpr logic::MagicCrystalSpawn* DUNGEON3_ROOM2_MAGIC_CRYSTALS = nullptr;
 inline constexpr logic::LevelData DUNGEON3_ROOM2_DATA = { DUNGEON3_ROOM2_TILES, 48, 19, 3, 16, true, 25, 16, true, 36, 16, DUNGEON3_ROOM2_ENEMIES, 0, DUNGEON3_ROOM2_GATES, 0, DUNGEON3_ROOM2_DOORS, 0, DUNGEON3_ROOM2_PICKUPS, 0, DUNGEON3_ROOM2_BLOCKS, 0, DUNGEON3_ROOM2_PLATES, 0, DUNGEON3_ROOM2_BUTTONS, 0, DUNGEON3_ROOM2_BRAZIERS, 0, DUNGEON3_ROOM2_BRAZIER_GROUPS, 0, DUNGEON3_ROOM2_ENTRANCES, 1, DUNGEON3_ROOM2_ROOM_DOORS, 1, DUNGEON3_ROOM2_HEART_CONTAINERS, 0, DUNGEON3_ROOM2_BOULDERS, 0, DUNGEON3_ROOM2_LOOSE_PLATFORMS, 0, DUNGEON3_ROOM2_HIDDEN_PLATFORMS, 0, DUNGEON3_ROOM2_MAGIC_CRYSTALS, 0, nullptr };
 

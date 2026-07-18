@@ -334,11 +334,16 @@ def emit_header(level, name):
         return ', '.join(str(v) for v in vals)
 
     def emit_array(cpp_type, var, items, dummy):
-        """Emit an inline constexpr array (1-element dummy when empty) + return its count."""
+        """Emit an inline constexpr array (nullptr when empty) + return its count.
+
+        `dummy` is unused now that empty lists emit a null pointer instead of a
+        fake one-element array; kept as a parameter so call sites don't need to
+        change (harmless dead argument, avoids a noisy diff at every call site).
+        """
         if items:
             body = ', '.join(items)
             return (f'inline constexpr {cpp_type} {name}_{var}[] = {{ {body} }};', len(items))
-        return (f'inline constexpr {cpp_type} {name}_{var}[] = {{ {dummy} }};', 0)
+        return (f'inline constexpr {cpp_type}* {name}_{var} = nullptr;', 0)
 
     L = ['#pragma once', '#include "logic/level_data.h"']
     if level.get('boss'):

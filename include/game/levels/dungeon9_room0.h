@@ -2,21 +2,21 @@
 #include "logic/level_data.h"
 
 inline constexpr unsigned char DUNGEON9_ROOM0_TILES[] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
-inline constexpr logic::EntitySpawn DUNGEON9_ROOM0_ENEMIES[] = { {0,0,0,0,0} };
-inline constexpr logic::GateSpawn DUNGEON9_ROOM0_GATES[] = { {0,0,logic::GateType::Gap,-1} };
-inline constexpr logic::DoorSpawn DUNGEON9_ROOM0_DOORS[] = { {0,0,0} };
-inline constexpr logic::AbilityPickup DUNGEON9_ROOM0_PICKUPS[] = { {0,0,logic::Ability::Fire} };
-inline constexpr logic::BlockSpawn DUNGEON9_ROOM0_BLOCKS[] = { {0,0,false} };
-inline constexpr logic::PlateSpawn DUNGEON9_ROOM0_PLATES[] = { {0,0,0,0,false,-1} };
-inline constexpr logic::ButtonSpawn DUNGEON9_ROOM0_BUTTONS[] = { {0,0,0,0} };
-inline constexpr logic::BrazierSpawn DUNGEON9_ROOM0_BRAZIERS[] = { {0,0,0} };
-inline constexpr logic::BrazierGroupSpawn DUNGEON9_ROOM0_BRAZIER_GROUPS[] = { {0,0,0,-1} };
+inline constexpr logic::EntitySpawn* DUNGEON9_ROOM0_ENEMIES = nullptr;
+inline constexpr logic::GateSpawn* DUNGEON9_ROOM0_GATES = nullptr;
+inline constexpr logic::DoorSpawn* DUNGEON9_ROOM0_DOORS = nullptr;
+inline constexpr logic::AbilityPickup* DUNGEON9_ROOM0_PICKUPS = nullptr;
+inline constexpr logic::BlockSpawn* DUNGEON9_ROOM0_BLOCKS = nullptr;
+inline constexpr logic::PlateSpawn* DUNGEON9_ROOM0_PLATES = nullptr;
+inline constexpr logic::ButtonSpawn* DUNGEON9_ROOM0_BUTTONS = nullptr;
+inline constexpr logic::BrazierSpawn* DUNGEON9_ROOM0_BRAZIERS = nullptr;
+inline constexpr logic::BrazierGroupSpawn* DUNGEON9_ROOM0_BRAZIER_GROUPS = nullptr;
 inline constexpr logic::EntranceSpawn DUNGEON9_ROOM0_ENTRANCES[] = { {0,2,28,1}, {1,25,28,-1} };
 inline constexpr logic::RoomDoorSpawn DUNGEON9_ROOM0_ROOM_DOORS[] = { {5,28,-1,0}, {23,28,1,0} };
-inline constexpr logic::HeartContainerSpawn DUNGEON9_ROOM0_HEART_CONTAINERS[] = { {0,0,0} };
-inline constexpr logic::BoulderSpawn DUNGEON9_ROOM0_BOULDERS[] = { {0,0} };
-inline constexpr logic::LoosePlatformSpawn DUNGEON9_ROOM0_LOOSE_PLATFORMS[] = { {0,0,1} };
-inline constexpr logic::HiddenPlatformSpawn DUNGEON9_ROOM0_HIDDEN_PLATFORMS[] = { {0,0,1} };
-inline constexpr logic::MagicCrystalSpawn DUNGEON9_ROOM0_MAGIC_CRYSTALS[] = { {0,0} };
+inline constexpr logic::HeartContainerSpawn* DUNGEON9_ROOM0_HEART_CONTAINERS = nullptr;
+inline constexpr logic::BoulderSpawn* DUNGEON9_ROOM0_BOULDERS = nullptr;
+inline constexpr logic::LoosePlatformSpawn* DUNGEON9_ROOM0_LOOSE_PLATFORMS = nullptr;
+inline constexpr logic::HiddenPlatformSpawn* DUNGEON9_ROOM0_HIDDEN_PLATFORMS = nullptr;
+inline constexpr logic::MagicCrystalSpawn* DUNGEON9_ROOM0_MAGIC_CRYSTALS = nullptr;
 inline constexpr logic::LevelData DUNGEON9_ROOM0_DATA = { DUNGEON9_ROOM0_TILES, 40, 32, 3, 28, false, 0, 0, false, 0, 0, DUNGEON9_ROOM0_ENEMIES, 0, DUNGEON9_ROOM0_GATES, 0, DUNGEON9_ROOM0_DOORS, 0, DUNGEON9_ROOM0_PICKUPS, 0, DUNGEON9_ROOM0_BLOCKS, 0, DUNGEON9_ROOM0_PLATES, 0, DUNGEON9_ROOM0_BUTTONS, 0, DUNGEON9_ROOM0_BRAZIERS, 0, DUNGEON9_ROOM0_BRAZIER_GROUPS, 0, DUNGEON9_ROOM0_ENTRANCES, 2, DUNGEON9_ROOM0_ROOM_DOORS, 2, DUNGEON9_ROOM0_HEART_CONTAINERS, 0, DUNGEON9_ROOM0_BOULDERS, 0, DUNGEON9_ROOM0_LOOSE_PLATFORMS, 0, DUNGEON9_ROOM0_HIDDEN_PLATFORMS, 0, DUNGEON9_ROOM0_MAGIC_CRYSTALS, 0, nullptr };
 
