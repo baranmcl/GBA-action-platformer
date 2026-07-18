@@ -70,6 +70,7 @@ static const bn::sprite_item& boss_sprite_for(const logic::BossDef* def){
         case logic::BossId::D3Coldforge: return bn::sprite_items::coldforge;
         case logic::BossId::D1Guardian:  return bn::sprite_items::guardian;
         default: BN_ERROR("no sprite mapped for boss id ", (int)def->id);
+                 return bn::sprite_items::guardian;
     }
 }
 

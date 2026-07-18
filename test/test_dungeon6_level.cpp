@@ -245,15 +245,18 @@ TEST(d6_brazier_hitbox_tracks_floor_row){
     // hit rows (14..19) the pre-fix hardcoded body used. This proves that identity holds for every
     // authored D6 brazier -- a regression if a future re-layout moves a brazier onto a non-standard
     // floor without updating this expectation (ledge rooms would then correctly get a different row).
+    int braziers = 0;
     for(int r = 0; r < D6_N; ++r){
         const LevelData& L = *D6_ROOMS[r];
         Tilemap map{ L.w, L.h, L.tiles };
         for(int i = 0; i < L.brazier_count; ++i){
+            ++braziers;
             int draw_ty = game::floor_row_below(map, L.braziers[i].tx, L.braziers[i].ty) - 1;
             CHECK_EQ(draw_ty, 19);        // standard row-20 floor
             CHECK_EQ(draw_ty - 5, 14);    // hit rows 14..19, matching the pre-fix hardcoded body
         }
     }
+    CHECK(braziers >= 1);
 }
 
 TEST(d6_cage_and_exit_on_floor_row){
