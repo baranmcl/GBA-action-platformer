@@ -86,7 +86,7 @@ notes and commit messages.
 
 ## Execution Status
 
-**Overall:** 1/7 phases shipped (Phase 0); Phase 1 in progress on branch `fix/health-review-remediation`.
+**Overall:** 7/7 phases code-complete on branch `fix/health-review-remediation` (34 tasks). Host tests 455→539. Pending before merge: user mGBA QA (see the pre-merge checklist appended below) + final whole-branch review. Phase 5's Task 5.5 (fight-matrix QA) and all per-task emulator smokes are user-blocked and consolidated into that checklist.
 
 | Phase | Status | Ship SHA(s) | Notes |
 |---|---|---|---|
@@ -101,7 +101,7 @@ notes and commit messages.
 | 3 — Save v6 | ⬜ Not started | — | — |
 | 4 — Shared constants + player session | ⬜ Not started | — | — |
 | 5 — Boss-loop unification | ⬜ Not started | — | — |
-| 6 — play_room decomposition + minors | ⬜ Not started | — | — |
+| 6 — play_room decomposition + minors | ✅ Shipped | `dbe3b8a..536045d` | 2026-07-17; 539/539; scene_dungeon 1420→468 |
 
 ### Deviations
 - **Task 5.5 ordering:** the plan makes 5.5 (manual fight-matrix mGBA QA) block Phase 6. Executed autonomously, the emulator gate can't run mid-session, and Phase 6 is code-independent of fight behavior (it decomposes `play_room`; it only required `run_room_boss` to be deleted, which Task 5.4 did). Decision: proceed into Phase 6; 5.5 + all accumulated mGBA QA move to the pre-merge user checklist. The gate's intent (don't build atop unverified fights) is preserved because Phase 6 builds on none of the fight code.
@@ -942,7 +942,7 @@ static const bn::sprite_item& boss_sprite_for(const logic::BossDef* def){
 
 # Phase 6 — play_room decomposition + remaining minors
 
-**Execution Status:** ⬜ NOT STARTED
+**Execution Status:** ✅ SHIPPED at `dbe3b8a..536045d` on 2026-07-17 (7 tasks, 1 self-caught + fixed regression; 539/539; ROM green). play_room decomposed into 6 room-system units (pickups/doors/gates/triggers/enemies/terrain) — scene_dungeon.cpp 1420→468 (I1 resolved); brazier+cracked-floor geometry fixed; 5 new IMPL pitfalls; empty arrays→nullptr; enemy-type seam + dungeon registry + host-tested door gating; debug selector (save-gated) + CPU meter. mGBA smokes for each moved family + the debug save-safety check are on the pre-merge user checklist.
 
 Split the 850-line room loop into room-subsystem units with an explicit update order (I1); land the enemy-type seam (I10) and the remaining minors (I23, I25, I26, I27, I28, I35). Dimensions: Code Quality + Architecture + Content DX + Ops. Depends on Phases 4+5 (play_room already consumes PlayerSession; run_room_boss is gone).
 
@@ -1024,6 +1024,41 @@ main.cpp's if-chain becomes `if(n >= 1 && n <= 8) lvl = DUNGEONS_BY_ID[n-1]; els
 Do NOT: persist debug-granted state to SRAM; add the meter outside the pause screen (zero cost when unused).
 
 **After completing Phase 6:** 3-round review + the full-game mGBA regression walk + `bash tools/host_test.sh` + `python tools/check_logic_purity.py` + `bash tools/build_rom.sh`. Update project memory: the `share-player-ability-controller` and `dungeon-progression-debug-selector` memories are now DONE (update/remove them); update `boss-fight-scope` (framework unified).
+
+---
+
+# Pre-Merge User QA Checklist (mGBA)
+
+All code is reviewed + host-tested (539/539) + ROM-building, but the following need a human at an emulator before merge (agents can build the ROM, not play it). Grouped by phase:
+
+**Save v6 (Phase 3) — highest priority (data safety):**
+- [ ] Power-cycle persistence: play to a latch/pickup, reset, confirm progress kept.
+- [ ] Corruption recovery: hex-edit slot A's first bytes, boot → recovers from slot B (not a fresh game).
+- [ ] Fresh boot on empty SRAM → new game (not garbage).
+- [ ] v5→v6 migration: boot an existing pre-change .sav → progress intact, then re-save (now v6 dual-slot).
+
+**Boss fights (Phase 5, Task 5.5 fight matrix) — all four fights end-to-end:**
+- [ ] King finale: teleports, bolt+spell block, Light-expose→wound→warp, P2/P3 taunts, intro/death lines, Game-Over Continue + Quit, Victory→THE END.
+- [ ] D1 Guardian (TiredWindow, dodge-only), D2 Slagshell (pacing, Fire block, rockfall 3→5), D3 Coldforge (element shift, 4-frame sprite, Fire+Ice block).
+- [ ] Each: one death (restart replays intro), one Game-Over.
+- [ ] Defeated-boss skip: beat a room boss, exit to hub, re-enter → no re-fight, onward door open.
+
+**Content/geometry (Phases 1 & 6):**
+- [ ] Heavy-plate latch persists across room re-entry (D7 room0 heavy plate).
+- [ ] D7 room2 stacked-cracked-floor pound chain still re-arms; boulder + loose-platform pound steps fire.
+- [ ] D2 brazier puzzle; a plate/button gate.
+- [ ] D8 Light hidden-platform climb; block-pull + enemy-pull grapple.
+- [ ] 18-pip HUD health bar on a 3-heart save; damage from full is visible.
+- [ ] One-room smoke of each dungeon D1–D9-approach (the decomposition touched the shared room loop).
+
+**Debug tooling (Phase 6.7) — CRITICAL save-safety check:**
+- [ ] SELECT+START at boot title → debug menu; pick D8 + all abilities + 7 spronks → launches.
+- [ ] Pause (START) shows the CPU line.
+- [ ] **Confirm a debug session does NOT overwrite a real save** (launch debug with a real .sav present, play/die/collect, reset → real save intact).
+
+**Visual (deferred art-eyeball items surfaced during review):**
+- [ ] Boss crystal sprite grounding (FloorBelow) reads right in the King arena + room arenas.
+- [ ] D3 dormant fire-head palette (pal 14) doesn't read as "two ice heads" (pre-existing M14 note).
 
 ---
 
