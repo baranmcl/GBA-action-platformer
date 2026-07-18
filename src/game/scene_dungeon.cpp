@@ -8,10 +8,6 @@
 #include "bn_sprite_ptr.h"
 #include "bn_keypad.h"
 #include "bn_vector.h"
-#include "bn_optional.h"
-#include "bn_sprite_items_enemy.h"
-#include "bn_sprite_items_fire_enemy.h"
-#include "bn_sprite_items_block.h"
 #include "bn_sprite_items_fire_proj.h"
 #include "bn_sprite_items_ice_proj.h"
 #include "bn_sprite_items_light_proj.h"
@@ -21,19 +17,14 @@
 #include "bn_sprite_items_slagshell.h" // M13: D2 Ember Caverns boss sprite (Slagshell, 2 frames)
 #include "bn_sprite_items_coldforge.h" // M14: D3 Frost Hollow boss sprite (Coldforge Twins, 4 frames)
 
-#include "logic/reveal.h"
-
 #include "logic/tilemap.h"
 #include "logic/world_state.h"   // max_health_for, collect/has heart container
 #include "logic/player.h"
-#include "logic/enemy.h"
 #include "logic/meters.h"
 #include "logic/combat_rules.h"  // shared damage/i-frame/respawn constants + frame-step (M-remediation)
 #include "logic/spell.h"
 #include "logic/hazard.h"
-#include "logic/pushable_block.h"
 #include "logic/tile_ids.h"
-#include "logic/stone_impact.h" // loose_platform_in_shockwave (pound shockwave radius)
 #include "logic/room_graph.h"   // find_entrance (room_door_at now lives in game::DoorsSystem)
 #include "engine/level_loader.h"  // load_level, set_collision_tile
 #include "engine/level_view.h"    // set_level_tile
@@ -54,6 +45,8 @@
 #include "game/room/doors_system.h"      // room-door + exit archway render/Up-press (Task 6.1)
 #include "game/room/gates_system.h"      // gates + cracked floors (Task 6.2)
 #include "game/room/triggers_system.h"   // braziers + plate/button/brazier-group triggers (Task 6.2)
+#include "game/room/enemies_system.h"    // patrolling enemies (Task 6.3)
+#include "game/room/terrain_system.h"    // blocks/boulders/loose+hidden platforms + pound resolution (Task 6.3)
 
 namespace game
 {
@@ -68,28 +61,14 @@ namespace
         int target_entrance = 0;
     };
 
-    struct EnemyInst { logic::Enemy e; bn::optional<bn::sprite_ptr> sprite; };
-    struct BlockInst { logic::PushableBlock blk; bn::optional<bn::sprite_ptr> sprite; bool pullable = false; };
-    // M8 Stone: a breakable solid boulder (NOT pushable). Solid tile + sprite; removed on a pound.
-    struct BoulderInst { int tx, ty; bn::optional<bn::sprite_ptr> sprite; bool broken = false; };
-    // M8 Stone: a horizontal run of `len` tiles, suspended, that DROPS straight down (drop-to-rest,
-    // no momentum) when a pound's shockwave lands within Chebyshev distance <=6. Collision tiles + sprites.
-    struct LoosePlatformInst {
-        int tx, ty, len, cur_ty;
-        bool falling = false, fallen = false;
-        bn::vector<bn::sprite_ptr, 8> sprites;   // one per tile in the run
-    };
-    // M10 Light: a horizontal run of `len` tiles that is NON-solid + invisible until a Light cast
-    // reveals it (RevealState window) — then solid + visible; reverts when the timer expires.
-    struct HiddenPlatformInst {
-        int tx, ty, len;
-        bool shown = false;
-        bn::vector<bn::sprite_ptr, 8> sprites;   // one per tile in the run
-    };
     // NOTE (Task 6.2): GateInst/CrackedFloorInst/BrazierInst/TriggerInst + floor_row_below/
     // persist_latch/tile_body/fill_column/open_column moved out with the gates/braziers/triggers
     // families -- see game::GatesSystem (src/game/room/gates_system.cpp) and game::TriggersSystem
-    // (src/game/room/triggers_system.cpp). Nothing left in this function needs them.
+    // (src/game/room/triggers_system.cpp).
+    // NOTE (Task 6.3): EnemyInst moved to game::EnemiesSystem (src/game/room/enemies_system.h);
+    // BlockInst/BoulderInst/LoosePlatformInst/HiddenPlatformInst + the pound-resolution handler
+    // moved to game::TerrainSystem (src/game/room/terrain_system.h). Nothing left in this
+    // function needs the old local struct defs.
 }
 
 // ---------------------------------------------------------------------------
@@ -185,86 +164,24 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     //      were extracted out of this function's body. spawn() below fills in for the removed
     //      cage/spronk, exit, ability-shrine, heart-container, magic-crystal, room-door-archway,
     //      and exit-archway inline blocks (verbatim moves — see src/game/room/*.cpp). ----
-    game::Ctx ctx{ world, player, ps, lvl, cam, hw, hh };
+    game::Ctx ctx{ world, player, ps, lvl, cam, hw, hh, invuln };
     game::PickupsSystem pickups;
     game::DoorsSystem doors;
     game::GatesSystem gates;       // spawned below, at its original per-frame-order spot (Task 6.2)
     game::TriggersSystem triggers; // spawned below, at its original per-frame-order spot (Task 6.2)
+    game::EnemiesSystem enemies_sys;   // spawned below, at its original per-frame-order spot (Task 6.3)
+    game::TerrainSystem terrain;   // blocks/boulders/loose+hidden platforms (Task 6.3), spawned below
     pickups.spawn(level, ctx);
     doors.spawn(level, ctx);
 
-    // ---- enemies (fire_immune from param2 bit0) ----
-    bn::vector<EnemyInst, 8> enemies;
-    for(int i = 0; i < level.enemy_count && i < 8; ++i){
-        const logic::EntitySpawn& s = level.enemies[i];
-        enemies.push_back(EnemyInst{});
-        EnemyInst& inst = enemies.back();
-        inst.e.body.half_w = fx(8); inst.e.body.half_h = fx(8);
-        inst.e.body.pos = { fx(s.tx * 8), fx(s.ty * 8) };
-        inst.e.left_bound = fx(s.param0 * 8); inst.e.right_bound = fx(s.param1 * 8);
-        inst.e.fire_immune = (s.param2 & 1) != 0;
-        inst.sprite = (inst.e.fire_immune ? bn::sprite_items::fire_enemy.create_sprite(0, 0)
-                                          : bn::sprite_items::enemy.create_sprite(0, 0));
-        inst.sprite->set_camera(cam);
-    }
+    // ---- enemies (Task 6.3: game::EnemiesSystem; fire_immune decoded from param2 bit0 inside spawn()) ----
+    enemies_sys.spawn(level, ctx);
 
     // ---- gates + cracked floors (Task 6.2: game::GatesSystem) ----
     gates.spawn(level, ctx);
 
-    // ---- pushable blocks (solid collision cell + 8x8 sprite) ----
-    bn::vector<BlockInst, 8> blocks;
-    for(int i = 0; i < level.block_count && i < 8; ++i){
-        const logic::BlockSpawn& b = level.blocks[i];
-        blocks.push_back(BlockInst{ logic::PushableBlock{ b.tx, b.ty }, {}, b.pullable });
-        BlockInst& bi = blocks.back();
-        engine::set_collision_tile(b.tx, b.ty, 1);       // block is solid; bg stays blank, sprite shows it
-        bi.sprite = bn::sprite_items::block.create_sprite(0, 0);
-        bi.sprite->set_camera(cam);
-    }
-
-    // ---- boulders (M8 Stone: breakable solid; like a block but NOT pushable; pound removes it) ----
-    bn::vector<BoulderInst, 8> boulders;
-    for(int i = 0; i < level.boulder_count && i < 8; ++i){
-        const logic::BoulderSpawn& b = level.boulders[i];
-        boulders.push_back(BoulderInst{ b.tx, b.ty, {}, false });
-        BoulderInst& bo = boulders.back();
-        engine::set_collision_tile(b.tx, b.ty, 1);                // solid; bg stays blank, sprite shows it
-        bo.sprite = bn::sprite_items::block.create_sprite(0, 0);  // placeholder art (reuse block)
-        bo.sprite->set_camera(cam);
-        bo.sprite->set_position(wx(b.tx * 8 + 4), wy(b.ty * 8 + 4));
-    }
-
-    // ---- loose platforms (M8 Stone: drop straight down on a nearby pound shockwave) ----
-    bn::vector<LoosePlatformInst, 8> loose_platforms;
-    for(int i = 0; i < level.loose_platform_count && i < 8; ++i){
-        const logic::LoosePlatformSpawn& lp = level.loose_platforms[i];
-        loose_platforms.push_back(LoosePlatformInst{ lp.tx, lp.ty, lp.len, lp.ty, false, false, {} });
-        LoosePlatformInst& li = loose_platforms.back();
-        for(int dx = 0; dx < lp.len && dx < 8; ++dx){
-            engine::set_collision_tile(lp.tx + dx, lp.ty, 1);     // solid run; bg blank, sprites show it
-            li.sprites.push_back(bn::sprite_items::block.create_sprite(0, 0));  // placeholder art
-            li.sprites.back().set_camera(cam);
-            li.sprites.back().set_position(wx((lp.tx + dx) * 8 + 4), wy(lp.ty * 8 + 4));
-        }
-    }
-
-    // ---- hidden platforms (M10 Light: NON-solid + invisible at spawn; a Light cast reveals them
-    //      solid+visible for the RevealState window, then they revert). Mirrors loose platforms but
-    //      we do NOT make them solid here and the sprites start hidden. ----
-    bn::vector<HiddenPlatformInst, 8> hidden_platforms;
-    for(int i = 0; i < level.hidden_platform_count && i < 8; ++i){
-        const logic::HiddenPlatformSpawn& hp = level.hidden_platforms[i];
-        hidden_platforms.push_back(HiddenPlatformInst{ hp.tx, hp.ty, hp.len, false, {} });
-        HiddenPlatformInst& hi2 = hidden_platforms.back();
-        for(int dx = 0; dx < hp.len && dx < 8; ++dx){
-            // NON-solid + invisible until revealed (do NOT set_collision_tile here).
-            hi2.sprites.push_back(bn::sprite_items::block.create_sprite(0, 0));  // placeholder art (reuse block)
-            hi2.sprites.back().set_camera(cam);
-            hi2.sprites.back().set_position(wx((hp.tx + dx) * 8 + 4), wy(hp.ty * 8 + 4));
-            hi2.sprites.back().set_visible(false);
-        }
-    }
-    logic::RevealState reveal;   // room-wide Light reveal timer (a Light cast (re)starts it)
+    // ---- pushable blocks, boulders, loose + hidden platforms (Task 6.3: game::TerrainSystem) ----
+    terrain.spawn(level, ctx);
 
     // ---- braziers + plate/button/brazier-group triggers (Task 6.2: game::TriggersSystem) ----
     triggers.spawn(level, ctx);
@@ -275,7 +192,9 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     game::set_clamped_cam(cam, lvl.view.map_px_w, lvl.view.map_px_h, level.w, level.h, cx0, cy0);
     engine::set_fade(16);
     int fade_in_t = 16;
-    int push_cd = 0;
+    // push_cd (block-push cooldown) moved into game::TerrainSystem (Task 6.3) -- it's fully
+    // internal to update_blocks(). grapple_pull_cd stays HERE: it's the shared cooldown for BOTH
+    // the block-pull and enemy-pull grapple targeting below, which both stay in play_room.
     int grapple_pull_cd = 0;
     int lr_restart_hold = 0; // frames L+R held — anti-soft-lock manual restart (moved off START)
 
@@ -309,7 +228,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             BlockInst* target = nullptr;
             int ptx = px2t(player.body.pos.x + player.body.half_w);   // player centre tile x
             int pty = px2t(player.body.pos.y + player.body.half_h);   // player centre tile y
-            for(BlockInst& bi : blocks){
+            for(BlockInst& bi : terrain.blocks()){
                 if(!bi.pullable) continue;
                 int dxt = bi.blk.tx - ptx, dyt = bi.blk.ty - pty;
                 int adx = dxt < 0 ? -dxt : dxt, ady = dyt < 0 ? -dyt : dyt;
@@ -333,7 +252,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
                 // No pullable block — try pulling a nearby non-immune enemy one tile toward the player.
                 EnemyInst* etarget = nullptr;
                 int ebest_dist = 999;
-                for(EnemyInst& ei : enemies){
+                for(EnemyInst& ei : enemies_sys.enemies()){
                     if(!ei.e.alive || ei.e.fire_immune) continue; // immune enemies resist the vine
                     int etx = px2t(ei.e.body.pos.x + ei.e.body.half_w);
                     int ety = px2t(ei.e.body.pos.y + ei.e.body.half_h);
@@ -372,78 +291,21 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         // ---- M8 Stone pound impact resolution (on the one frame the pound lands) ----
         // Order: cracked-floor smash (may re-arm to chain through stacked floors) -> heavy switch ->
         // boulder break -> loose-platform shockwave. Crush is in the enemy loop below. The pound is
-        // armed via player.stone (logic); the scene resolves WHAT it hits, mirroring dash->CrackedWall.
-        if(player.stone.just_landed()){
-            int impact_cx = px2t(player.body.pos.x + player.body.half_w);                                  // centre column
-            // Two distinct rows (the collision resolver leaves the body resting just ABOVE the floor):
-            //  - impact_fy: the body's lowest OCCUPIED tile (matches the plate-trip convention, ~500-505);
-            //    a plate/heavy-plate marker is a non-solid tile the body stands ON, so we match this row.
-            //  - impact_floor: the SOLID tile directly under the feet (matches the on_ground probe,
-            //    collision.cpp:75); cracked floors + boulders are SOLID tiles the player lands ON TOP of,
-            //    so they live at this row, not impact_fy.
-            int impact_fy    = px2t(player.body.pos.y + player.body.half_h + player.body.half_h - fx(1));
-            int impact_floor = px2t(player.body.pos.y + player.body.half_h + player.body.half_h);
+        // armed via player.stone (logic); game::TerrainSystem::resolve_pound resolves WHAT it hits
+        // (Task 6.3), mirroring dash->CrackedWall. Internally gates on player.stone.just_landed();
+        // play_room only owns the pound VFX (dust sprite + camera shake -- play_room-local state,
+        // not terrain data -- see resolve_pound's doc comment for the split).
+        game::TerrainSystem::PoundImpact impact = terrain.resolve_pound(ctx, gates, triggers);
+        if(impact.landed){
             // Pound VFX (placeholder): puff of dust at the impacted floor + a brief camera shake.
-            pound_dust.set_position(wx(impact_cx * 8 + 4), wy(impact_floor * 8 + 4));
+            pound_dust.set_position(wx(impact.cx * 8 + 4), wy(impact.floor * 8 + 4));
             pound_dust.set_visible(true);
             pound_vfx_t = 8;
             pound_shake_t = 6;
-            // 1. CrackedFloor smash + continue the plunge. The landed tile is solid; if it is an unbroken
-            //    cracked floor, break the WHOLE contiguous cracked-floor run at that row (I27: a 2-direction
-            //    walk from the impact tile — game::GatesSystem::break_cracked_run_at) and RE-ARM the pound
-            //    so the next frame plunges into the area below. Re-arm ONLY on a cracked tile, so one pound
-            //    chains through STACKED cracked floors and naturally ends on the first non-cracked solid.
-            bool smashed = gates.break_cracked_run_at(impact_cx, impact_floor, ctx);
-            if(smashed) player.stone.start();   // re-arm: plunge through to the next floor below
-
-            // 2. Heavy switch: a heavy plate trips ONLY on a pound (game::TriggersSystem::trip_heavy_plate_at).
-            //    Fires its gate target when the player's feet/centre land on the plate tile. (Normal plates
-            //    are handled in the trigger loop below, which SKIPS heavy plates so they never trip on a
-            //    step/block.)
-            triggers.trip_heavy_plate_at(impact_cx, impact_fy, ctx);
-
-            // 3. Boulder break: if a boulder is the tile directly below the player's feet (or the landed
-            //    tile itself), remove it so the path clears. (Boulders rebuild on room re-entry — fine.)
-            for(BoulderInst& bo : boulders){
-                if(bo.broken) continue;
-                // The boulder the player landed ON TOP of is the solid tile under the feet (impact_floor).
-                bool below = (bo.tx == impact_cx && bo.ty == impact_floor);
-                if(below){
-                    bo.broken = true;
-                    engine::set_collision_tile(bo.tx, bo.ty, 0);
-                    if(bo.sprite) bo.sprite->set_visible(false);
-                }
-            }
-
-            // 4. Loose-platform shockwave: any not-yet-falling loose platform whose run is within
-            //    Chebyshev distance <=6 of the impact begins falling (drop-to-rest; see step loop below).
-            for(LoosePlatformInst& li : loose_platforms){
-                if(li.falling || li.fallen) continue;
-                if(logic::loose_platform_in_shockwave(li.tx, li.cur_ty, li.len, impact_cx, impact_floor))
-                    li.falling = true;
-            }
         }
 
-        // ---- loose platforms: drop-to-rest one tile/frame while falling (solid-grid test only) ----
-        // The fall test considers ONLY the collision grid; the player is not a collision tile, so a
-        // platform never rests on the player (content guarantees the player isn't under a dropping run).
-        for(LoosePlatformInst& li : loose_platforms){
-            if(!li.falling) continue;
-            bool clear_below = true;
-            for(int dx = 0; dx < li.len; ++dx)
-                if(lvl.map.is_solid(li.tx + dx, li.cur_ty + 1)){ clear_below = false; break; }
-            if(clear_below){
-                for(int dx = 0; dx < li.len; ++dx){
-                    engine::set_collision_tile(li.tx + dx, li.cur_ty, 0);       // clear old row
-                    engine::set_collision_tile(li.tx + dx, li.cur_ty + 1, 1);   // set new row solid
-                }
-                ++li.cur_ty;
-                for(int dx = 0; dx < (int)li.sprites.size(); ++dx)
-                    li.sprites[dx].set_position(wx((li.tx + dx) * 8 + 4), wy(li.cur_ty * 8 + 4));
-            } else {
-                li.falling = false; li.fallen = true;   // rest; drop-to-rest, no bounce
-            }
-        }
+        // ---- loose platforms: drop-to-rest one tile/frame while falling (Task 6.3: game::TerrainSystem) ----
+        terrain.update_loose_platforms(ctx);
 
         // Shot aim (Zelda II style, shared with the boss/hub): UP = high, DOWN = low, else medium.
         logic::Vec2 muzzle = session.muzzle();
@@ -451,47 +313,19 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
 
         logic::SpellId fired = spells.update_and_cast(intent.cast_spell, spell, magic, muzzle, player.facing, lvl.map);
 
-        // ---- M10 Light reveal: a Light cast that ACTUALLY fired (re)starts the room-wide window.
-        //      Detect via the returned fired-spell (NOT a magic delta — the crystal refill mutates
-        //      magic.cur the same frame and would corrupt a before/after inference). Then tick; toggle
-        //      hidden-platform collision+visibility on the timer EDGE (don't rewrite every frame).
-        if(fired == logic::SpellId::Light) reveal.on_cast();
-        reveal.tick();
-        {
-            bool want_shown = reveal.revealed();
-            for(HiddenPlatformInst& hp : hidden_platforms){
-                if(want_shown == hp.shown) continue;            // edge only
-                for(int dx = 0; dx < hp.len && dx < 8; ++dx)
-                    engine::set_collision_tile(hp.tx + dx, hp.ty, want_shown ? 1 : 0);
-                for(int dx = 0; dx < (int)hp.sprites.size(); ++dx)
-                    hp.sprites[dx].set_visible(want_shown);
-                hp.shown = want_shown;
-            }
-        }
+        // ---- M10 Light reveal (Task 6.3: game::TerrainSystem owns RevealState + the hidden
+        //      platforms). play_room detects a Light cast that ACTUALLY fired via the returned
+        //      fired-spell (NOT a magic delta — the crystal refill mutates magic.cur the same
+        //      frame and would corrupt a before/after inference) and passes that bool in, since
+        //      TerrainSystem doesn't otherwise see the spell-cast result.
+        terrain.update_hidden_platforms(ctx, fired == logic::SpellId::Light);
 
         // ---- spell resolution (ORDER: gates -> braziers -> enemies -> freeze/melt -> despawn-on-solid) ----
         gates.update(ctx, spells);
         triggers.update_braziers(ctx, spells);
 
-        // ---- enemies: patrol, render, bolt-kill(+magic), fire-kill(no magic unless immune), contact ----
-        for(EnemyInst& inst : enemies){
-            inst.e.update(lvl.map);
-            if(!inst.e.alive) continue;
-            int ex = inst.e.body.pos.x.to_int() + inst.e.body.half_w.to_int();
-            int ey = inst.e.body.pos.y.to_int() + inst.e.body.half_h.to_int();
-            inst.sprite->set_position(ex - hw, ey - hh);
-            if(player.stone.active() && logic::aabb_overlap(player.body, inst.e.body)){
-                // M8: a pound CRUSHES any enemy on contact (including fire_immune), refilling magic
-                // like a bolt-kill. Guarded by stone.active() (pound i-frames), parallel to dash i-frames.
-                inst.e.kill(); magic.heal(logic::KILL_MAGIC_REFILL); inst.sprite->set_visible(false);
-            } else if(bolts.consume_hit(inst.e.body)){
-                inst.e.kill(); magic.heal(logic::KILL_MAGIC_REFILL); inst.sprite->set_visible(false);
-            } else if(spells.consume_hit(inst.e.body, logic::SpellId::Fire)){
-                if(!inst.e.fire_immune){ inst.e.kill(); inst.sprite->set_visible(false); } // no magic refill from fire
-            } else {
-                logic::try_hit(health, invuln, player.dash.invincible(), logic::aabb_overlap(player.body, inst.e.body));  // dash i-frames blink through contact
-            }
-        }
+        // ---- enemies (Task 6.3: game::EnemiesSystem) ----
+        enemies_sys.update(ctx, bolts, spells);
 
         // ---- reversible terrain: Ice freezes water it flies over; Fire melts ice platforms.
         // Spells fly at chest height but water/ice sit at floor level, so consume_tile_hit scans
@@ -522,41 +356,19 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         // ---- hazards (lava, water, or spikes): same damage; dash i-frames blink through ----
         logic::try_hit(health, invuln, player.dash.invincible(), logic::hazard_overlap(player.body, lvl.map));
 
-        // ---- pushable blocks: push detection, gravity, sprite ----
-        if(push_cd > 0) --push_cd;
-        if(grapple_pull_cd > 0) --grapple_pull_cd;   // ticks here; checked in the input phase above
-        for(BlockInst& bi : blocks){
-            // push when grounded, holding a dir, and the tile in front of the player == this block
-            if(push_cd == 0 && player.body.on_ground && (intent.in.left || intent.in.right)){
-                int dir = intent.in.right ? 1 : -1;
-                int lead_px = intent.in.right ? player.body.pos.x.to_int() + 16 : player.body.pos.x.to_int() - 1;
-                int feet_ty = px2t(player.body.pos.y + player.body.half_h + player.body.half_h - fx(1));
-                if(px2t(fx(lead_px)) == bi.blk.tx && feet_ty == bi.blk.ty){
-                    int oldx = bi.blk.tx;
-                    if(bi.blk.push(dir, lvl.map)){
-                        engine::set_collision_tile(oldx, bi.blk.ty, 0);
-                        engine::set_collision_tile(bi.blk.tx, bi.blk.ty, 1);
-                        push_cd = 8;
-                    }
-                }
-            }
-            int oldy = bi.blk.ty;
-            if(bi.blk.apply_gravity_step(lvl.map)){
-                engine::set_collision_tile(bi.blk.tx, oldy, 0);
-                engine::set_collision_tile(bi.blk.tx, bi.blk.ty, 1);
-            }
-            int bx = bi.blk.tx * 8 + 4, by = bi.blk.ty * 8 + 4;
-            bi.sprite->set_position(bx - hw, by - hh);
-        }
+        // ---- pushable blocks: push detection, gravity, sprite (Task 6.3: game::TerrainSystem) ----
+        if(grapple_pull_cd > 0) --grapple_pull_cd;   // ticks here; checked in the input phase above (stays in play_room -- shared with enemy-pull)
+        terrain.update_blocks(ctx, intent.in.left, intent.in.right);
 
         // ---- triggers: update inputs, open/close targets ----
         {
-            // Cross-system query (Task 6.2 extraction rule): TriggersSystem doesn't own blocks
-            // (Task 6.3's terrain_system will), so play_room hands it this frame's block tiles for
-            // the plate's "something is resting on me" check -- mirrors the original inline
-            // `for(BlockInst& bi : blocks)` scan exactly.
+            // Cross-system query (Task 6.2 extraction rule; Task 6.3 fulfills it): TriggersSystem
+            // doesn't own blocks (game::TerrainSystem does), so play_room hands it this frame's
+            // block tiles for the plate's "something is resting on me" check -- mirrors the
+            // original inline `for(BlockInst& bi : blocks)` scan exactly, now scanning
+            // `terrain.blocks()` instead of a local vector.
             bn::vector<game::BlockTileXY, 8> block_tiles;
-            for(BlockInst& bi : blocks) block_tiles.push_back({ bi.blk.tx, bi.blk.ty });
+            for(BlockInst& bi : terrain.blocks()) block_tiles.push_back({ bi.blk.tx, bi.blk.ty });
             triggers.update_triggers(ctx, block_tiles);
         }
 
@@ -588,14 +400,8 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
             avatar.sync(player);
             // Reset pushable blocks to their authored start so a block shoved into a dead corner
             // (a soft-lock) is recoverable by dying. (Plates re-evaluate next frame; latched
-            // button/brazier gates stay solved.)
-            for(int i = 0; i < (int)blocks.size(); ++i){
-                BlockInst& bi = blocks[i];
-                engine::set_collision_tile(bi.blk.tx, bi.blk.ty, 0);          // clear where it ended up
-                bi.blk.tx = level.blocks[i].tx; bi.blk.ty = level.blocks[i].ty;
-                engine::set_collision_tile(bi.blk.tx, bi.blk.ty, 1);          // solid at the start cell
-                if(bi.sprite) bi.sprite->set_position(wx(bi.blk.tx * 8 + 4), wy(bi.blk.ty * 8 + 4));
-            }
+            // button/brazier gates stay solved.) Task 6.3: game::TerrainSystem::reset_blocks.
+            terrain.reset_blocks(ctx);
             // M10: reset magic crystals each attempt (NOT latched) so a fresh full-refill is always
             // available after a death-respawn — guarantees no magic soft-lock on the Light ascent.
             pickups.crystals.reset();
