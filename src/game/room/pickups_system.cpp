@@ -27,12 +27,9 @@ void PickupsSystem::spawn(const logic::LevelData& level, Ctx& ctx)
         _cage = tile_body(level.cage_tx, level.cage_ty, 8, 12);
         _spronk = bn::sprite_items::spronk.create_sprite(0, 0);
         _spronk->set_camera(cam);
-        // Ground the 16x16 spronk sprite on the FIRST SOLID/one-way tile below the authored cage
-        // row, so its BOTTOM rests on the floor surface (not embedded in it).  Sprite half-height
-        // is 8 px, so centre = floor_surface - 8.  For the D1-D7 convention (cage_ty=18, floor at
-        // row 20): floor_row_below(…,18)==20 → wy(20*8 - 8) == wy(cage.pos.y.to_int()+8) — no
-        // visible regression.  For ledge cages (D8+ Room 2) the sprite now rests on the ledge
-        // instead of being embedded in it.
+        // Ground the 16x16 spronk sprite on the floor-scanned row below the authored cage tile
+        // (IMPL-5), so its bottom rests on the floor surface for both flat rooms and ledge cages.
+        // Sprite half-height is 8 px, so centre = floor_surface - 8.
         int cage_fr = floor_row_below(ctx.lvl.map, level.cage_tx, level.cage_ty);
         _spronk->set_position(wx(level.cage_tx * 8 + 8), wy(cage_fr * 8 - 8));
         _spronk->set_visible(!world.spronk_freed(d));
@@ -62,11 +59,10 @@ void PickupsSystem::spawn(const logic::LevelData& level, Ctx& ctx)
         HeartInst& hi = _hearts.back();
         hi.sprite = bn::sprite_items::heart_container.create_sprite(0, 0);
         hi.sprite->set_camera(cam);
-        // Ground the 16x16 sprite on the FIRST SOLID tile below the authored row (like the
-        // cage/exit/room-doors), so its BOTTOM rests on the floor surface. M7 hard-coded a
-        // tile-centre position assuming a row-18 floor-2-below layout; in D7's tight alcove the
-        // floor is only 1 row below, so that sank the sprite INTO the platform. Floor surface is
-        // at fr*8; sprite half-height is 8, so centre = fr*8 - 8.
+        // Ground the 16x16 sprite on the first solid tile below the authored row (floor-scanned,
+        // IMPL-5), like the cage/exit/room-doors, so its bottom rests on the floor surface
+        // regardless of authored floor depth. Floor surface is at fr*8; sprite half-height is 8,
+        // so centre = fr*8 - 8.
         int hc_fr = floor_row_below(ctx.lvl.map, hc.tx, hc.ty);
         hi.sprite->set_position(wx(hc.tx * 8 + 8), wy(hc_fr * 8 - 8));
     }

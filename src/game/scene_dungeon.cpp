@@ -8,11 +8,7 @@
 #include "bn_sprite_ptr.h"
 #include "bn_keypad.h"
 #include "bn_vector.h"
-#include "bn_sprite_items_fire_proj.h"
-#include "bn_sprite_items_ice_proj.h"
-#include "bn_sprite_items_light_proj.h"
 #include "bn_sprite_items_bolt.h"
-#include "bn_sprite_items_grapple_icon.h"
 #include "bn_sprite_items_guardian.h"   // M12: per-dungeon boss sprite (D1 Whispering Woods Guardian, 2 frames)
 #include "bn_sprite_items_slagshell.h" // M13: D2 Ember Caverns boss sprite (Slagshell, 2 frames)
 #include "bn_sprite_items_coldforge.h" // M14: D3 Frost Hollow boss sprite (Coldforge Twins, 4 frames)
@@ -36,7 +32,6 @@
 #include "engine/fade.h"
 #include "engine/save.h"        // write_world (persist latches)
 #include "logic/boss.h"          // BossDef/BossId (boss_sprite_for) — the fight itself runs in game::run_boss_fight
-#include "logic/collision.h"     // aabb_overlap (enemy/gate/pickup contact)
 #include "game/scene_game_over.h" // run_game_over (death -> 0 lives flow)
 #include "game/player_session.h" // play_room: PlayerSession, CrystalStation, set_clamped_cam
 #include "game/boss_fight.h"     // run_boss_fight (Task 5.4: room bosses share the King's fight loop)
@@ -60,15 +55,6 @@ namespace
         int target_room = 0;
         int target_entrance = 0;
     };
-
-    // NOTE (Task 6.2): GateInst/CrackedFloorInst/BrazierInst/TriggerInst + floor_row_below/
-    // persist_latch/tile_body/fill_column/open_column moved out with the gates/braziers/triggers
-    // families -- see game::GatesSystem (src/game/room/gates_system.cpp) and game::TriggersSystem
-    // (src/game/room/triggers_system.cpp).
-    // NOTE (Task 6.3): EnemyInst moved to game::EnemiesSystem (src/game/room/enemies_system.h);
-    // BlockInst/BoulderInst/LoosePlatformInst/HiddenPlatformInst + the pound-resolution handler
-    // moved to game::TerrainSystem (src/game/room/terrain_system.h). Nothing left in this
-    // function needs the old local struct defs.
 }
 
 // ---------------------------------------------------------------------------
@@ -101,9 +87,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     const int hh = lvl.view.map_px_h / 2;
     auto wx = [&](int px){ return px - hw; };
     auto wy = [&](int px){ return px - hh; };
-    // Centre the camera on the player (cx,cy in level pixels), but CLAMP so the 240x160 view never
-    // scrolls past the authored level into the blank/wrapping region of the fixed 64x32 background
-    // (the BG repeats; a tall level would otherwise show its top wrapped onto the screen bottom).
+    // Camera centers on the player but is clamped to the level bounds (IMPL-9).
 
     logic::EntranceSpawn ent = logic::find_entrance(level, entrance_id);
     const logic::Vec2 spawn_pos { fx(ent.tx * 8), fx(ent.ty * 8) };
@@ -116,13 +100,9 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     // A defeated room boss stays defeated (persisted, save v6) — re-entering the arena
     // while backtracking must not re-trigger a mandatory fight (D1 decision).
     if(level.boss != nullptr && d >= 1 && d <= 8 && !world.boss_defeated(d)){
-        // Room-boss entry vitals (Task 5.4 verification): run_boss_fight's inline_game_over=false path
-        // only does health.cur = health.max (matching the deleted run_room_boss's own entry — it never
-        // touched health.max or refilled magic). ps.health.max is already correct here without any extra
-        // line: run_dungeon calls logic::sync_health_cap(ps, world) ONCE before the room loop starts, and
-        // the only other place health.max changes is the heart-container pickup below (which also
-        // refills health.cur to match) — so the cap carried into this room is already up to date. Magic
-        // is deliberately left carried-in from the previous room (room-boss semantics), same as before.
+        // Entry vitals: run_boss_fight refills health.cur to health.max (health.max is already
+        // current -- run_dungeon syncs the cap once before the room loop). Magic carries in from
+        // the previous room by design (room-boss semantics).
         game::FightOutcome fo = run_boss_fight(level, *level.boss, boss_sprite_for(level.boss),
                                                world, ps, lvl, cam, player, spawn_pos, ent,
                                                /*inline_game_over=*/false);
@@ -135,12 +115,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     logic::Meter& health = ps.health;   // persist across hub <-> dungeon (no reset on entry)
     logic::Meter& magic  = ps.magic;
     int invuln = 0;
-    // Post-respawn grace: i-frames granted on death (logic::respawn_vitals, logic::RESPAWN_IFRAMES)
-    // so a player who died in a sub-floor hazard pit cannot be re-damaged before regaining control.
-    // The header's static_assert enforces RESPAWN_IFRAMES > HIT_IFRAMES so even an authored-unsafe
-    // spawn yields real control frames instead of an unbreakable every-frame death loop (the
-    // "stuck at the bottom" report). The entrance is authored safe, but this guarantees robustness
-    // regardless.
+    // Respawn grace i-frames on death (logic::respawn_vitals) -- see IMPL-8.
 
     engine::Avatar avatar(player, lvl.view.map_px_w, lvl.view.map_px_h, cam);
     engine::BoltPool bolts(lvl.view.map_px_w, lvl.view.map_px_h, cam);
@@ -198,6 +173,31 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
     int grapple_pull_cd = 0;
     int lr_restart_hold = 0; // frames L+R held — anti-soft-lock manual restart (moved off START)
 
+    // ---- Per-frame update order (I28: single canonical list -- replaces the ordering comments
+    //      that used to be scattered across this loop; do NOT reorder without checking every
+    //      numbered constraint below) ----
+    //   1. Global controls: pause, quit (SELECT), anti-soft-lock restart hold (L+R), door Up-press.
+    //   2. Ability sync + intent read, then grapple targeting (block-pull -> enemy-pull -> anchor
+    //      fallback) -- reads intent before player.update() consumes it.
+    //   3. player.update() + avatar sync + anchor-miss detection.
+    //   4. Pound impact resolution (terrain.resolve_pound): cracked-floor smash (may re-arm the
+    //      pound to chain through stacked floors, see IMPL-7) -> heavy-plate trip -> boulder
+    //      break -> loose-platform shockwave arm.
+    //   5. Loose-platform drop-to-rest stepping.
+    //   6. Bolts update, then spell cast.
+    //   7. Hidden-platform (Light reveal) toggle.
+    //   8. Spell resolution: gates -> braziers -> enemies.
+    //   9. Freeze/melt tile transforms (Ice water->ice, Fire ice->water) -- MUST precede
+    //      despawn_on_solid (IMPL-6).
+    //  10. despawn_on_solid.
+    //  11. Hazard damage (lava/water/spikes).
+    //  12. Pushable-block push/gravity/sprite update.
+    //  13. Triggers (plate/button/brazier-group) open/close, fed this frame's block tiles.
+    //  14. i-frame tick + death/respawn (lose a life, or respawn with grace i-frames + reset
+    //      transient player state + reset blocks + reset magic crystals).
+    //  15. Ability shrines, then heart containers + magic crystals.
+    //  16. Spronk-rescue + exit check (may return RoomOutcome::ExitDungeon).
+    //  17. Vine VFX, pound VFX/camera-shake tick, HUD, camera clamp, fade-in tick.
     while(true)
     {
         engine::check_pause();   // START -> freeze + "GAME PAUSED" until START again (global pause)
@@ -288,13 +288,7 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
         if(tried_anchor && !player.grapple.active())
             session.note_anchor_miss(player.facing);
 
-        // ---- M8 Stone pound impact resolution (on the one frame the pound lands) ----
-        // Order: cracked-floor smash (may re-arm to chain through stacked floors) -> heavy switch ->
-        // boulder break -> loose-platform shockwave. Crush is in the enemy loop below. The pound is
-        // armed via player.stone (logic); game::TerrainSystem::resolve_pound resolves WHAT it hits
-        // (Task 6.3), mirroring dash->CrackedWall. Internally gates on player.stone.just_landed();
-        // play_room only owns the pound VFX (dust sprite + camera shake -- play_room-local state,
-        // not terrain data -- see resolve_pound's doc comment for the split).
+        // ---- pound impact resolution (order: step 4 above); play_room owns only the VFX ----
         game::TerrainSystem::PoundImpact impact = terrain.resolve_pound(ctx, gates, triggers);
         if(impact.landed){
             // Pound VFX (placeholder): puff of dust at the impacted floor + a brief camera shake.
@@ -313,24 +307,16 @@ static RoomOutcome play_room(const logic::LevelData& level, int entrance_id, log
 
         logic::SpellId fired = spells.update_and_cast(intent.cast_spell, spell, magic, muzzle, player.facing, lvl.map);
 
-        // ---- M10 Light reveal (Task 6.3: game::TerrainSystem owns RevealState + the hidden
-        //      platforms). play_room detects a Light cast that ACTUALLY fired via the returned
-        //      fired-spell (NOT a magic delta — the crystal refill mutates magic.cur the same
-        //      frame and would corrupt a before/after inference) and passes that bool in, since
-        //      TerrainSystem doesn't otherwise see the spell-cast result.
+        // Light reveal: fired-spell (not a magic delta -- the crystal refill would corrupt a
+        // before/after inference) tells TerrainSystem a Light cast actually fired.
         terrain.update_hidden_platforms(ctx, fired == logic::SpellId::Light);
 
-        // ---- spell resolution (ORDER: gates -> braziers -> enemies -> freeze/melt -> despawn-on-solid) ----
+        // ---- spell resolution (order: step 8 above) ----
         gates.update(ctx, spells);
         triggers.update_braziers(ctx, spells);
-
-        // ---- enemies (Task 6.3: game::EnemiesSystem) ----
         enemies_sys.update(ctx, bolts, spells);
 
-        // ---- reversible terrain: Ice freezes water it flies over; Fire melts ice platforms.
-        // Spells fly at chest height but water/ice sit at floor level, so consume_tile_hit scans
-        // DOWN the shot's column (the M3 brazier-height lesson). MUST precede despawn_on_solid
-        // because IcePlatform is solid — otherwise a melt-shot is killed before it can melt.
+        // ---- freeze/melt: Ice turns water into an ice bridge, Fire melts it back (IMPL-6) ----
         int ftx, fty;
         while(spells.consume_tile_hit(lvl.map, logic::TileKind::Water, logic::SpellId::Ice, ftx, fty)){
             // Freeze the WHOLE contiguous horizontal run of water into one ice bridge (one cast),

@@ -74,12 +74,8 @@ TerrainSystem::PoundImpact TerrainSystem::resolve_pound(Ctx& ctx, GatesSystem& g
     if(!player.stone.just_landed()) return PoundImpact{};
 
     int impact_cx = logic::Tilemap::px_to_tile(player.body.pos.x + player.body.half_w);                  // centre column
-    // Two distinct rows (the collision resolver leaves the body resting just ABOVE the floor):
-    //  - impact_fy: the body's lowest OCCUPIED tile (matches the plate-trip convention); a
-    //    plate/heavy-plate marker is a non-solid tile the body stands ON, so we match this row.
-    //  - impact_floor: the SOLID tile directly under the feet (matches the on_ground probe);
-    //    cracked floors + boulders are SOLID tiles the player lands ON TOP of, so they live at
-    //    this row, not impact_fy.
+    // impact_fy (occupied tile, for non-solid plate markers) vs. impact_floor (solid tile under
+    // the feet, for cracked floors/boulders) -- see IMPL-7 for why these must stay distinct.
     int impact_fy    = logic::Tilemap::px_to_tile(player.body.pos.y + player.body.half_h + player.body.half_h - fx(1));
     int impact_floor = logic::Tilemap::px_to_tile(player.body.pos.y + player.body.half_h + player.body.half_h);
 

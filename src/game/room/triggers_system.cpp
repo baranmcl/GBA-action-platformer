@@ -32,13 +32,10 @@ void TriggersSystem::spawn(const logic::LevelData& level, Ctx& ctx)
     // ---- braziers (bg tile 14 unlit; Body for fire-hit) ----
     for(int i = 0; i < level.brazier_count && i < 16; ++i){
         const logic::BrazierSpawn& b = level.braziers[i];
-        // Visual grounded on the floor (fr-1), floor-scanned so a ledge-authored brazier still
-        // grounds correctly (not just the row-20-floor convention).
+        // Grounded on the floor (fr-1), floor-scanned (IMPL-5) so a ledge-authored brazier still
+        // grounds correctly; the hit-body rows (draw_ty-5..draw_ty) are derived from the same
+        // floor-scanned row rather than a hardcoded offset, for the same reason (I25).
         int draw_ty = floor_row_below(lvl.map, b.tx, b.ty) - 1;
-        // I25 fix: the hit-body rows are DERIVED from the floor-scanned draw row (draw_ty-5 ..
-        // draw_ty) instead of a hardcoded row 14. For the standard row-20-floor rooms draw_ty==19,
-        // so draw_ty-5==14 -- identical rows 14..19 to the pre-fix body (tile_body(b.tx, 14, 6,
-        // 24)). Ledge/nonstandard-floor rooms now get hit rows that actually track the brazier.
         _braziers.push_back(BrazierInst{ b.tx, b.ty, b.group, tile_body(b.tx, draw_ty - 5, 6, 24), false, draw_ty });
         engine::set_level_tile(lvl.view, b.tx, draw_ty, logic::tiles::BRAZIER_UNLIT);
     }
