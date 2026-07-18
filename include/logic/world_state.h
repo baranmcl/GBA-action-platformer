@@ -66,6 +66,24 @@ inline bool door_enterable(int n, const World& w){
 inline int max_lives(const World& w){ return World::STARTING_LIVES + spronk_count(w); }
 inline void refill_lives(World& w){ w.lives = (uint8_t)max_lives(w); }
 inline void lose_life(World& w){ if(w.lives > 0) --w.lives; }
+
+// I35 dev tooling: builds a synthetic, session-only World for the title-screen debug selector
+// (game::run_debug_select). Pure and host-testable, unlike the engine-coupled scene that calls it.
+// `ability_mask` is a raw bit-OR of (1u << (int)Ability) bits (the debug UI toggles bits directly
+// rather than calling grant() per ability, so this takes the already-built mask); `spronk_count`
+// frees spronks 1..spronk_count (clamped to 0..8) so door-gating (door_enterable) and the
+// lives bonus (max_lives) behave the same as a real playthrough that rescued that many spronks.
+// current_dungeon is left at 0 — the caller (main.cpp) sets it right before launching, mirroring
+// the normal hub->dungeon flow's own world.current_dungeon assignment.
+inline World make_debug_world(uint16_t ability_mask, int spronk_count){
+    World w{};
+    w.abilities = ability_mask;
+    int n = spronk_count < 0 ? 0 : (spronk_count > 8 ? 8 : spronk_count);
+    for(int d = 1; d <= n; ++d) w.free_spronk(d);
+    refill_lives(w); // lives/max_lives scale with spronks freed, same as a real save
+    return w;
+}
+
 // Boot safety: loaded save must never have lives==0 (instant game-over) or lives>max.
 inline void clamp_lives_on_load(World& w){
     int m = max_lives(w);

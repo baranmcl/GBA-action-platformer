@@ -6,7 +6,9 @@ namespace {
     uint16_t s_seq = 0;
     int s_next_slot = 0;
     bool s_loaded = false;
+    bool s_save_enabled = true; // I35 save gate — see set_save_enabled's doc comment in save.h
 }
+void set_save_enabled(bool enabled){ s_save_enabled = enabled; }
 bool read_world(logic::World& out){
     logic::SaveDataV6 a{}, b{};
     logic::SaveData legacy{};
@@ -19,6 +21,8 @@ bool read_world(logic::World& out){
     return d.valid;
 }
 void write_world(const logic::World& w){
+    if(!s_save_enabled) return; // I35: debug-launched sessions run with saving disabled — no-op,
+                                 // never touches bn::sram, so a synthetic World can't reach SRAM.
     if(!s_loaded){ logic::World tmp; read_world(tmp); } // arbitration state before first write
     ++s_seq;
     logic::SaveDataV6 s = logic::make_save_v6(w, s_seq);

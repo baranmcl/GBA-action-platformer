@@ -8,6 +8,7 @@
 #include "game/scene_dungeon.h"
 #include "game/scene_boss.h"
 #include "game/scene_victory.h"
+#include "game/scene_debug.h"
 #include "game/levels/dungeons.h"
 
 int main()
@@ -19,7 +20,43 @@ int main()
         world = logic::World{}; // fresh game on empty/corrupt SRAM
     logic::clamp_lives_on_load(world); // never boot into an instant Game Over (fresh World already has lives=3)
 
-    game::run_title(world); // START -> enter the hub
+    // Title -> normal hub flow, OR (SELECT held on START) the I35 debug dungeon/ability selector.
+    // A debug launch runs with saving disabled and a synthetic, throwaway World (never `world`
+    // itself) so it can never touch the real SRAM save; afterward we land back on the title with
+    // the ORIGINAL `world` untouched and loop until the player enters normally. This is the ONLY
+    // change to main's control flow — once TitleResult::debug is false, everything below is
+    // byte-identical to the pre-I35 flow.
+    for(;;)
+    {
+        game::TitleResult tr = game::run_title(world);
+        if(!tr.debug) break;
+
+        game::DebugLaunch dl = game::run_debug_select();
+        if(dl.dungeon != 0)
+        {
+            engine::set_save_enabled(false); // linchpin: nothing below can reach SRAM until re-enabled
+            logic::World dbg_world = dl.world;
+            dbg_world.current_dungeon = dl.dungeon;
+            logic::PlayerState dbg_ps;
+            logic::sync_health_cap(dbg_ps, dbg_world);
+            dbg_ps.health.cur = dbg_ps.health.max;
+
+            if(dl.dungeon == 9) // finale: approach then boss arena, same routing as door 9 below
+            {
+                game::DungeonResult ar = game::run_dungeon(DUNGEON9_APPROACH, dbg_world, dbg_ps);
+                if(ar == game::DungeonResult::Cleared)
+                    game::run_boss(DUNGEON9_ARENA, dbg_world, dbg_ps); // result unused — debug session ends either way
+            }
+            else
+            {
+                const logic::DungeonData* lvl = DUNGEONS_BY_ID[dl.dungeon - 1];
+                game::run_dungeon(*lvl, dbg_world, dbg_ps);
+            }
+
+            engine::set_save_enabled(true); // restore normal saving for the rest of the session
+        }
+        // Loop back to the title; dl.dungeon == 0 (cancelled) also lands here.
+    }
 
     logic::PlayerState ps;  // health/magic persist across hub <-> dungeon for the whole session
     // Boot at FULL health for the player's CURRENT max. PlayerState defaults to the BASE 100, but a
