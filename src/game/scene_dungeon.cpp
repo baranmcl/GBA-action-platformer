@@ -459,8 +459,8 @@ DungeonResult run_dungeon(const logic::DungeonData& dungeon, logic::World& world
                 break;
             case RoomOutcome::GameOver: {
                 game::GameOverChoice c = game::run_game_over(world);
-                logic::refill_lives(world);   // both choices refill to max
-                engine::write_world(world);   // persist the refill — the save never holds lives==0
+                logic::revive_lives(world);   // both choices revive to STARTING_LIVES (3); the save never holds lives==0
+                engine::write_world(world);   // persist the revive — the save never holds lives==0
                 ps.health.cur = ps.health.max;   // refill vitals for BOTH choices — never return to the
                 ps.magic.cur  = ps.magic.max;    // hub/title at 0 HP (the empty-health-bar bug)
                 if(c == game::GameOverChoice::QuitToTitle) return DungeonResult::QuitToTitle;

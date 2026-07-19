@@ -65,6 +65,9 @@ inline bool door_enterable(int n, const World& w){
 
 inline int max_lives(const World& w){ return World::STARTING_LIVES + spronk_count(w); }
 inline void refill_lives(World& w){ w.lives = (uint8_t)max_lives(w); }
+// Game-Over revive: come back with the STARTING life count (3), NOT max_lives — a game over resets
+// your run's life stock regardless of how many spronks are freed. (max_lives still caps growth via spronk rescues.)
+inline void revive_lives(World& w){ w.lives = (uint8_t)World::STARTING_LIVES; }
 inline void lose_life(World& w){ if(w.lives > 0) --w.lives; }
 // Grants exactly +1 life, capped at max_lives (unlike refill_lives, which jumps straight to max).
 // Used for spronk-rescue: each spronk should give +1 life, not a full refill.

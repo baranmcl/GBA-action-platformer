@@ -420,8 +420,8 @@ FightOutcome run_boss_fight(const logic::LevelData& level, const logic::BossDef&
                     restart_fight();          // full-fight restart (soft fade-back below)
                 } else {
                     game::GameOverChoice c = game::run_game_over(world);
-                    logic::refill_lives(world);   // both choices refill to max
-                    engine::write_world(world);   // persist the refill — the save never holds lives==0
+                    logic::revive_lives(world);   // both choices revive to STARTING_LIVES (3); the save never holds lives==0
+                    engine::write_world(world);   // persist the revive — the save never holds lives==0
                     if(c == game::GameOverChoice::QuitToTitle) return FightOutcome::QuitToTitle;
                     restart_fight();              // Continue: restart the fight
                 }

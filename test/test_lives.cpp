@@ -102,6 +102,34 @@ TEST(refill_lives_already_at_max_unchanged){
     CHECK_EQ((int)w.lives, 3);
 }
 
+// --- revive_lives (Game-Over revive: always STARTING_LIVES, not max_lives) ---
+
+TEST(revive_lives_no_spronks){
+    World w;
+    w.lives = 0;
+    revive_lives(w);
+    CHECK_EQ((int)w.lives, 3);  // always STARTING_LIVES regardless of max
+}
+
+TEST(revive_lives_with_spronks_still_three){
+    World w;
+    // Free 5 spronks: max_lives would be 3 + 5 = 8
+    for(int d = 1; d <= 5; ++d) w.free_spronk(d);
+    w.lives = 0;
+    revive_lives(w);
+    CHECK_EQ((int)w.lives, 3);  // NOT 8 (max_lives) — the whole point of revive_lives
+}
+
+TEST(revive_lives_below_max_is_valid){
+    World w;
+    // Free 5 spronks: max_lives = 8
+    for(int d = 1; d <= 5; ++d) w.free_spronk(d);
+    revive_lives(w);
+    // After revive to 3 with 5 spronks freed, confirm 3 <= max_lives (so clamp_lives_on_load won't alter it)
+    CHECK((int)w.lives <= max_lives(w));
+    CHECK((int)w.lives > 0);
+}
+
 // --- gain_life ---
 
 TEST(gain_life_grants_exactly_one_after_spronk_freed){
