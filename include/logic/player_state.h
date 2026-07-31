@@ -1,6 +1,7 @@
 #pragma once
 #include "logic/meters.h"
 #include "logic/spell.h"
+#include "logic/world_state.h"   // World, max_health_for (sync_health_cap)
 namespace logic {
 // Runtime player vitals that persist across scenes within a session (hub <-> dungeons).
 // Owned by main() and passed by reference into every scene, so health drained / magic
@@ -18,4 +19,13 @@ struct PlayerState {
     // because world.current_dungeon is reset to 0 when a dungeon scene ends.
     int last_dungeon = 0;
 };
+
+// Collapses the 3x-duplicated heart-container max-HP sync (run_dungeon, scene_hub, and the
+// boot path in main.cpp): grow the CAP to reflect any collected heart containers, and clamp
+// cur DOWN only if it now exceeds the new max — never raises cur (a mid-session re-sync must
+// not free-heal the player; only a fresh full-refill pickup/boot does that).
+inline void sync_health_cap(PlayerState& ps, const World& w){
+    ps.health.max = max_health_for(w);
+    if(ps.health.cur > ps.health.max) ps.health.cur = ps.health.max;
+}
 }

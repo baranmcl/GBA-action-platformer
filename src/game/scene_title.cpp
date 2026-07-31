@@ -12,7 +12,7 @@
 
 namespace game
 {
-void run_title(const logic::World& world)
+TitleResult run_title(const logic::World& world)
 {
     bn::bg_palettes::set_transparent_color(bn::color(4, 6, 22));
 
@@ -35,8 +35,12 @@ void run_title(const logic::World& world)
     {
         if(bn::keypad::start_pressed())
         {
+            // I35 dev-tooling combo: holding SELECT while pressing START enters the debug
+            // dungeon/ability selector instead of the hub. Checked only on the START edge (not
+            // select_pressed) so SELECT can be picked up first or simultaneously with START.
+            bool debug = bn::keypad::select_held();
             engine::fade_out(16); // hand the next scene a black screen
-            return;
+            return TitleResult{ debug };
         }
         bn::core::update();
     }

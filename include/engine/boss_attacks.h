@@ -119,6 +119,22 @@ public:
         return blocked;
     }
 
+    // Like block_with_spell but the player's FREE BOLT does the blocking. Returns the count blocked,
+    // so the scene can reward it (D3: bolt blocks recharge magic, alongside Fire/Ice).
+    template<typename BoltLike>
+    int block_with_bolt(BoltLike& bolts){
+        int blocked = 0;
+        for(AttackInst& a : _pool){
+            if(!a.active) continue;
+            if(bolts.consume_hit(a.body)){
+                a.active = false;
+                if(a.sprite) a.sprite->set_visible(false);
+                ++blocked;
+            }
+        }
+        return blocked;
+    }
+
 private:
     AttackInst _pool[CAP];
     int _half_w_px;
@@ -198,6 +214,28 @@ private:
 };
 
 // -----------------------------------------------------------------------------
+// rockfall_fits — compile-time cross-file invariant (I2): every ROCKFALL phase's
+// Active window (attack_active_frames) must be long enough for RockfallEmitter's
+// WARN_FRAMES telegraph to elapse and still have the rock land while the window is
+// Active (RockfallEmitter::tick is only called during AttackStep::Active — see
+// run_room_boss). Checked via static_assert for every def in the boss registry, so
+// a tuning change that breaks this is a COMPILE error, not something discovered
+// mid-playtest.
+// -----------------------------------------------------------------------------
+constexpr bool rockfall_fits(const logic::BossDef& d){
+    for(int i = 0; i < d.phase_count; ++i){
+        if((d.phases[i].attacks & logic::BOSS_ATK_ROCKFALL) != 0){
+            if(!(d.phases[i].pattern.attack_active_frames > RockfallEmitter::WARN_FRAMES)) return false;
+        }
+    }
+    return true;
+}
+static_assert(rockfall_fits(logic::KING_DEF), "rockfall must land inside the Active window (King)");
+static_assert(rockfall_fits(logic::D1_DEF),   "rockfall must land inside the Active window (D1)");
+static_assert(rockfall_fits(logic::D2_DEF),   "rockfall must land inside the Active window (D2)");
+static_assert(rockfall_fits(logic::D3_DEF),   "rockfall must land inside the Active window (D3)");
+
+// -----------------------------------------------------------------------------
 // TelegraphCue — the coloured charge orb shown AT the boss during
 // AttackStep::Telegraph so the incoming attack reads. Colour by variant:
 // aimed -> aimed_item, spiral -> spiral_item, fan -> fan_item (the King wired
@@ -247,7 +285,8 @@ private:
 // driven entirely by logic::BossState. Generic over the project's spell/bolt
 // pools via templates (no game/ include). Mirrors scene_boss.cpp's
 // "damage resolution" block:
-//   * Light (def's expose spell) ALWAYS exposes (every frame) — on_expose_hit.
+//   * The CURRENT expose spell (b.cur_expose — == def->expose_spell for a fixed-element boss;
+//     shifts each wound for a dual-spell boss like the D3 Coldforge Twins) exposes — on_expose_hit.
 //   * While exposed, a bolt OR Fire/Ice wound lands; an elemental wound refills
 //     magic (heal 25). For AlwaysVulnerable bosses (no expose gate) the wound
 //     check runs unconditionally — vulnerable() short-circuits expose.
@@ -258,10 +297,11 @@ private:
 template<typename BoltLike, typename SpellLike, typename MeterLike>
 bool resolve_damage(logic::BossState& b, const logic::Body& boss_body,
                     BoltLike& bolts, SpellLike& spells, MeterLike& magic, int magic_heal){
-    // Light always exposes/refreshes (no-op once defeated/i-framed or AlwaysVulnerable).
+    // Light/Fire/Ice (the CURRENT expose element) exposes/refreshes (no-op if defeated/i-framed or
+    // AlwaysVulnerable). cur_expose == expose_spell for a non-shift boss; shifts for a dual-spell boss.
     if(b.def->vuln == logic::VulnMode::SpellExpose &&
-       spells.consume_hit(boss_body, b.def->expose_spell)){
-        b.on_expose_hit(b.def->expose_spell);
+       spells.consume_hit(boss_body, b.cur_expose)){
+        b.on_expose_hit(b.cur_expose);
     }
     int hp_before = b.hp;
     // Wounding lands only while vulnerable (exposed, or AlwaysVulnerable). Gate here

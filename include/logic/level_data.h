@@ -4,11 +4,11 @@
 #include "logic/ability_pickup.h"   // AbilityPickup { tx, ty, ability }
 #include "logic/boss.h"             // BossDef (a boss room sets LevelData::boss = &<DEF>)
 namespace logic {
-struct EntitySpawn { int tx, ty, param0, param1, param2; }; // enemy: param0/1 patrol l/r tile; param2 flags (bit0 = fire_immune)
+struct EntitySpawn { int tx, ty, param0, param1, param2; }; // enemy: param0/1 patrol l/r tile; param2 encodes EnemyType (see logic/enemy.h's enemy_type_from_params — bit0 = fire-immune variant)
 struct GateSpawn   { int tx, ty; GateType type; int latch_id = -1; }; // latch_id -1 = not latched
-struct DoorSpawn   { int tx, ty, dungeon; };                // dungeon 1..8
+struct DoorSpawn   { int tx, ty, dungeon; };                // dungeon 1..9; 9 = finale
 struct BlockSpawn  { int tx, ty; bool pullable = false; };
-struct PlateSpawn  { int tx, ty, target_tx, target_ty; bool heavy = false; };
+struct PlateSpawn  { int tx, ty, target_tx, target_ty; bool heavy = false; int latch_id = -1; }; // latch_id -1 = not latched (heavy plates only)
 struct ButtonSpawn { int tx, ty, target_tx, target_ty; };
 struct BrazierSpawn{ int tx, ty, group; };
 struct BrazierGroupSpawn { int total, target_tx, target_ty; int latch_id = -1; }; // latch_id -1 = not latched; a group of braziers shares one target
@@ -19,6 +19,7 @@ struct BoulderSpawn        { int tx, ty; };            // M8 Stone: rolling boul
 struct LoosePlatformSpawn  { int tx, ty, len; };       // M8 Stone: shaking platform that drops on pound
 struct HiddenPlatformSpawn { int tx, ty, len; };       // M10 Light: invisible platform revealed while RevealState is active
 struct MagicCrystalSpawn   { int tx, ty; };            // M10: a magic crystal — fully refills the magic meter on touch; respawns each attempt
+struct HealthPickupSpawn   { int tx, ty; };            // M14: a full-HP restore pickup — one-shot per room visit (not persisted); placed pre-boss
 struct LevelData {
     const uint8_t* tiles; int w, h;
     int spawn_tx, spawn_ty;
@@ -40,6 +41,7 @@ struct LevelData {
     const LoosePlatformSpawn*  loose_platforms     = nullptr; int loose_platform_count     = 0;
     const HiddenPlatformSpawn* hidden_platforms    = nullptr; int hidden_platform_count    = 0;
     const MagicCrystalSpawn*   magic_crystals      = nullptr; int magic_crystal_count      = 0;
+    const HealthPickupSpawn*   health_pickups      = nullptr; int health_pickup_count      = 0;
     const BossDef*             boss                = nullptr;  // M12: non-null = boss room (fight on entry)
 };
 struct DungeonData {

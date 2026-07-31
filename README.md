@@ -3,10 +3,25 @@
 An original **Game Boy Advance** action platformer. Laurel, a wand-wielding Goob, must rescue
 the 8 spronks from 8 dungeons and defeat the Nightmare King.
 
-This repo is built in milestones. It currently contains **Milestone 6 — Sunken Ruins + Blink
-(Dash)**: a flooded fifth dungeon that combines every earned power, on top of M1–M5.
+This repo is built in milestones and is currently at **Milestone 14**, the full game loop:
 
-## What's playable
+- **8 spronk-rescue dungeons** (D1 Whispering Woods … D8 Gloom Spire) plus a **9th finale door** —
+  a 2-room approach into the **Nightmare King** boss arena — gated on all 8 spronks freed.
+- A **boss framework** with three shipped per-dungeon room bosses (D1 Whispering Woods Guardian,
+  D2 Slagshell in Ember Caverns, D3 Coldforge Twins in Frost Hollow) plus the Nightmare King finale
+  fight.
+- A **lives + Game Over** system (lives refill on spronk rescue; Game Over offers Continue/Quit),
+  **heart containers** (+25 max HP each, 3 shipped across D6/D7/D8), and **room-to-room** multi-room
+  dungeons with persisted shortcut latches.
+- **SRAM save (v5)** with migrations, and eight abilities — Featherleap (double jump), Fire, Ice,
+  Glide, Dash, Grapple, Stone (ground-pound), and Light — one granted per dungeon shrine. `L`
+  cycles the selected tool; `R` casts/fires it.
+
+## Milestone history
+
+The sections below describe each milestone as it originally shipped; see `docs/acceptance-m*.md`
+and `docs/plans/` for the fuller build-out from M7 (Thornwild Marsh) through M14 (boss framework +
+D1–D3 room bosses).
 
 **M6 — Sunken Ruins (Dungeon 5) + Dash**
 - **Blink / Dash** — a traversal ability: **double-tap a direction** for a fast horizontal burst
@@ -85,7 +100,7 @@ Requires **devkitPro / devkitARM**, **Butano** (vendored as a submodule), and **
 git submodule update --init           # fetch Butano 21.6.0
 python tools/make_placeholder_art.py  # (re)generate placeholder art
 bash tools/build_rom.sh               # build -> SpronkQuest.gba
-bash tools/host_test.sh               # run the host-side logic tests (149 tests)
+bash tools/host_test.sh               # run the host-side logic tests (459 tests)
 ```
 
 > **Windows note:** the ROM builds through devkitPro's bundled MSYS2; host tests use the mingw64
@@ -107,6 +122,10 @@ Physics, collision, combat, meters, and the save format are all validated by fas
 **before** the ROM is ever built.
 
 ## Project status
+
+**Milestone 14: all 8 spronk dungeons + the Nightmare King finale shipped**, on top of the boss
+framework (D1–D3 room bosses), lives/Game-Over, heart containers, and room-to-room dungeons
+described above. The entries below are per-milestone history from M6 down to M1.
 
 **M6 Sunken Ruins + Dash: feature-complete, mGBA-verified.** Adds **Blink / Dash** — a double-tap
 i-frame air-dash that blinks through spikes and smashes cracked walls — plus a `Spikes` hazard, a
@@ -131,10 +150,9 @@ gates, and v1→v2 save migration (`docs/acceptance-m2.md`).
 
 **M1 vertical slice:** shipped (`docs/acceptance-m1.md`).
 
-Real-hardware verification pending. Next milestones: Dungeons 5–8 + their abilities (each a
-content milestone snapping into the M2 framework). See
+Real-hardware verification pending. See
 `docs/superpowers/specs/2026-06-03-spronk-quest-design.md` and the per-milestone plans in
-`docs/plans/`.
+`docs/plans/` for the full M7–M14 build-out (Thornwild Marsh through the boss framework).
 
 ### Level authoring
 

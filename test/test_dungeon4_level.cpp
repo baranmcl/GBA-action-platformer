@@ -1,4 +1,5 @@
 #include "test_framework.h"
+#include "level_harness.h"
 #include "game/levels/dungeon4.h"
 using namespace logic;
 TEST(d4_is_vertical){ CHECK(DUNGEON4_DATA.h > 22); CHECK(DUNGEON4_DATA.h <= 128); }  // tall climb (big-map bg cap)
@@ -48,4 +49,59 @@ TEST(d4_hub_door_grounds_on_main_floor){
       CHECK_EQ(fr, floor_row);
     }
   }
+}
+
+// ----------------------------------------------------------------------------
+// Task 2.6 — real reachability via the shared harness (was existence-only coverage). The Vine gate
+// (col 12) walls off the ENTIRE room past the spawn (build_grid fills it rows 1..h-3, i.e. nearly
+// floor-to-ceiling for this h=56 room), so every proof below opens it (the "Fire beat" the Vine gate
+// gates in this dungeon) -- otherwise nothing past the spawn is reachable at all.
+// ----------------------------------------------------------------------------
+static harness::WorldModel d4_open_gates_wm(){
+  harness::WorldModel wm{};
+  for(int i = 0; i < DUNGEON4_DATA.gate_count; ++i) wm.open_gates.insert(i);
+  return wm;
+}
+
+TEST(d4_shrine_reachable_with_and_without_glide){
+  // The Glide shrine sits BEFORE the updraft shaft (reached via the cols 12-18 ledge staircase,
+  // each rung a 5-tile climb -- exactly CLIMB_RELIABLE), so it must be reachable with the ability
+  // the player doesn't have yet (it's what grants glide) -- and, trivially, also reachable once
+  // glide is held (glide only adds reach, never removes it).
+  const LevelData& L = DUNGEON4_DATA;
+  REQUIRE(L.pickup_count == 1);
+  int tx = L.pickups[0].tx, ty = L.pickups[0].ty;
+  harness::WorldModel no_glide = d4_open_gates_wm();
+  CHECK(harness::reaches(L, no_glide, tx, ty));
+  harness::WorldModel glide = d4_open_gates_wm(); glide.glide = true;
+  CHECK(harness::reaches(L, glide, tx, ty));
+}
+
+// NEEDS_CONTEXT (discovered, not guessed): the row-35 ledge staircase (cols 12-18) and the updraft
+// shaft's base (the row-37 OneWay cap, cols 25-28) sit on the SAME rows (33-37) but are separated by
+// a 6-tile WindRight zone (cols 19-24) with no standable tile in between -- crossing it requires the
+// sideways gust PUSH (src/logic/player.cpp: WIND_ACCEL, applied "regardless of ability"), which this
+// harness deliberately does not model (Task 2.6 brief: "Do NOT model wind push force"). From spawn,
+// harness::reaches(DUNGEON4_DATA, glide, exit/cage) is therefore NOT provable by this model -- it is
+// not a soft-lock (the level almost certainly plays fine with real wind physics; the whole point of
+// the WindRight strip lining up with the ledge row is clearly to blow the player across), just outside
+// what a conservative climb-only model can certify. The test below proves the part that IS provable:
+// seeded at the shaft's base (i.e. GIVEN the wind gust carries the player across, unmodeled), glide
+// alone carries them the rest of the way to both the cage and the exit -- the updraft-lift rule is
+// doing its job; the wind-push gap is the only unverified link. Report this gap in the task report
+// rather than inventing a wind-push rule to force the spawn-seeded assertion to pass.
+TEST(d4_glide_crosses_shaft_from_its_base){
+  const LevelData& L = DUNGEON4_DATA;
+  harness::WorldModel wm = d4_open_gates_wm(); wm.glide = true;
+  CHECK(harness::reaches_from(L, wm, 26, 36, L.exit_tx, L.exit_ty));
+  CHECK(harness::reaches_from(L, wm, 26, 36, L.cage_tx, L.cage_ty));
+}
+
+TEST(d4_exit_and_cage_require_glide){
+  // MUST-NOT-bypass companion: without glide, the shaft stays unreachable even at the edge-apex
+  // CLIMB_MAX jump -- the updraft is the only way up, not an unreliable pixel-perfect jump.
+  const LevelData& L = DUNGEON4_DATA;
+  harness::WorldModel wm = d4_open_gates_wm(); wm.climb_max = true;
+  CHECK(!harness::reaches(L, wm, L.exit_tx, L.exit_ty));
+  CHECK(!harness::reaches(L, wm, L.cage_tx, L.cage_ty));
 }

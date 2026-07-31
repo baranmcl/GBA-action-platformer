@@ -9,6 +9,7 @@ enum class GateType : uint8_t {
     Vine,         // obstacle: Fire
     Ice,          // obstacle: Fire (melts)
     Water,        // obstacle: Ice (freezes to platform)
+                  // the Ice-clearable waterfall GATE — unrelated to TileKind::Water (the damaging hazard tile)
     CrackedWall,  // obstacle: Dash
     CrackedFloor, // obstacle: Stone (ground-pound)
     DarkVeil,     // obstacle: Light
@@ -27,12 +28,7 @@ constexpr GateInfo GATE_TABLE[(int)GateType::Count] = {
     /*DarkVeil*/     { Ability::Light,        false, 12 },
     /*FireWall*/     { Ability::Ice,          false, 10 },  // wall of flames; Ice extinguishes it
 };
-// Tile-index map (graphics/tiles.bmp): 0 blank, 1 ground, 2 one-way, 3 gate(closed wall),
-// 4 cage, 5 door-open, 6 door-locked, 7-12 reserved for M3+ obstacle-gate art, 13 lava,
-// 14/15 brazier, 16 water (M4), 17 plate, 18 button, 19 ice-platform (M4),
-// 20 updraft, 21 wind-left, 22 wind-right (M5), 23 cracked-wall (M6), 24 spikes (M6),
-// 25 grapple-anchor (M7 — green ring with cross, distinct non-flame tile for GrapplePoint kind 10).
-// (9 = Water-gate waterfall. CrackedWall uses 23 because tile 10 is FireWall's flame art.)
+// Tile-index registry (graphics/tiles.bmp strip slots) lives in logic/tile_ids.h — see `tiles::` there.
 inline const GateInfo& gate_info(GateType t){ return GATE_TABLE[(int)t]; }
 inline bool can_pass(GateType t, uint16_t abilities){ return (abilities >> (int)gate_info(t).required) & 1u; }
 

@@ -5,10 +5,14 @@
 namespace logic {
 enum class SpellId : uint8_t { None=0, Fire, Ice, Grapple, Light };  // Grapple: free traversal tool; Light: M10 reveal spell
 
+// Cost of a single spell cast, in magic units. Source of truth for anything that gates on
+// "can the player afford to cast" (e.g. a magic-crystal station deciding whether to top off).
+inline constexpr int SPELL_COST = 10;   // cheap enough that a few enemy kills fund a dungeon's spell obstacles
+
 // Spell-agnostic caster: spends magic + yields a projectile. The POOL tags the projectile with
 // SpellState::selected (Fire vs Ice); the caster itself doesn't care which spell it is.
 struct SpellCast {
-    int cost = 10;   // cheap enough that a few enemy kills fund a dungeon's spell obstacles
+    int cost = SPELL_COST;
     int cooldown_ticks = 20;
     int cd = 0;
     void tick(){ if(cd>0) --cd; }

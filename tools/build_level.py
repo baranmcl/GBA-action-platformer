@@ -14,11 +14,13 @@ Grid symbols (collision tile in parens):
   ?=hidden button  *=brazier
   N=entrance (JSON: {"id":N,"facing":±1}; id defaults to scan-order index, facing to +1)  D=room-door
   Q=exit-to-hub door (no JSON; hardcoded room-door with target_room=-1 -> returns player to the hub)
+  +=health pickup (M14: one-shot full-HP restore, not persisted; no JSON needed, like '$')
   (all content symbols except ~ set collision tile 0; positions recorded as entities)
 
 JSON sidecar (Nth metadata entry -> Nth matching symbol in row-major scan order):
   { "tileset":"tiles",
-    "enemies":[{"patrol":[l,r], "fire_immune":false}...],   # 'o'
+    "enemies":[{"patrol":[l,r], "type":"patroller"}...],    # 'o' (type: "patroller"|"patroller_fire_immune";
+                                                              #      legacy "fire_immune":true/false also accepted)
     "gates":[{"type":"gap"}...],                            # 'G' (V/I set their type directly)
     "pickups":[{"ability":"fire"}...],                      # 'F' (default fire)
     "plates":[{"target":[tx,ty]}...],                       # '='
@@ -47,13 +49,21 @@ ABILITY_ENUM = {
     'featherleap': 'Featherleap', 'fire': 'Fire', 'ice': 'Ice', 'glide': 'Glide',
     'dash': 'Dash', 'grapple': 'Grapple', 'stone': 'Stone', 'light': 'Light',
 }
+# I10: EnemyType seam. Preferred JSON spelling for 'o' entries -> param2 bit0 (same encoding
+# the old bare "fire_immune": true/false flag used; that spelling stays accepted for back-compat
+# -- see the 'o' case in compile_level). Mirrors logic::EnemyType in include/logic/enemy.h.
+ENEMY_TYPE = {
+    'patroller': 0,
+    'patroller_fire_immune': 1,
+}
 # M12: optional room "boss" key -> the BossDef symbol (defined in logic/boss.h). EXPLICIT
 # name->symbol map; an unknown name is a compile error. D1_DEF is THE canonical symbol name.
 BOSS_SYMBOL = {
     'd1': 'logic::D1_DEF',
     'd2': 'logic::D2_DEF',
+    'd3': 'logic::D3_DEF',
 }
-CONTENT = set('@CEoG123456789VIWXFBPK=?*NDQHkO:h$')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door, 'Q' exit-to-hub door (target_room=-1); 'H' heart container; 'k' cracked-floor gate (M8, Stone); 'O' boulder (M8); ':' loose platform (M8); 'h' hidden platform (M10); '$' magic crystal (M10)
+CONTENT = set('@CEoG123456789VIWXFBPK=?*NDQHkO:h$+')  # 'W' Water gate, 'X' Fire-wall gate (M4); 'K' cracked-wall gate (M6, Dash); 'P' pullable block (M7); 'N' entrance, 'D' room-door, 'Q' exit-to-hub door (target_room=-1); 'H' heart container; 'k' cracked-floor gate (M8, Stone); 'O' boulder (M8); ':' loose platform (M8); 'h' hidden platform (M10); '$' magic crystal (M10); '+' health pickup (M14)
 
 
 class LevelError(Exception):
@@ -116,6 +126,7 @@ def compile_level(txt_path, json_path):
     loose_platforms = []  # (tx, ty, len)
     hidden_platforms = [] # (tx, ty, len)  M10 Light
     magic_crystals = []   # (tx, ty)       M10 Light
+    health_pickups = []   # (tx, ty)       M14: full-HP restore pickup
     e_idx = g_idx = f_idx = pl_idx = b_idx = br_idx = n_idx = rd_idx = hc_idx = lp_idx = 0
     cf_idx = 0  # scan-order index for cracked floors ('k'), maps into j_cracked_floors
     hp_idx = 0  # scan-order index for hidden platforms ('h'), maps into j_hidden_platforms
@@ -137,13 +148,22 @@ def compile_level(txt_path, json_path):
             elif c == 'o':
                 je = j_enemies[e_idx] if e_idx < len(j_enemies) else {}
                 patrol = je.get('patrol', [x - 2, x + 2])
-                p2 = 1 if je.get('fire_immune') else 0
+                etype = je.get('type')
+                if etype is not None:
+                    if etype not in ENEMY_TYPE:
+                        raise LevelError(
+                            f"unknown enemy type '{etype}' at ({x},{y}) (known: {sorted(ENEMY_TYPE)})")
+                    p2 = ENEMY_TYPE[etype]
+                else:
+                    p2 = 1 if je.get('fire_immune') else 0  # back-compat spelling
                 enemies.append((x, y, patrol[0], patrol[1], p2))
                 e_idx += 1
             elif c == 'G':
-                if not j_gates:
-                    raise LevelError(f"gate 'G' at ({x},{y}) but JSON has no 'gates' entry")
-                entry = j_gates[g_idx] if g_idx < len(j_gates) else j_gates[-1]
+                if g_idx >= len(j_gates):
+                    raise LevelError(
+                        f"gate 'G' #{g_idx} at ({x},{y}) has no JSON 'gates' entry "
+                        f"({g_idx + 1} symbols so far, {len(j_gates)} entries)")
+                entry = j_gates[g_idx]
                 gtype = entry['type']
                 if gtype not in GATE_ENUM:
                     raise LevelError(f"unknown gate type '{gtype}'")
@@ -182,7 +202,8 @@ def compile_level(txt_path, json_path):
                 jp = j_plates[pl_idx]
                 t = jp['target']
                 heavy = jp.get('heavy', False)
-                plates.append((x, y, t[0], t[1], heavy))
+                latch_id = jp.get('latch_id', -1)
+                plates.append((x, y, t[0], t[1], heavy, latch_id))
                 pl_idx += 1
             elif c == '?':
                 if b_idx >= len(j_buttons):
@@ -232,11 +253,21 @@ def compile_level(txt_path, json_path):
             elif c == '$':
                 # M10: a magic crystal — fully refills the magic meter on touch (respawns each attempt). No JSON needed.
                 magic_crystals.append((x, y))
+            elif c == '+':
+                # M14: a health pickup — full-HP restore on touch, one-shot per room visit (not persisted). No JSON needed.
+                health_pickups.append((x, y))
             elif c in '123456789':
                 doors.append((x, y, int(c)))
 
     if len(spawns) != 1:
         raise LevelError(f"need exactly one '@' spawn, found {len(spawns)}")
+
+    # JSON 'gates' entries beyond the number of 'G' symbols are orphaned (a typo, e.g. a
+    # stale entry left after removing a gate from the grid) — hard error in both directions.
+    if len(j_gates) > g_idx:
+        raise LevelError(
+            f"JSON 'gates' has {len(j_gates)} entries but only {g_idx} 'G' symbols in the level "
+            f"(orphaned entries)")
 
     brazier_groups = [(g['total'], g['target'][0], g['target'][1], g.get('latch_id', -1))
                       for g in j_brazier_groups]
@@ -251,7 +282,7 @@ def compile_level(txt_path, json_path):
         if tile_at(0, y) != 1 or tile_at(w - 1, y) != 1:
             raise LevelError(f"left/right border not solid at row {y}")
 
-    return {
+    level = {
         'w': w, 'h': h, 'tiles': tiles,
         'spawn': spawns[0], 'cage': cages[0] if cages else None, 'exit': exits[0] if exits else None,
         'enemies': enemies, 'gates': gates, 'doors': doors, 'pickups': pickups,
@@ -261,8 +292,63 @@ def compile_level(txt_path, json_path):
         'heart_containers': heart_containers,
         'boulders': boulders, 'loose_platforms': loose_platforms,
         'hidden_platforms': hidden_platforms, 'magic_crystals': magic_crystals,
+        'health_pickups': health_pickups,
         'boss': boss_symbol,
     }
+    validate_level(level)
+    return level
+
+
+def validate_level(level):
+    """Enforce the per-room caps mirroring the fixed-capacity bn::vector spawn buffers in
+    src/game/scene_dungeon.cpp. A room that exceeds one of these silently truncates on real
+    hardware (or, for the shared trigger vector, hard-crashes) — so these are build-time
+    errors, not warnings.
+    """
+    def cap(name, count, limit):
+        if count > limit:
+            raise LevelError(f"{count} {name} > cap {limit}")
+
+    cap('enemies', len(level['enemies']), 8)
+
+    cracked = [g for g in level['gates'] if g[2] == 'CrackedFloor']
+    non_cracked = [g for g in level['gates'] if g[2] != 'CrackedFloor']
+    cap('CrackedFloor gates', len(cracked), 16)
+    cap('non-CrackedFloor gates', len(non_cracked), 24)
+
+    cap('shrines', len(level['pickups']), 4)
+    cap('heart containers', len(level['heart_containers']), 4)
+    cap('blocks', len(level['blocks']), 8)
+    cap('boulders', len(level['boulders']), 8)
+
+    cap('loose platforms', len(level['loose_platforms']), 8)
+    for (tx, ty, llen) in level['loose_platforms']:
+        if llen > 8:
+            raise LevelError(f"loose platform at ({tx},{ty}) len {llen} > cap 8")
+
+    cap('hidden platforms', len(level['hidden_platforms']), 8)
+    for (tx, ty, hlen) in level['hidden_platforms']:
+        if hlen > 8:
+            raise LevelError(f"hidden platform at ({tx},{ty}) len {hlen} > cap 8")
+
+    cap('magic crystals', len(level['magic_crystals']), 8)
+    cap('health_pickups', len(level['health_pickups']), 4)
+    cap('room_doors', len(level['room_doors']), 8)
+    cap('braziers', len(level['braziers']), 16)
+    cap('plates', len(level['plates']), 16)
+    cap('buttons', len(level['buttons']), 16)
+
+    # plates + buttons + brazier_groups share one 16-capacity bn::vector<TriggerInst, 16>
+    # at runtime (scene_dungeon.cpp); overflowing it is a hard crash on hardware, not a
+    # silent truncation, so this combined cap is checked separately from the per-kind caps.
+    trigger_count = len(level['plates']) + len(level['buttons']) + len(level['brazier_groups'])
+    cap('triggers (plates+buttons+brazier_groups)', trigger_count, 16)
+
+    cap('width', level['w'], 64)
+    cap('height', level['h'], 128)
+    area = level['w'] * level['h']
+    if area > 8192:
+        raise LevelError(f"level {level['w']}x{level['h']}={area} tiles > 8192 (EWRAM grid cap)")
 
 
 def emit_header(level, name):
@@ -270,11 +356,16 @@ def emit_header(level, name):
         return ', '.join(str(v) for v in vals)
 
     def emit_array(cpp_type, var, items, dummy):
-        """Emit an inline constexpr array (1-element dummy when empty) + return its count."""
+        """Emit an inline constexpr array (nullptr when empty) + return its count.
+
+        `dummy` is unused now that empty lists emit a null pointer instead of a
+        fake one-element array; kept as a parameter so call sites don't need to
+        change (harmless dead argument, avoids a noisy diff at every call site).
+        """
         if items:
             body = ', '.join(items)
             return (f'inline constexpr {cpp_type} {name}_{var}[] = {{ {body} }};', len(items))
-        return (f'inline constexpr {cpp_type} {name}_{var}[] = {{ {dummy} }};', 0)
+        return (f'inline constexpr {cpp_type}* {name}_{var} = nullptr;', 0)
 
     L = ['#pragma once', '#include "logic/level_data.h"']
     if level.get('boss'):
@@ -298,8 +389,8 @@ def emit_header(level, name):
                               [f'{{{tx},{ty},{"true" if pull else "false"}}}' for (tx, ty, pull) in level['blocks']],
                               '{0,0,false}'); L.append(line)
     line, plcount = emit_array('logic::PlateSpawn', 'PLATES',
-                               [f'{{{tx},{ty},{ttx},{tty},{"true" if heavy else "false"}}}' for (tx, ty, ttx, tty, heavy) in level['plates']],
-                               '{0,0,0,0,false}'); L.append(line)
+                               [f'{{{tx},{ty},{ttx},{tty},{"true" if heavy else "false"},{latch}}}' for (tx, ty, ttx, tty, heavy, latch) in level['plates']],
+                               '{0,0,0,0,false,-1}'); L.append(line)
     line, btcount = emit_array('logic::ButtonSpawn', 'BUTTONS',
                                [f'{{{tx},{ty},{ttx},{tty}}}' for (tx, ty, ttx, tty) in level['buttons']],
                                '{0,0,0,0}'); L.append(line)
@@ -330,6 +421,9 @@ def emit_header(level, name):
     line, mccount = emit_array('logic::MagicCrystalSpawn', 'MAGIC_CRYSTALS',
                                [f'{{{tx},{ty}}}' for (tx, ty) in level['magic_crystals']],
                                '{0,0}'); L.append(line)
+    line, hpkcount = emit_array('logic::HealthPickupSpawn', 'HEALTH_PICKUPS',
+                               [f'{{{tx},{ty}}}' for (tx, ty) in level['health_pickups']],
+                               '{0,0}'); L.append(line)
 
     sx, sy = level['spawn']
     cx, cy = level['cage'] if level['cage'] else (0, 0)
@@ -348,6 +442,7 @@ def emit_header(level, name):
         f'{name}_HEART_CONTAINERS, {hccount}, '
         f'{name}_BOULDERS, {bocount}, {name}_LOOSE_PLATFORMS, {lpcount}, '
         f'{name}_HIDDEN_PLATFORMS, {hpcount}, {name}_MAGIC_CRYSTALS, {mccount}, '
+        f'{name}_HEALTH_PICKUPS, {hpkcount}, '
         f'{boss_init} }};'
     )
     L.append('')

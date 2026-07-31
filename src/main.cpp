@@ -3,11 +3,13 @@
 #include "logic/world_state.h"
 #include "logic/player_state.h"
 #include "engine/save.h"
+#include "engine/pause.h"
 #include "game/scene_title.h"
 #include "game/scene_hub.h"
 #include "game/scene_dungeon.h"
 #include "game/scene_boss.h"
 #include "game/scene_victory.h"
+#include "game/scene_debug.h"
 #include "game/levels/dungeons.h"
 
 int main()
@@ -19,15 +21,54 @@ int main()
         world = logic::World{}; // fresh game on empty/corrupt SRAM
     logic::clamp_lives_on_load(world); // never boot into an instant Game Over (fresh World already has lives=3)
 
-    game::run_title(world); // START -> enter the hub
+    // Title -> normal hub flow, OR (SELECT held on START) the I35 debug dungeon/ability selector.
+    // A debug launch runs with saving disabled and a synthetic, throwaway World (never `world`
+    // itself) so it can never touch the real SRAM save; afterward we land back on the title with
+    // the ORIGINAL `world` untouched and loop until the player enters normally. This is the ONLY
+    // change to main's control flow — once TitleResult::debug is false, everything below is
+    // byte-identical to the pre-I35 flow.
+    for(;;)
+    {
+        game::TitleResult tr = game::run_title(world);
+        if(!tr.debug) break;
+
+        game::DebugLaunch dl = game::run_debug_select();
+        if(dl.dungeon != 0)
+        {
+            engine::set_save_enabled(false); // linchpin: nothing below can reach SRAM until re-enabled
+            engine::set_cpu_meter_enabled(true); // debug session: show the pause-screen CPU meter
+            logic::World dbg_world = dl.world;
+            dbg_world.current_dungeon = dl.dungeon;
+            logic::PlayerState dbg_ps;
+            logic::sync_health_cap(dbg_ps, dbg_world);
+            dbg_ps.health.cur = dbg_ps.health.max;
+
+            if(dl.dungeon == 9) // finale: approach then boss arena, same routing as door 9 below
+            {
+                game::DungeonResult ar = game::run_dungeon(DUNGEON9_APPROACH, dbg_world, dbg_ps);
+                if(ar == game::DungeonResult::Cleared)
+                    game::run_boss(DUNGEON9_ARENA, dbg_world, dbg_ps); // result unused — debug session ends either way
+            }
+            else
+            {
+                const logic::DungeonData* lvl = DUNGEONS_BY_ID[dl.dungeon - 1];
+                game::run_dungeon(*lvl, dbg_world, dbg_ps);
+            }
+
+            engine::set_cpu_meter_enabled(false); // debug session over: hide the CPU meter again
+            engine::set_save_enabled(true); // restore normal saving for the rest of the session
+        }
+        // Loop back to the title; dl.dungeon == 0 (cancelled) also lands here.
+    }
 
     logic::PlayerState ps;  // health/magic persist across hub <-> dungeon for the whole session
     // Boot at FULL health for the player's CURRENT max. PlayerState defaults to the BASE 100, but a
     // returning player may have earned heart containers (max_health_for > 100); without this they'd
     // start with a partly-empty bar (cur=100 < max=150). ps is never saved, so a fresh boot always
     // starts full — per-session damage still carries across hub<->dungeon (no free heal on hub return).
-    ps.health.max = logic::max_health_for(world);
-    ps.health.cur = ps.health.max;
+    logic::sync_health_cap(ps, world);   // grow the cap for any already-collected heart containers
+    ps.health.cur = ps.health.max;       // ...then always start a fresh boot at FULL health (unlike the
+                                         // mid-session clamp-down sync_health_cap does at the other sites)
 
     while(true)
     {
@@ -62,14 +103,7 @@ int main()
         }
 
         const logic::DungeonData* lvl = nullptr;
-        if(n == 1) lvl = &DUNGEON1_DUNGEON;
-        else if(n == 2) lvl = &DUNGEON2_DUNGEON;
-        else if(n == 3) lvl = &DUNGEON3_DUNGEON;
-        else if(n == 4) lvl = &DUNGEON4_DUNGEON;
-        else if(n == 5) lvl = &DUNGEON5_DUNGEON;
-        else if(n == 6) lvl = &DUNGEON6_DUNGEON;
-        else if(n == 7) lvl = &DUNGEON7_DUNGEON;
-        else if(n == 8) lvl = &DUNGEON8_DUNGEON;
+        if(n >= 1 && n <= 8) lvl = DUNGEONS_BY_ID[n - 1];
         else continue;                                // out-of-range n (no such dungeon)
 
         world.current_dungeon = n;

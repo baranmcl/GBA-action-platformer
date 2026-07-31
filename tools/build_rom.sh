@@ -10,9 +10,9 @@
 #   bash tools/build_rom.sh -j8        # pass make args
 set -euo pipefail
 
-DKP_BASH="/c/devkitPro/msys2/usr/bin/bash.exe"
-REPO="/c/Users/baranmcl/Code/GBA-action-platformer"
-WINPY="/c/Users/baranmcl/AppData/Local/Programs/Python/Python312"
+DKP_BASH="${DKP_BASH:-/c/devkitPro/msys2/usr/bin/bash.exe}"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WINPY="${WINPY:-/c/Users/baranmcl/AppData/Local/Programs/Python/Python312}"
 
 MAKE_ARGS="${*:-"-j8"}"
 
@@ -21,5 +21,10 @@ for f in "$REPO"/tools/levels/*.txt; do
     [ -e "$f" ] || continue
     "$WINPY/python" "$REPO/tools/build_level.py" "$f" "$REPO/include/game/levels/$(basename "${f%.txt}").h"
 done
+
+# Whole-game validator: catches cross-room/cross-dungeon content errors (room-graph
+# typos, latch/heart id collisions, sprite-budget overruns, arena constraint violations)
+# before they reach a ROM build.
+"$WINPY/python" "$REPO/tools/validate_dungeons.py"
 
 exec "$DKP_BASH" -lc "cd '$REPO' && export PATH=\"$WINPY:\$PATH\" && make $MAKE_ARGS"

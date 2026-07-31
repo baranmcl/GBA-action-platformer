@@ -85,6 +85,19 @@ TEST(health_bar_ties_to_containers){
     CHECK_EQ(health_fill_pips(100, max_health_for(w)), 10);      // partial on the longer bar
 }
 
+// --- MAX_HEALTH_PIPS must fit the shipped 3-heart-container max (175 HP), not just the old
+// 150-HP band. At the old cap of 16, health_total_pips(175) clamped to 16 (same length as a
+// 160 max), making the third heart container's bar length invisible. ---
+TEST(health_bar_fits_three_heart_containers){
+    CHECK_EQ(health_total_pips(175), 18);            // ceil(175/10) = 18, unclamped at the new cap
+}
+TEST(health_bar_clamps_beyond_new_cap){
+    CHECK_EQ(health_total_pips(300), 20);            // ceil(300/10) = 30, clamped to MAX_HEALTH_PIPS
+}
+TEST(health_bar_fill_at_three_heart_containers){
+    CHECK_EQ(health_fill_pips(160, 175), 16);         // damage from full is visible well before the cap
+}
+
 // --- lives_display_count: clamps to [0, LIVES_HUD_CAP], floors negatives at 0 ---
 TEST(lives_display_zero){
     CHECK_EQ(lives_display_count(0), 0);

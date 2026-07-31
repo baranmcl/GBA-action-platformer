@@ -142,7 +142,7 @@ class TestBuildLevel(unittest.TestCase):
             "brazier_groups": [{"total": 1, "target": [5, 5]}],
         })
         self.assertEqual(lvl['blocks'], [(2, 1, False)])
-        self.assertEqual(lvl['plates'], [(3, 1, 6, 1, False)])
+        self.assertEqual(lvl['plates'], [(3, 1, 6, 1, False, -1)])
         self.assertEqual(lvl['buttons'], [(4, 1, 6, 2)])
         self.assertEqual(lvl['braziers'], [(5, 1, 0)])
         self.assertEqual(lvl['brazier_groups'], [(1, 5, 5, -1)])  # latch_id defaults to -1
@@ -150,6 +150,21 @@ class TestBuildLevel(unittest.TestCase):
     def test_fire_immune_enemy_flag(self):
         lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4], "fire_immune": True}]})
         self.assertEqual(lvl['enemies'][0], (4, 1, 1, 4, 1))  # param2 bit0 = fire_immune
+
+    # --- I10: EnemyType "type" spelling (preferred over legacy "fire_immune") ---
+
+    def test_enemy_type_patroller(self):
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4], "type": "patroller"}]})
+        self.assertEqual(lvl['enemies'][0], (4, 1, 1, 4, 0))
+
+    def test_enemy_type_patroller_fire_immune(self):
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4], "type": "patroller_fire_immune"}]})
+        self.assertEqual(lvl['enemies'][0], (4, 1, 1, 4, 1))  # same param2 bit0 as fire_immune:true
+
+    def test_enemy_unknown_type_errors(self):
+        with self.assertRaises(build_level.LevelError) as cm:
+            compile_str(VALID, {"enemies": [{"patrol": [1, 4], "type": "flyer"}]})
+        self.assertIn('flyer', str(cm.exception))
 
     def test_plate_requires_json_target(self):
         txt = "#####\n#@=.#\n#####\n"
@@ -294,27 +309,27 @@ class TestBuildLevel(unittest.TestCase):
         # A plate entry with "heavy": true must produce a plate tuple with heavy=True (5th element)
         txt = "#######\n#@.=..#\n#######\n"
         lvl = compile_str(txt, {"plates": [{"target": [3, 4], "heavy": True}]})
-        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, True)])
+        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, True, -1)])
 
     def test_heavy_plate_flag_false_by_default(self):
         # A plate entry without "heavy" defaults to False
         txt = "#######\n#@.=..#\n#######\n"
         lvl = compile_str(txt, {"plates": [{"target": [3, 4]}]})
-        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, False)])
+        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, False, -1)])
 
     def test_heavy_plate_emit_header_true(self):
         # emit_header must include the bool in the PlateSpawn initializer
         txt = "#######\n#@.=..#\n#######\n"
         lvl = compile_str(txt, {"plates": [{"target": [3, 4], "heavy": True}]})
         hdr = build_level.emit_header(lvl, "TESTHP")
-        self.assertIn("{3,1,3,4,true}", hdr)
+        self.assertIn("{3,1,3,4,true,-1}", hdr)
 
     def test_heavy_plate_emit_header_false(self):
         # Non-heavy plate must emit false
         txt = "#######\n#@.=..#\n#######\n"
         lvl = compile_str(txt, {"plates": [{"target": [3, 4]}]})
         hdr = build_level.emit_header(lvl, "TESTHPF")
-        self.assertIn("{3,1,3,4,false}", hdr)
+        self.assertIn("{3,1,3,4,false,-1}", hdr)
 
     def test_existing_plate_test_still_green(self):
         # The existing block/plate/button/brazier test data still compiles correctly
@@ -325,8 +340,27 @@ class TestBuildLevel(unittest.TestCase):
             "braziers": [{"group": 0}],
             "brazier_groups": [{"total": 1, "target": [5, 5]}],
         })
-        # plate still at (3,1) targeting (6,1); heavy defaults False (5th field)
-        self.assertEqual(lvl['plates'], [(3, 1, 6, 1, False)])
+        # plate still at (3,1) targeting (6,1); heavy defaults False (5th field); latch_id defaults -1 (6th field)
+        self.assertEqual(lvl['plates'], [(3, 1, 6, 1, False, -1)])
+
+    # --- Task 1.3: heavy-plate latch_id persistence (I24) ---
+    def test_plate_latch_id_emits_given_value(self):
+        # A plate entry with "latch_id": 3 must produce a plate tuple carrying it (6th element)
+        # and emit_header must render the literal int, not the default.
+        txt = "#######\n#@.=..#\n#######\n"
+        lvl = compile_str(txt, {"plates": [{"target": [3, 4], "heavy": True, "latch_id": 3}]})
+        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, True, 3)])
+        hdr = build_level.emit_header(lvl, "TESTPLATCH")
+        self.assertIn("{3,1,3,4,true,3}", hdr)
+
+    def test_plate_latch_id_defaults_to_minus_one(self):
+        # A plate entry without "latch_id" defaults to -1 (not latched), both in the compiled
+        # tuple and in the emitted header literal.
+        txt = "#######\n#@.=..#\n#######\n"
+        lvl = compile_str(txt, {"plates": [{"target": [3, 4], "heavy": True}]})
+        self.assertEqual(lvl['plates'], [(3, 1, 3, 4, True, -1)])
+        hdr = build_level.emit_header(lvl, "TESTPLNOLATCH")
+        self.assertIn("{3,1,3,4,true,-1}", hdr)
 
     # --- M8 symbols: Task 2.3 boulder 'O' + loose-platform ':' ---
     def test_boulder_symbol(self):
@@ -497,6 +531,45 @@ class TestBuildLevel(unittest.TestCase):
         self.assertIn("TESTNOMC_MAGIC_CRYSTALS, 0", hdr)
         self.assertEqual(lvl['magic_crystals'], [])
 
+    def test_health_pickup_symbol(self):
+        # '+' compiles to a health pickup at the right tile position (no JSON needed)
+        txt = "#######\n#@.+..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['health_pickups'], [(3, 1)])
+
+    def test_health_pickup_tile_is_empty(self):
+        # '+' is a content symbol: collision tile under it must be 0
+        txt = "#######\n#@.+..#\n#######\n"
+        lvl = compile_str(txt, {})
+        self.assertEqual(lvl['tiles'][lvl['w'] * 1 + 3], 0)
+
+    def test_health_pickup_emit_header(self):
+        # emit_header includes HEALTH_PICKUPS array and wires count into LevelData
+        txt = "#######\n#@.+..#\n#######\n"
+        lvl = compile_str(txt, {})
+        hdr = build_level.emit_header(lvl, "TESTHP")
+        self.assertIn("TESTHP_HEALTH_PICKUPS", hdr)
+        self.assertIn("{3,1}", hdr)  # HealthPickupSpawn {tx, ty}
+        self.assertIn("TESTHP_HEALTH_PICKUPS, 1", hdr)  # count in LevelData
+
+    def test_health_pickup_absent_still_compiles(self):
+        # Level without '+': dummy array + count 0 in LevelData
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4]}]})
+        hdr = build_level.emit_header(lvl, "TESTNOHPK")
+        self.assertIn("TESTNOHPK_HEALTH_PICKUPS", hdr)
+        self.assertIn("TESTNOHPK_HEALTH_PICKUPS, 0", hdr)
+        self.assertEqual(lvl['health_pickups'], [])
+
+    def test_health_pickup_cap_exceeded_errors(self):
+        # 5 health pickups > cap 4 (mirrors the shrine/heart_container cap style)
+        w = 2 + 1 + 5  # borders + '@' + 5 '+'
+        txt = ('#' * w + '\n' +
+               '#@' + '+' * 5 + '#' + '\n' +
+               '#' * w + '\n')
+        with self.assertRaises(build_level.LevelError) as cm:
+            compile_str(txt, {})
+        self.assertIn('health_pickups', str(cm.exception))
+
     # --- M12 boss key: optional "boss" JSON key -> LevelData.boss field ---
     def test_boss_key_d1_sets_boss_field(self):
         # A room with "boss":"d1" records the canonical D1_DEF symbol (namespace-qualified) on the level.
@@ -536,6 +609,95 @@ class TestBuildLevel(unittest.TestCase):
         lvl = compile_str(txt, {"hidden_platforms": [{"len": 2}]})
         self.assertEqual(lvl['hidden_platforms'], [(3, 1, 2)])
         self.assertEqual(lvl['magic_crystals'], [(5, 1)])
+
+    # --- Task 1.1: per-room cap/dimension/JSON-count validation ---
+    def test_enemy_cap_exceeded_errors(self):
+        # 9 enemies > cap 8 (runtime bn::vector<EnemyInst, 8> in scene_dungeon.cpp)
+        w = 2 + 1 + 9  # borders + '@' + 9 'o's
+        txt = ('#' * w + '\n' +
+               '#@' + 'o' * 9 + '#' + '\n' +
+               '#' * w + '\n')
+        with self.assertRaises(build_level.LevelError) as cm:
+            compile_str(txt, {})
+        self.assertIn('enemies', str(cm.exception))
+
+    def test_width_cap_exceeded_errors(self):
+        # 65-wide bordered level > cap 64 (level width; EWRAM collision grid)
+        w = 65
+        interior = '.' * (w - 3)  # w minus 2 borders minus '@'
+        txt = ('#' * w + '\n' +
+               '#@' + interior + '#' + '\n' +
+               '#' * w + '\n')
+        with self.assertRaises(build_level.LevelError) as cm:
+            compile_str(txt, {})
+        self.assertIn('width', str(cm.exception))
+
+    def test_combined_trigger_cap_exceeded_errors(self):
+        # 6 plates + 6 buttons + 5 brazier_groups = 17 triggers > cap 16 (shared
+        # bn::vector<TriggerInst, 16> in scene_dungeon.cpp). brazier_groups are JSON-only
+        # (indexed by group id, not by a grid symbol), so the grid only needs the 6
+        # '=' plates + 6 '?' buttons (12 symbols) plus '@' and borders.
+        w = 2 + 1 + 6 + 6  # borders + '@' + 6 '=' + 6 '?'
+        txt = ('#' * w + '\n' +
+               '#@' + '=' * 6 + '?' * 6 + '#' + '\n' +
+               '#' * w + '\n')
+        meta = {
+            "plates": [{"target": [0, 0]} for _ in range(6)],
+            "buttons": [{"target": [0, 0]} for _ in range(6)],
+            "brazier_groups": [{"total": 1, "target": [0, 0]} for _ in range(5)],
+        }
+        with self.assertRaises(build_level.LevelError) as cm:
+            compile_str(txt, meta)
+        self.assertIn('trigger', str(cm.exception))
+
+    def test_loose_platform_len_cap_exceeded_errors(self):
+        # loose platform len 9 > cap 8
+        txt = "#######\n#@.:..#\n#######\n"
+        with self.assertRaises(build_level.LevelError) as cm:
+            compile_str(txt, {"loose_platforms": [{"len": 9}]})
+        self.assertIn('len', str(cm.exception))
+
+    def test_gate_symbol_json_undercount_errors(self):
+        # 3 'G' symbols but only 2 JSON 'gates' entries -> hard error (replaces the old
+        # silent j_gates[-1] reuse fallback at build_level.py:147)
+        txt = "########\n#@GGG..#\n########\n"
+        with self.assertRaises(build_level.LevelError):
+            compile_str(txt, {"gates": [{"type": "gap"}, {"type": "gap"}]})
+
+    def test_gate_symbol_json_overcount_errors(self):
+        # JSON 'gates' has MORE entries than 'G' symbols -> orphaned entry is a typo, hard error
+        txt = "#####\n#@G.#\n#####\n"
+        with self.assertRaises(build_level.LevelError):
+            compile_str(txt, {"gates": [{"type": "gap"}, {"type": "gap"}]})
+
+    def test_room_at_exact_caps_compiles_clean(self):
+        # Happy path: exactly at caps (8 enemies, width 64) must compile without error.
+        w = 64
+        interior_len = w - 2 - 1 - 8  # minus borders, '@', 8 'o's
+        txt = ('#' * w + '\n' +
+               '#@' + 'o' * 8 + '.' * interior_len + '#' + '\n' +
+               '#' * w + '\n')
+        lvl = compile_str(txt, {})
+        self.assertEqual(len(lvl['enemies']), 8)
+        self.assertEqual(lvl['w'], 64)
+
+    # --- I23: empty entity lists emit a null pointer, not a dummy one-element array ---
+    def test_empty_gates_emit_nullptr(self):
+        # No 'G'/'V'/'I'/'W' symbols -> GATES must be a null pointer, not `{ {`.
+        lvl = compile_str(VALID, {"enemies": [{"patrol": [1, 4]}]})
+        hdr = build_level.emit_header(lvl, "TESTNULLGATES")
+        self.assertIn("TESTNULLGATES_GATES = nullptr;", hdr)
+        self.assertNotIn("TESTNULLGATES_GATES[] = { {", hdr)
+        self.assertIn("TESTNULLGATES_GATES, 0", hdr)
+
+    def test_nonempty_gates_still_emit_array(self):
+        # A level with real gates must still emit a real array (not nullptr).
+        txt = "######\n#@VI.#\n######\n"
+        lvl = compile_str(txt, {})
+        hdr = build_level.emit_header(lvl, "TESTREALGATES")
+        self.assertIn("TESTREALGATES_GATES[] = {", hdr)
+        self.assertNotIn("TESTREALGATES_GATES = nullptr;", hdr)
+        self.assertIn("TESTREALGATES_GATES, 2", hdr)
 
 
 if __name__ == '__main__':

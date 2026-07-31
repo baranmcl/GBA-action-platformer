@@ -36,3 +36,15 @@ TEST(enemy_dead_does_not_move){
 }
 TEST(enemy_kill_flag){ Enemy e; e.kill(); CHECK(!e.alive); }
 TEST(enemy_fire_immune_flag){ Enemy e; e.fire_immune=true; CHECK(e.fire_immune); Enemy d; CHECK(!d.fire_immune); }
+
+// I10: EnemyType seam — param2 bit0 decode.
+TEST(enemy_type_from_params_bit0_set_is_fire_immune){
+    CHECK(enemy_type_from_params(1) == EnemyType::PatrollerFireImmune);
+}
+TEST(enemy_type_from_params_bit0_clear_is_patroller){
+    CHECK(enemy_type_from_params(0) == EnemyType::Patroller);
+}
+TEST(enemy_type_from_params_ignores_other_bits){
+    CHECK(enemy_type_from_params(3) == EnemyType::PatrollerFireImmune); // bit0 set, bit1 ignored
+    CHECK(enemy_type_from_params(2) == EnemyType::Patroller);           // bit0 clear
+}

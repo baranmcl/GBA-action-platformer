@@ -7,7 +7,7 @@ TARGET      	:=  SpronkQuest
 BUILD       	:=  build
 LIBBUTANO   	:=  butano/butano
 PYTHON      	:=  python
-SOURCES     	:=  src src/logic src/engine src/game butano/common/src
+SOURCES     	:=  src src/logic src/engine src/game src/game/room butano/common/src
 INCLUDES    	:=  include butano/common/include
 DATA        	:=
 GRAPHICS    	:=  graphics butano/common/graphics
@@ -40,3 +40,13 @@ endif
 # Include main makefile:
 #---------------------------------------------------------------------------------------------------------------------
 include $(LIBBUTANOABS)/butano.mak
+
+#---------------------------------------------------------------------------------------------------------------------
+# Level headers are generated from tools/levels/*.txt — `make levels` refreshes them.
+# tools/build_rom.sh performs the same regeneration itself; raw `make` does NOT.
+#---------------------------------------------------------------------------------------------------------------------
+.PHONY: levels
+levels:
+	@for f in tools/levels/*.txt; do \
+	  python tools/build_level.py $$f include/game/levels/$$(basename $${f%.txt}).h; \
+	done

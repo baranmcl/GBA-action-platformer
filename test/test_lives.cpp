@@ -102,6 +102,61 @@ TEST(refill_lives_already_at_max_unchanged){
     CHECK_EQ((int)w.lives, 3);
 }
 
+// --- revive_lives (Game-Over revive: always STARTING_LIVES, not max_lives) ---
+
+TEST(revive_lives_no_spronks){
+    World w;
+    w.lives = 0;
+    revive_lives(w);
+    CHECK_EQ((int)w.lives, 3);  // always STARTING_LIVES regardless of max
+}
+
+TEST(revive_lives_with_spronks_still_three){
+    World w;
+    // Free 5 spronks: max_lives would be 3 + 5 = 8
+    for(int d = 1; d <= 5; ++d) w.free_spronk(d);
+    w.lives = 0;
+    revive_lives(w);
+    CHECK_EQ((int)w.lives, 3);  // NOT 8 (max_lives) — the whole point of revive_lives
+}
+
+TEST(revive_lives_below_max_is_valid){
+    World w;
+    // Free 5 spronks: max_lives = 8
+    for(int d = 1; d <= 5; ++d) w.free_spronk(d);
+    revive_lives(w);
+    // After revive to 3 with 5 spronks freed, confirm 3 <= max_lives (so clamp_lives_on_load won't alter it)
+    CHECK((int)w.lives <= max_lives(w));
+    CHECK((int)w.lives > 0);
+}
+
+// --- gain_life ---
+
+TEST(gain_life_grants_exactly_one_after_spronk_freed){
+    World w;
+    w.lives = 2; // starting max 3, lost a life
+    w.free_spronk(1); // freeing a spronk grows max to 4
+    gain_life(w);
+    CHECK_EQ((int)w.lives, 3); // +1, NOT a full refill to 4
+}
+
+TEST(gain_life_at_old_max_grants_one_more_via_new_cap){
+    World w;
+    // lives == 3, the max at 0 spronks (full)
+    CHECK_EQ((int)w.lives, 3);
+    w.free_spronk(1); // freeing a spronk grows max to 4
+    gain_life(w);
+    CHECK_EQ((int)w.lives, 4); // +1 up to the new max
+}
+
+TEST(gain_life_at_max_is_noop){
+    World w;
+    w.free_spronk(1); // max = 4
+    w.lives = 4;       // already at max
+    gain_life(w);
+    CHECK_EQ((int)w.lives, 4); // cannot exceed max
+}
+
 // --- clamp_lives_on_load ---
 
 TEST(clamp_lives_on_load_zero_becomes_max){
@@ -146,4 +201,41 @@ TEST(spronk_count_three){
     World w;
     w.free_spronk(2); w.free_spronk(5); w.free_spronk(8);
     CHECK_EQ(spronk_count(w), 3);
+}
+
+// --- door_enterable (I8) ---
+
+TEST(door_enterable_door1_always_open_fresh_start){
+    World w;
+    CHECK(door_enterable(1, w));
+}
+
+TEST(door_enterable_door2_locked_until_spronk1_freed){
+    World w;
+    CHECK(!door_enterable(2, w));
+    w.free_spronk(1);
+    CHECK(door_enterable(2, w));
+}
+
+TEST(door_enterable_door8_needs_spronk7_not_spronk1){
+    World w;
+    w.free_spronk(1);
+    CHECK(!door_enterable(8, w)); // only spronk 1 freed, not spronk 7
+    w.free_spronk(7);
+    CHECK(door_enterable(8, w));
+}
+
+TEST(door_enterable_door9_finale_needs_all_eight_spronks){
+    World w;
+    for(int d = 1; d <= 7; ++d) w.free_spronk(d);
+    CHECK(!door_enterable(9, w)); // only 7 of 8 freed
+    w.free_spronk(8);
+    CHECK(door_enterable(9, w));
+}
+
+TEST(door_enterable_out_of_range_n_is_false){
+    World w;
+    for(int d = 1; d <= 8; ++d) w.free_spronk(d); // even fully-unlocked state
+    CHECK(!door_enterable(0, w));
+    CHECK(!door_enterable(10, w));
 }

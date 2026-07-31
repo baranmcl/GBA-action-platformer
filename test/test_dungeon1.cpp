@@ -1,5 +1,5 @@
 #include "test_framework.h"
-#include "logic/dungeon1.h"
+#include "logic/spronk_rescue.h"
 using namespace logic;
 static Body mk(int x, int y, int hw, int hh){
     Body b{}; b.half_w=Fixed::from_int(hw); b.half_h=Fixed::from_int(hh);
