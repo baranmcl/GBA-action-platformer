@@ -81,18 +81,24 @@ but by accident, from an unrelated field. §5 replaces the derivation with an ex
 
 ### 3.1 The governing rule, and the number behind it
 
-**No standing surface exists within 11 tiles below the boss's hover line.** The player can never
-reach boss altitude from a ledge — not by standing, and not by jumping — so landing a hit always
-requires the updraft-and-glide loop.
+**No standing surface exists within 13 tiles above the boss's hover line** — i.e. every standing
+surface row `L` satisfies `L >= hover_row + 13`. The player can never reach boss altitude from a
+ledge, by standing or by jumping, so landing a hit always requires the updraft-and-glide loop.
 
-11 is derived, not guessed. From a standing surface the player's maximum bolt reach upward is:
+13 is derived, not guessed. Measuring from the *surface the player stands on* to the *bottom edge of
+the boss's hitbox* — the two extremities that actually decide whether a bolt connects:
 
 | Term | Value | Source |
 |------|-------|--------|
-| Featherleap double jump | 2 × 3.5 = **7.0 tiles** | `JUMP_VY = -812` raw → "single jump ~3.5 tiles" (`src/logic/player.cpp:8`). The player owns Featherleap from D1, so both jumps are always available. |
+| Player centre above the surface it stands on | **2.0 tiles** | body is 4 tiles tall; `muzzle()` fires from `pos.y + half_h` (`src/game/player_session.cpp:110`) |
 | Up-aimed muzzle offset | 14 px = **1.75 tiles** | `read_aim_dy()` (`src/engine/input.cpp:16`) |
-| Boss hitbox half-height | 16 px = **2.0 tiles** | `boss_body.half_h = fx(16)` (`src/game/boss_fight.cpp:91`) |
-| **Total** | **10.75 → 11** | |
+| Featherleap double jump | 2 × 3.5 = **7.0 tiles** | `JUMP_VY = -812` raw → "single jump ~3.5 tiles" (`src/logic/player.cpp:8`). The player owns Featherleap from D1, so both jumps are always available. |
+| Boss hitbox half-height (centre → bottom edge) | 16 px = **2.0 tiles** | `boss_body.half_h = fx(16)` (`src/game/boss_fight.cpp:91`) |
+| **Total** | **12.75 → 13** | |
+
+Both endpoints matter and are easy to drop: measuring to the boss's *centre* rather than its bottom
+edge, or forgetting that the player's muzzle already sits 2 tiles above the ledge, each understates
+the clearance by 2 tiles and silently permits the jump-shot this rule exists to forbid.
 
 If emulator QA shows a ledge still permits a jump-shot, the constant is raised in one place (§7) and
 the arena rows move with it.
@@ -105,23 +111,35 @@ firing window and the fight's core skill expression.
 
 ### 3.2 Arena geometry and the loop
 
-32 × 24 tiles. Floor at row 22 (`run_boss_fight` grounds non-hovering bodies at `(level.h - 2) * 8`).
-Hover line at **row 5**; three ledges at **rows 16–19**, all ≥ 11 tiles clear of it. Updraft columns
-run from the floor to ~row 4. The 17-tile floor-to-boss span fits the 20-tile-tall viewport, so a
-player standing on the floor can see the boss and read its drift before committing.
+32 × 24 tiles. Rows 22–23 are solid floor, so bodies stand with their feet at `(h - 2) * 8`, which is
+also where `run_boss_fight` grounds a non-hovering boss. Hover line at **row 5** (hitbox spans rows
+3–7). Two ledges at **rows 18 and 20** — both satisfy `L >= 5 + 13`. Two updraft columns at
+**x = 6** and **x = 25**, spanning rows 3–21.
+
+The 17-tile floor-to-boss span fits the 20-tile viewport, so a player on the floor can see the boss
+and read its drift before committing to a climb (camera clamping per IMPL-9 keeps the tall room from
+scrolling past its bounds).
 
 ```
  row  0  ################################
-      1  #..............................#
-      5  #.......~~~ BOSS drifts ~~~....#  <- hover line (rows 4-6 hitbox)
+      3  #.....u..................u.....#  <- columns reach above the hover line
+      5  #.....u ~~~ BOSS drifts ~~~u...#  <- hover line (hitbox rows 3-7)
       8  #.....u..................u.....#  |
      12  #.....u..................u.....#  |  open glide corridor
-     15  #.....u..................u.....#  |  (no surfaces: 11-tile rule)
-     16  #..___u.......______.....u___..#  <- ledges (rows 16-19)
-     19  #.....u..................u.....#
-     22  #.@.ND u ..............u ..ND..#  <- floor
-     23  ################################
+     16  #.....u..................u.....#  |  (no surfaces: the 13-tile rule)
+     18  #.....u..._____..........u....#   <- ledge (row 18) — first legal surface
+     20  #..___u..............____u.....#  <- ledge (row 20)
+     21  #.@.ND u ..............u ..ND..#  <- standing row
+     22  ################################  <- solid floor (rows 22-23)
 ```
+
+**Horizontal reach is not a constraint.** Gliding is `RUN_MAX = 2` px/frame across against
+`GLIDE_VY = 1` px/frame down (`src/logic/player.cpp:5,10`) — a **2:1 glide ratio**. Falling from the
+ceiling to the floor (19 tiles) carries the player ~38 tiles horizontally, more than the arena's full
+width, and crossing the 5-tile-tall boss band alone affords ~10 tiles of horizontal travel. Two
+columns therefore cover a boss drifting anywhere in the room, and no wind-assist tiles are needed in
+the arena. (Wind would not help regardless: `WIND_ACCEL` is re-clamped to `RUN_MAX` on the following
+frame at `player.cpp:37`, so wind tiles redirect the player rather than speeding them up.)
 
 1. Hold A inside an updraft column to rise at 3 px/frame.
 2. Break out of the column at altitude and glide horizontally toward the drifting boss.
@@ -283,13 +301,18 @@ unification was built to deliver.
   solid, Glide shrine, updraft + wind present, hub-return door) re-pointed at `DUNGEON4_ROOM0_DATA`.
   Reachability: spawn → shrine → top room-door (room 0); entrances → onward door (room 1); entrance →
   cage + exit (room 2).
-- **The governing rule as a test:** in the arena room, assert that no standing surface exists within
-  **11 tiles** below `D4_DEF.hover_row` (§3.1's derivation), with 11 held in a single named constant
+- **The governing rule as a test:** in the arena room, assert that every standing surface row `L`
+  satisfies `L >= D4_DEF.hover_row + 13` (§3.1's derivation), with 13 held in a single named constant
   beside the test so QA can raise it in one edit. This is pure content data, so a future arena tweak
   cannot quietly turn the fight into a stand-and-plink without going red.
-- **`test/test_boss.cpp`:** the existing def-invariant loop picks up `D4_DEF` for free. Add
-  D4-specific assertions — an `AlwaysVulnerable` boss never opens an expose window; phase thresholds
-  descend; `hover_row > 0` when `locomotion == Hovering`.
+- **`test/test_boss.cpp` — note the coverage gap.** There is **no** automatic all-defs invariant
+  loop, contrary to what `docs/content-recipes.md` step 2.7 implies is coming: per-def structural
+  tests are hand-written (`bossdef_d3_coldforge_fields`), and `switch_budget_holds_for_all_defs`
+  (`test/test_boss.cpp:278`) hand-lists `KING_DEF`, `D1_DEF`, and the synthetic `AV_DEF` — **`D2_DEF`
+  and `D3_DEF` are missing from it**. So M15 must (a) hand-write `bossdef_d4_galewing_fields`, and
+  (b) close the pre-existing gap by adding `D2_DEF`, `D3_DEF`, and `D4_DEF` to that test. D4-specific
+  assertions: an `AlwaysVulnerable` boss never opens an expose window; phase thresholds descend;
+  `hover_row > 0` and `hover_row + 13 <= arena floor row` when `locomotion == Hovering`.
 - **Regression:** every existing `test_boss.cpp` assertion for King/D1/D2/D3 must stay **unchanged**
   and green. The appended-fields rule (§5.1) plus `aim_horizontal`'s default are what guarantee it;
   if any existing assertion needs editing, the field placement is wrong.
@@ -302,7 +325,7 @@ fixed!` with zero warnings.
 **mGBA QA (human-only — agents build the ROM, they cannot play it):**
 
 - The full loop: climb an updraft, glide, land a hit, fall, repeat to a kill.
-- **The 11-tile margin holds in practice:** stand on the highest ledge, double-jump, fire up-aimed —
+- **The 13-tile margin holds in practice:** stand on the row-18 ledge, double-jump, fire up-aimed —
   the bolt must miss. This is the empirical check on §3.1's arithmetic.
 - Rockfall's leap-offset read on a hovering boss (§3.5's known risk).
 - Aimed bolts actually track a grounded player (the §2.3 fix).
