@@ -112,24 +112,29 @@ firing window and the fight's core skill expression.
 ### 3.2 Arena geometry and the loop
 
 32 × 24 tiles. Rows 22–23 are solid floor, so bodies stand with their feet at `(h - 2) * 8`, which is
-also where `run_boss_fight` grounds a non-hovering boss. Hover line at **row 5** (hitbox spans rows
-3–7). Two ledges at **rows 18 and 20** — both satisfy `L >= 5 + 13`. Two updraft columns at
-**x = 6** and **x = 25**, spanning rows 3–21.
+also where `run_boss_fight` grounds a non-hovering boss. Hover line at **row 4** (hitbox spans rows
+2–6). Two one-way ledges (`'^'`) at **rows 18 and 20**; two updraft columns at **x = 6** and
+**x = 25**, spanning rows 2–21.
 
-The 17-tile floor-to-boss span fits the 20-tile viewport, so a player on the floor can see the boss
+**The ledges clear the rule with margin, deliberately.** Row 18 is 14 tiles below the hover line and
+row 20 is 16, against a derived minimum of 13. Placing the hover line at row 5 instead would put the
+row-18 ledge at *exactly* 13 — a 2-pixel miss margin, which is not a margin. One tile of slack costs
+nothing and absorbs any rounding in the jump-apex figure.
+
+The 18-tile floor-to-boss span fits the 20-tile viewport, so a player on the floor can see the boss
 and read its drift before committing to a climb (camera clamping per IMPL-9 keeps the tall room from
 scrolling past its bounds).
 
 ```
  row  0  ################################
-      3  #.....u..................u.....#  <- columns reach above the hover line
-      5  #.....u ~~~ BOSS drifts ~~~u...#  <- hover line (hitbox rows 3-7)
+      2  #.....u..................u.....#  <- columns reach above the hover line
+      4  #.....u ~~~ BOSS drifts ~~~u...#  <- hover line (hitbox rows 2-6)
       8  #.....u..................u.....#  |
      12  #.....u..................u.....#  |  open glide corridor
      16  #.....u..................u.....#  |  (no surfaces: the 13-tile rule)
-     18  #.....u..._____..........u....#   <- ledge (row 18) — first legal surface
-     20  #..___u..............____u.....#  <- ledge (row 20)
-     21  #.@.ND u ..............u ..ND..#  <- standing row
+     18  #.....u...^^^^^^.........u.....#  <- one-way ledge, row 18 (14 tiles clear)
+     20  #.....u........^^^^^^....u.....#  <- one-way ledge, row 20 (16 tiles clear)
+     21  #@.ND.u..................u.ND..#  <- standing row
      22  ################################  <- solid floor (rows 22-23)
 ```
 
@@ -208,11 +213,12 @@ crystal in the arena, and no block-to-charge economy. This is the first arena th
 
 D4 today is a single 30×56 vertical shaft: `@` spawn and `Q` hub-return at the bottom, the Glide
 shrine partway up, one patroller, an updraft column and wind-push tiles carrying the player upward
-past spike banks, and the spronk cage `C` + exit `E` at the top.
+past one-way platform ledges, and the spronk cage `C` + exit `E` at the top. (Those `'^'` glyphs are
+`TileKind::OneWay`, not spikes — spikes are `'s'` = 9. D4 contains no spikes.)
 
 | Room | Name | Content |
 |------|------|---------|
-| 0 | **The Ascent** | The existing shaft, kept as-is except at the top: `@`, `Q`, the Glide shrine, the patroller, updrafts, wind tiles, spike banks. The top `C` + `E` are **replaced** by a room-door to the arena plus a return entrance. |
+| 0 | **The Ascent** | The existing shaft, kept as-is except at the top: `@`, `Q`, the Glide shrine, the patroller, updrafts, wind tiles, one-way ledges. The top `C` + `E` are **replaced** by a room-door to the arena plus a return entrance. |
 | 1 | **The Eyrie** (new) | The boss arena, per §3.2: 32×24, floor row 22, hover line row 5, two updraft columns, three ledges at rows 16–19. `"boss": "d4"`; fought on entry; victory opens the onward door. |
 | 2 | **Windward Perch** (new) | The spronk cage + exit, relocated from the old shaft top. Small and calm — the exhale after the fight, as in D2/D3 room 2. |
 
